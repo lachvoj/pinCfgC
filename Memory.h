@@ -3,7 +3,13 @@
 
 #include "Types.h"
 
-bool Memory_bInit(uint8_t *pu8Memory, size_t szSize);
+typedef enum
+{
+    MEMORY_OK_E,
+    MEMORY_ERROR_E
+} MEMORY_RESULT_T;
+
+MEMORY_RESULT_T Memory_eInit(uint8_t *pu8Memory, size_t szSize);
 void *Memory_vpAlloc(size_t szSize);
 void *Memory_vpTempAlloc(size_t szSize);
 void Memory_vTempFree(void);

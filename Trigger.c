@@ -1,7 +1,5 @@
 #include "Trigger.h"
 
-static void Trigger_vEventHandle(PINSUBSCRIBER_IF *psHandle, uint8_t u8EventType, uint32_t u32Data);
-
 TRIGGER_RESULT_T Trigger_eInit(
     TRIGGER_HANDLE_T *psHandle,
     TRIGGER_SWITCHACTION_T *pasSwAct,
@@ -16,7 +14,7 @@ TRIGGER_RESULT_T Trigger_eInit(
         return TRIGGER_MAX_SWITCH_ERROR_E;
 
     // pin subscriberIF
-    psHandle->sPinSubscriber.eventHandle = Trigger_vEventHandle;
+    psHandle->sPinSubscriber.ePinCfgType = PINCFG_TRIGGER_E;
 
     // parameters init
     psHandle->pasSwAct = pasSwAct;
@@ -27,28 +25,26 @@ TRIGGER_RESULT_T Trigger_eInit(
     return TRIGGER_OK_E;
 }
 
-static void Trigger_vEventHandle(PINSUBSCRIBER_IF *psHandle, uint8_t u8EventType, uint32_t u32Data)
+void Trigger_vEventHandle(TRIGGER_HANDLE_T *psHandle, uint8_t u8EventType, uint32_t u32Data)
 {
-    TRIGGER_HANDLE_T *psTriggerHnd = (TRIGGER_HANDLE_T *)psHandle;
-
-    if ((TRIGGER_EVENTTYPE_T)u8EventType != psTriggerHnd->eEventType || u32Data != psTriggerHnd->u8EventCount)
+    if ((TRIGGER_EVENTTYPE_T)u8EventType != psHandle->eEventType || u32Data != psHandle->u8EventCount)
         return;
 
-    for (uint8_t i = 0; i < psTriggerHnd->u8SwActCount; i++)
+    for (uint8_t i = 0; i < psHandle->u8SwActCount; i++)
     {
-        if (psTriggerHnd->pasSwAct[i].eAction == TRIGGER_A_TOGGLE_E)
+        if (psHandle->pasSwAct[i].eAction == TRIGGER_A_TOGGLE_E)
         {
-            MySensorsPresent_vToggle((MYSENSORSPRESENT_HANDLE_T *)(psTriggerHnd->pasSwAct[i].psSwitchHnd));
+            MySensorsPresent_vToggle((MYSENSORSPRESENT_HANDLE_T *)(psHandle->pasSwAct[i].psSwitchHnd));
         }
-        else if (psTriggerHnd->pasSwAct[i].eAction == TRIGGER_A_UP_E)
+        else if (psHandle->pasSwAct[i].eAction == TRIGGER_A_UP_E)
         {
             MySensorsPresent_vSetState(
-                (MYSENSORSPRESENT_HANDLE_T *)(psTriggerHnd->pasSwAct[i].psSwitchHnd), (uint8_t) true);
+                (MYSENSORSPRESENT_HANDLE_T *)(psHandle->pasSwAct[i].psSwitchHnd), (uint8_t) true);
         }
-        else if (psTriggerHnd->pasSwAct[i].eAction == TRIGGER_A_DOWN_E)
+        else if (psHandle->pasSwAct[i].eAction == TRIGGER_A_DOWN_E)
         {
             MySensorsPresent_vSetState(
-                (MYSENSORSPRESENT_HANDLE_T *)(psTriggerHnd->pasSwAct[i].psSwitchHnd), (uint8_t) false);
+                (MYSENSORSPRESENT_HANDLE_T *)(psHandle->pasSwAct[i].psSwitchHnd), (uint8_t) false);
         }
     }
 }

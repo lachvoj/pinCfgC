@@ -14,28 +14,28 @@
 #endif
 
 static const char *extCfgName = "cfgReceviver";
+static LOOPRE_IF_T *psLoopablesFirst;
+static LOOPRE_IF_T *psPresentablesFirst;
+
+static inline void PinCfgCsv_vAddToLoopables(LOOPRE_IF_T *psLoopable);
+static inline void PinCfgCsv_vAddToPresentables(LOOPRE_IF_T *psLoopable);
 static inline void PinCfgCsv_vAddToString(const char *pcMsgToBeAdded, char *pcOutMsg, const size_t szOutMsgMaxLen);
 
 PINCFG_RESULT_T PinCfgCsv_eParse(
     const char *pcCfgBuf,
-    const bool bValidate,
-    const bool bRemoteConfigEnabled,
-    LOOPRE_IF_T **apsLoopables,
-    uint8_t *pu8LoopablesLen,
-    const uint8_t u8LoopablesMaxLen,
-    LOOPRE_IF_T **apsPresentables,
-    uint8_t *pu8PresentablesLen,
-    const uint8_t u8PresentablesMaxLen,
-    MYSENOSRS_IF_T *psMySensorsIf,
-    PIN_IF_T *psPinIf,
     char *pcOutString,
-    const uint16_t u16OutStrMaxLen)
+    const uint16_t u16OutStrMaxLen,
+    const bool bValidate,
+    uint8_t *pcMemory,
+    size_t szMemorySize,
+    const bool bRemoteConfigEnabled,
+    MYSENOSRS_IF_T *psMySensorsIf,
+    PIN_IF_T *psPinIf)
 {
     if (pcCfgBuf == NULL || pcOutString == NULL ||
-        (!bValidate && (apsLoopables == NULL || pu8LoopablesLen == NULL || apsPresentables == NULL ||
-                        pu8PresentablesLen == NULL || psMySensorsIf == NULL || psMySensorsIf->bRequest == NULL ||
-                        psMySensorsIf->bPresent == NULL || psMySensorsIf->bSend == NULL || psPinIf == NULL ||
-                        psPinIf->vPinMode == NULL || psPinIf->u8ReadPin == NULL || psPinIf->vWritePin == NULL)))
+        (!bValidate && (psMySensorsIf == NULL || psMySensorsIf->bRequest == NULL || psMySensorsIf->bPresent == NULL ||
+                        psMySensorsIf->bSend == NULL || psPinIf == NULL || psPinIf->vPinMode == NULL ||
+                        psPinIf->u8ReadPin == NULL || psPinIf->vWritePin == NULL)))
     {
         return PINCFG_NULLPTR_ERROR_E;
     }
@@ -43,18 +43,43 @@ PINCFG_RESULT_T PinCfgCsv_eParse(
     psPinCfg_MySensorsIf = psMySensorsIf;
     psPinCfg_PinIf = psPinIf;
 
-    *pu8LoopablesLen = 0;
-    *pu8PresentablesLen = 0;
+    // Memory init
+    if (!bValidate)
+    {
+        if (pcMemory == NULL)
+        {
+            PinCfgCsv_vAddToString("E: Memory: Null pointer to memory!\n", pcOutString, (size_t)u16OutStrMaxLen);
+            return PINCFG_NULLPTR_ERROR_E;
+        }
+        if (Memory_eInit((uint8_t *)pcMemory, szMemorySize) != MEMORY_OK_E)
+        {
+            PinCfgCsv_vAddToString("E: Memory: Init error!\n", pcOutString, (size_t)u16OutStrMaxLen);
+            return PINCFG_MEMORYINIT_ERROR_E;
+        }
+    }
+
+    uint8_t u8PresentablesCount = 0;
     pcOutString[0] = '\0';
     if (!bValidate && bRemoteConfigEnabled)
     {
         EXTCFGRECEIVER_HANDLE_T *psExtCfgReciver =
             (EXTCFGRECEIVER_HANDLE_T *)Memory_vpAlloc(sizeof(EXTCFGRECEIVER_HANDLE_T));
+        if (psExtCfgReciver == NULL)
+        {
+            PinCfgCsv_vAddToString("E: ExtCfgReceiver: Out of memory.\n", pcOutString, (size_t)u16OutStrMaxLen);
+            return PINCFG_OUTOFMEMORY_ERROR_E;
+        }
 
         STRING_POINT_T sName = {extCfgName, sizeof(extCfgName)};
-        ExtCfgReceiver_eInit(psExtCfgReciver, &sName, *pu8PresentablesLen, true);
-        apsPresentables[*pu8PresentablesLen] = (LOOPRE_IF_T *)psExtCfgReciver;
-        (*pu8PresentablesLen)++;
+        if (ExtCfgReceiver_eInit(psExtCfgReciver, &sName, u8PresentablesCount, true) == EXTCFGRECEIVER_OK_E)
+        {
+            PinCfgCsv_vAddToPresentables((LOOPRE_IF_T *)psExtCfgReciver);
+            u8PresentablesCount++;
+        }
+        else
+        {
+            PinCfgCsv_vAddToString("W: ExtCfgReceiver: Init failed!\n", pcOutString, (size_t)u16OutStrMaxLen);
+        }
     }
     STRING_POINT_T sTempStrPt;
     PinCfgStr_vInitStrPoint(&sTempStrPt, pcCfgBuf, strlen(pcCfgBuf));
@@ -80,9 +105,9 @@ PINCFG_RESULT_T PinCfgCsv_eParse(
             continue;
         }
 
-        // switches
         sTempStrPt = sLine;
         PinCfgStr_vGetSplitElemByIndex(&sTempStrPt, ',', 0);
+        // switches
         if (sTempStrPt.szLen == 1 && sTempStrPt.pcStrStart[0] == 'S')
         {
             sTempStrPt = sLine;
@@ -118,17 +143,29 @@ PINCFG_RESULT_T PinCfgCsv_eParse(
                     SWITCH_HANDLE_T *psSwHnd = (SWITCH_HANDLE_T *)Memory_vpAlloc(sizeof(SWITCH_HANDLE_T));
                     if (psSwHnd == NULL)
                     {
-                        PinCfgCsv_vAddToString("W: Switch: Out of memory.\n", pcOutString, (size_t)u16OutStrMaxLen);
+                        PinCfgCsv_vAddToString("E: Switch: Out of memory.\n", pcOutString, (size_t)u16OutStrMaxLen);
                         return PINCFG_OUTOFMEMORY_ERROR_E;
                     }
                     sTempStrPt = sLine;
                     PinCfgStr_vGetSplitElemByIndex(&sTempStrPt, ',', (u8NumberOffset - 1));
-                    Switch_eInit(
-                        psSwHnd, &sTempStrPt, *pu8PresentablesLen, true, 0U, SWITCH_CLASSIC_E, (uint8_t)u8Pin, 0U);
-                    apsPresentables[*pu8PresentablesLen] = (LOOPRE_IF_T *)psSwHnd;
-                    (*pu8PresentablesLen)++;
-                    apsLoopables[*pu8LoopablesLen] = (LOOPRE_IF_T *)psSwHnd;
-                    (*pu8LoopablesLen)++;
+                    if (Switch_eInit(
+                            psSwHnd,
+                            &sTempStrPt,
+                            u8PresentablesCount,
+                            true,
+                            0U,
+                            SWITCH_CLASSIC_E,
+                            (uint8_t)u8Pin,
+                            0U) == SWITCH_OK_E)
+                    {
+                        PinCfgCsv_vAddToPresentables((LOOPRE_IF_T *)psSwHnd);
+                        u8PresentablesCount++;
+                        PinCfgCsv_vAddToLoopables((LOOPRE_IF_T *)psSwHnd);
+                    }
+                    else
+                    {
+                        PinCfgCsv_vAddToString("W: Switch: Init failed!\n", pcOutString, (size_t)u16OutStrMaxLen);
+                    }
                 }
             }
         }
@@ -167,16 +204,21 @@ PINCFG_RESULT_T PinCfgCsv_eParse(
                     INPIN_HANDLE_T *psInPinHnd = (INPIN_HANDLE_T *)Memory_vpAlloc(sizeof(INPIN_HANDLE_T));
                     if (psInPinHnd == NULL)
                     {
-                        PinCfgCsv_vAddToString("W: InPin: Out of memory.\n", pcOutString, (size_t)u16OutStrMaxLen);
+                        PinCfgCsv_vAddToString("E: InPin: Out of memory.\n", pcOutString, (size_t)u16OutStrMaxLen);
                         return PINCFG_OUTOFMEMORY_ERROR_E;
                     }
                     sTempStrPt = sLine;
                     PinCfgStr_vGetSplitElemByIndex(&sTempStrPt, ',', (u8NumberOffset - 1));
-                    InPin_eInit(psInPinHnd, &sTempStrPt, *pu8PresentablesLen, true, (uint8_t)u8Pin);
-                    apsPresentables[*pu8PresentablesLen] = (LOOPRE_IF_T *)psInPinHnd;
-                    (*pu8PresentablesLen)++;
-                    apsLoopables[*pu8LoopablesLen] = (LOOPRE_IF_T *)psInPinHnd;
-                    (*pu8LoopablesLen)++;
+                    if (InPin_eInit(psInPinHnd, &sTempStrPt, u8PresentablesCount, true, (uint8_t)u8Pin) == INPIN_OK_E)
+                    {
+                        PinCfgCsv_vAddToPresentables((LOOPRE_IF_T *)psInPinHnd);
+                        u8PresentablesCount++;
+                        PinCfgCsv_vAddToLoopables((LOOPRE_IF_T *)psInPinHnd);
+                    }
+                    else
+                    {
+                        PinCfgCsv_vAddToString("W: InPin: Init failed!\n", pcOutString, (size_t)u16OutStrMaxLen);
+                    }
                 }
             }
         }
@@ -189,13 +231,15 @@ PINCFG_RESULT_T PinCfgCsv_eParse(
             PinCfgStr_vGetSplitElemByIndex(&sTempStrPt, ',', 2);
             memcpy(cTempStr, sTempStrPt.pcStrStart, sTempStrPt.szLen);
             cTempStr[sTempStrPt.szLen] = '\0';
-            for (uint8_t i = 0; i < *pu8LoopablesLen; i++)
+            LOOPRE_IF_T *psCurrent = psLoopablesFirst;
+            while (psCurrent != NULL)
             {
-                if (strcmp(MySensorsPresent_pcGetName((MYSENSORSPRESENT_HANDLE_T *)apsLoopables[i]), cTempStr) == 0)
+                if (strcmp(MySensorsPresent_pcGetName((MYSENSORSPRESENT_HANDLE_T *)psCurrent), cTempStr) == 0)
                 {
-                    psEmiter = (INPIN_HANDLE_T *)apsLoopables[i];
+                    psEmiter = (INPIN_HANDLE_T *)psCurrent;
                     break;
                 }
+                psCurrent = psCurrent->psNextLoopable;
             }
             if (psEmiter == NULL)
             {
@@ -244,13 +288,15 @@ PINCFG_RESULT_T PinCfgCsv_eParse(
                 PinCfgStr_vGetSplitElemByIndex(&sTempStrPt, ',', u8NameOffset);
                 memcpy(cTempStr, sTempStrPt.pcStrStart, sTempStrPt.szLen);
                 cTempStr[sTempStrPt.szLen] = '\0';
-                for (uint8_t j = 0; j < *pu8LoopablesLen; j++)
+                psCurrent = psLoopablesFirst;
+                while (psCurrent != NULL)
                 {
-                    if (strcmp(MySensorsPresent_pcGetName((LOOPRE_IF_T *)apsLoopables[j]), cTempStr) == 0)
+                    if (strcmp(MySensorsPresent_pcGetName((MYSENSORSPRESENT_HANDLE_T *)psCurrent), cTempStr) == 0)
                     {
-                        psDriven = (SWITCH_HANDLE_T *)apsLoopables[j];
+                        psDriven = (SWITCH_HANDLE_T *)psCurrent;
                         break;
                     }
+                    psCurrent = psCurrent->psNextLoopable;
                 }
                 if (psDriven == NULL)
                 {
@@ -274,6 +320,12 @@ PINCFG_RESULT_T PinCfgCsv_eParse(
                 {
                     TRIGGER_SWITCHACTION_T *psSwAct =
                         (TRIGGER_SWITCHACTION_T *)Memory_vpAlloc(sizeof(TRIGGER_SWITCHACTION_T));
+                    if (psSwAct == NULL)
+                    {
+                        PinCfgCsv_vAddToString(
+                            "E: Trigger: Switchaction: Out of memory.\n", pcOutString, (size_t)u16OutStrMaxLen);
+                        return PINCFG_OUTOFMEMORY_ERROR_E;
+                    }
                     psSwAct->psSwitchHnd = psDriven;
                     psSwAct->eAction = (TRIGGER_ACTION_T)d8DrivenAction;
                     if (pasSwActs == NULL)
@@ -290,31 +342,63 @@ PINCFG_RESULT_T PinCfgCsv_eParse(
             if (!bValidate)
             {
                 TRIGGER_HANDLE_T *psTriggerHnd = (TRIGGER_HANDLE_T *)Memory_vpAlloc(sizeof(TRIGGER_HANDLE_T));
-                Trigger_eInit(
+                if (psTriggerHnd == NULL)
+                {
+                    PinCfgCsv_vAddToString(
+                        "E: Trigger: Out of memory.\n", pcOutString, (size_t)u16OutStrMaxLen);
+                    return PINCFG_OUTOFMEMORY_ERROR_E;
+                }
+                if (Trigger_eInit(
                     psTriggerHnd,
                     pasSwActs,
                     u8DrivesCountReal,
                     (TRIGGER_EVENTTYPE_T)u8EventType,
-                    (uint8_t)u8EventCount);
+                    (uint8_t)u8EventCount) != TRIGGER_OK_E)
+                {
+                    PinCfgCsv_vAddToString("W: Trigger: Init failed!\n", pcOutString, (size_t)u16OutStrMaxLen);
+                }
             }
         }
         else
         {
-            // TODO: string status
-            return PINCFG_TYPE_ERROR_E;
+            PinCfgCsv_vAddToString("W: Unknown type.\n", pcOutString, (size_t)u16OutStrMaxLen);
         }
     }
 
     return PINCFG_OK_E;
 }
 
-PINCFG_RESULT_T PinCfgCsv_eValidate(const char *pcCfgBuf, char *pcOutString, const uint16_t u16OutStrMaxLen)
+// private
+static inline void PinCfgCsv_vAddToLoopables(LOOPRE_IF_T *psLoopable)
 {
-    return PinCfgCsv_eParse(
-        pcCfgBuf, true, false, NULL, NULL, 0, NULL, NULL, 0, NULL, NULL, pcOutString, u16OutStrMaxLen);
+    if (psLoopablesFirst == NULL)
+        psLoopablesFirst = psLoopable;
+    else
+    {
+        LOOPRE_IF_T *psCurrent = psLoopablesFirst;
+        while (psCurrent->psNextLoopable != NULL)
+        {
+            psCurrent = psCurrent->psNextLoopable;
+        }
+        psCurrent->psNextLoopable = psLoopable;
+    }
 }
 
-// private
+static inline void PinCfgCsv_vAddToPresentables(LOOPRE_IF_T *psPresentable)
+{
+    if (psPresentablesFirst == NULL)
+        psPresentablesFirst = psPresentable;
+    else
+    {
+        LOOPRE_IF_T *psCurrent = psPresentablesFirst;
+        while (psCurrent->psNextPresentable != NULL)
+        {
+            psCurrent = psCurrent->psNextPresentable;
+        }
+        psCurrent->psNextPresentable = psPresentable;
+    }
+}
+
 static inline void PinCfgCsv_vAddToString(const char *pcMsgToBeAdded, char *pcOutMsg, const size_t szOutMsgMaxLen)
 {
     if ((strlen(pcMsgToBeAdded) + strlen(pcOutMsg)) > (szOutMsgMaxLen - 1))

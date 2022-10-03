@@ -9,7 +9,7 @@
 #include "Trigger.h"
 
 #ifndef MEMORY_SZ
-#define MEMORY_SZ 6000
+#define MEMORY_SZ 3000
 #endif
 
 #ifndef AS_OUT_MAX_LEN_D
@@ -108,12 +108,12 @@ int main()
     printf("sizeof(TRIGGER_HANDLE_T): %ld\n", sizeof(TRIGGER_HANDLE_T));
     printf("sizeof(TRIGGER_SWITCHACTION_T): %ld\n", sizeof(TRIGGER_SWITCHACTION_T));
 
-    Memory_bInit(testMemory, MEMORY_SZ);
+    Memory_eInit(testMemory, MEMORY_SZ);
 
     // memory test
     void *a1 = Memory_vpAlloc(2);
     void *a2 = Memory_vpAlloc(3);
-    void *a3 = Memory_vpAlloc(2000);
+    void *a3 = Memory_vpAlloc(MEMORY_SZ);
 
     printf("Mem addr: %ld\n", (long unsigned int)&testMemory);
     printf("allocated1 addr: %ld\n", (long unsigned int)a1);
@@ -189,25 +189,17 @@ int main()
                            "T,vtl11,i1,3,1,1,o2,2\n"
                            "T,vtl12,i1,3,1,2,o2,2,o3,2";
 
-    LOOPRE_IF_T *apsLoopables[LOOPRE_ARRAYS_MAX_LEN_D];
-    uint8_t u8LoopablesLen;
-    LOOPRE_IF_T *apsPresentables[LOOPRE_ARRAYS_MAX_LEN_D];
-    uint8_t u8PresentablesLen;
     char acOutStr[OUT_STR_MAX_LEN_D];
     PinCfgCsv_eParse(
         pcConfig,
-        false,
-        true,
-        apsLoopables,
-        &u8LoopablesLen,
-        (uint8_t)LOOPRE_ARRAYS_MAX_LEN_D,
-        apsPresentables,
-        &u8PresentablesLen,
-        (uint8_t)LOOPRE_ARRAYS_MAX_LEN_D,
-        psMySensorsIf,
-        psPinIf,
         acOutStr,
-        (uint16_t)OUT_STR_MAX_LEN_D);
+        (uint16_t)OUT_STR_MAX_LEN_D,
+        false,
+        testMemory,
+        (size_t)MEMORY_SZ,
+        true,
+        psMySensorsIf,
+        psPinIf);
 
     return 0;
 }

@@ -6,10 +6,12 @@
 typedef struct LOOPRE_IF_T
 {
     PINCFG_ELEMENT_TYPE_T ePinCfgType;
+    struct LOOPRE_IF_T *psNextLoopable;
+    struct LOOPRE_IF_T *psNextPresentable;
 } LOOPRE_IF_T;
 
 // loopable
-void loop(struct LOOPRE_IF_T *psHandle, uint64_t u64ms);
+void loop(struct LOOPRE_IF_T *psHandle, uint32_t u32ms);
 // presentable
 uint8_t getId(struct LOOPRE_IF_T *psHandle);
 const char *getName(struct LOOPRE_IF_T *psHandle);

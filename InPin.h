@@ -7,13 +7,6 @@
 #include "PinSubscriberIf.h"
 #include "Types.h"
 
-#ifndef PINCFG_INPIN_MAX_SUBSCRIBERS_D
-#define PINCFG_INPIN_MAX_SUBSCRIBERS_D 5
-#endif
-#if (PINCFG_INPIN_MAX_SUBSCRIBERS_D > 255)
-#error PINCFG_INPIN_MAX_SUBSCRIBERS_D is more then 255!
-#endif
-
 typedef enum
 {
     INPIN_DOWN_E = 0,
@@ -36,18 +29,17 @@ typedef enum
 typedef struct
 {
     MYSENSORSPRESENT_HANDLE_T sMySenPresent;
-    uint64_t u64TimerDebounceStarted;
-    uint64_t u64timerMultiStarted;
-    PINSUBSCRIBER_IF *apsSubscribers[PINCFG_INPIN_MAX_SUBSCRIBERS_D];
-    uint8_t u8SubscribersCount;
+    PINSUBSCRIBER_IF_T *psFirstSubscriber;
+    uint32_t u32TimerDebounceStarted;
+    uint32_t u32timerMultiStarted;
     uint8_t u8InPin;
     uint8_t u8PressCount;
     PIN_STATE_T ePinState;
     bool bLastPinState;
 } INPIN_HANDLE_T;
 
-void InPin_SetDebounceMs(uint64_t debounce);
-void InPin_SetMulticlickMaxDelayMs(uint64_t multikMaxDelay);
+void InPin_SetDebounceMs(uint32_t debounce);
+void InPin_SetMulticlickMaxDelayMs(uint32_t multikMaxDelay);
 
 INPIN_RESULT_T InPin_eInit(
     INPIN_HANDLE_T *psHandle,
@@ -55,11 +47,11 @@ INPIN_RESULT_T InPin_eInit(
     uint8_t u8Id,
     bool bPresent,
     uint8_t u8InPin);
-INPIN_RESULT_T InPin_eAddSubscriber(INPIN_HANDLE_T *psHandle, PINSUBSCRIBER_IF *psSubscriber);
+INPIN_RESULT_T InPin_eAddSubscriber(INPIN_HANDLE_T *psHandle, PINSUBSCRIBER_IF_T *psSubscriber);
 void InPin_vSendEvent(INPIN_HANDLE_T *psHandle, uint8_t u8EventType, uint32_t u32Data);
 bool InPin_bReadPin(INPIN_HANDLE_T *psHandle);
 
 // loopable IF
-void InPin_vLoop(INPIN_HANDLE_T *psHandle, uint64_t u64ms);
+void InPin_vLoop(INPIN_HANDLE_T *psHandle, uint32_t u32ms);
 
 #endif // INPIN_H

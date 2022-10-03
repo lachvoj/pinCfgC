@@ -42,7 +42,7 @@ typedef struct
 
 typedef struct
 {
-    PINSUBSCRIBER_IF sPinSubscriber;
+    PINSUBSCRIBER_IF_T sPinSubscriber;
     TRIGGER_SWITCHACTION_T *pasSwAct;
     uint8_t u8SwActCount;
     TRIGGER_EVENTTYPE_T eEventType;
@@ -55,5 +55,7 @@ TRIGGER_RESULT_T Trigger_eInit(
     uint8_t u8SwActCount,
     TRIGGER_EVENTTYPE_T eEventType,
     uint8_t u8EventCount);
+
+void Trigger_vEventHandle(TRIGGER_HANDLE_T *psHandle, uint8_t u8EventType, uint32_t u32Data);
 
 #endif // TRIGGER_H

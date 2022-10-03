@@ -2,18 +2,19 @@
 
 #include "ExternalInterfaces.h"
 #include "InPin.h"
+#include "PinSubscriberIf.h"
 
-static uint64_t gu64InPinDebounceMs;
-static uint64_t gu64InPinMulticlickMaxDelayMs;
+static uint32_t gu32InPinDebounceMs;
+static uint32_t gu32InPinMulticlickMaxDelayMs;
 
-void InPin_SetDebounceMs(uint64_t u64Debounce)
+void InPin_SetDebounceMs(uint32_t u32Debounce)
 {
-    gu64InPinDebounceMs = u64Debounce;
+    gu32InPinDebounceMs = u32Debounce;
 }
 
-void InPin_SetMulticlickMaxDelayMs(uint64_t u64MultikMaxDelay)
+void InPin_SetMulticlickMaxDelayMs(uint32_t u32MultikMaxDelay)
 {
-    gu64InPinMulticlickMaxDelayMs = u64MultikMaxDelay;
+    gu32InPinMulticlickMaxDelayMs = u32MultikMaxDelay;
 }
 
 INPIN_RESULT_T InPin_eInit(
@@ -33,33 +34,41 @@ INPIN_RESULT_T InPin_eInit(
     }
 
     psHandle->u8InPin = u8InPin;
-    psHandle->u64TimerDebounceStarted--;
-    psHandle->u64timerMultiStarted--;
+    psHandle->u32TimerDebounceStarted--;
+    psHandle->u32timerMultiStarted--;
 
     return INPIN_OK_E;
 }
 
-INPIN_RESULT_T InPin_eAddSubscriber(INPIN_HANDLE_T *psHandle, PINSUBSCRIBER_IF *psSubscriber)
+INPIN_RESULT_T InPin_eAddSubscriber(INPIN_HANDLE_T *psHandle, PINSUBSCRIBER_IF_T *psSubscriber)
 {
-    if (psHandle->u8SubscribersCount >= PINCFG_INPIN_MAX_SUBSCRIBERS_D)
-    {
-        return INPIN_MAXSUBSCRIBERS_ERROR_E;
-    }
-
-    if (psSubscriber == NULL || psSubscriber->eventHandle == NULL)
+    if (psSubscriber == NULL)
         return INPIN_NULLPTR_ERROR_E;
 
-    psHandle->apsSubscribers[psHandle->u8SubscribersCount] = psSubscriber;
-    psHandle->u8SubscribersCount++;
+    if (psHandle->psFirstSubscriber != NULL)
+    {
+        PINSUBSCRIBER_IF_T *psCurrent = psHandle->psFirstSubscriber;
+        while (psCurrent->psNext != NULL)
+        {
+            psCurrent = psCurrent->psNext;
+        }
+        psCurrent->psNext = psSubscriber;
+    }
+    else
+    {
+        psHandle->psFirstSubscriber = psSubscriber;
+    }
 
     return INPIN_OK_E;
 }
 
 void InPin_vSendEvent(INPIN_HANDLE_T *psHandle, uint8_t u8EventType, uint32_t u32Data)
 {
-    for (uint8_t i = 0; i < psHandle->u8SubscribersCount; i++)
+    PINSUBSCRIBER_IF_T *psCurrent = psHandle->psFirstSubscriber;
+    while (psCurrent != NULL)
     {
-        psHandle->apsSubscribers[i]->eventHandle(psHandle->apsSubscribers[i], u8EventType, u32Data);
+        PinSubscriberIf_vEventHandle(psCurrent, u8EventType, u32Data);
+        psCurrent = psCurrent->psNext;
     }
 }
 
@@ -76,7 +85,7 @@ typedef enum
     INPIN_CHANGE_DOWN_E
 } INPIN_CHANGE_T;
 
-void InPin_vLoop(INPIN_HANDLE_T *psHandle, uint64_t u64ms)
+void InPin_vLoop(INPIN_HANDLE_T *psHandle, uint32_t u32ms)
 {
     MYSENSORSPRESENT_HANDLE_T *psMySensorsPresentHnd = (MYSENSORSPRESENT_HANDLE_T *)psHandle;
 
@@ -99,7 +108,7 @@ void InPin_vLoop(INPIN_HANDLE_T *psHandle, uint64_t u64ms)
     {
     case INPIN_DEBOUNCEDOWN_E:
     {
-        if (u64ms - psHandle->u64TimerDebounceStarted < gu64InPinDebounceMs)
+        if (u32ms - psHandle->u32TimerDebounceStarted < gu32InPinDebounceMs)
             break;
 
         psHandle->ePinState = INPIN_DOWN_E;
@@ -109,7 +118,7 @@ void InPin_vLoop(INPIN_HANDLE_T *psHandle, uint64_t u64ms)
     break;
     case INPIN_DOWN_E:
     {
-        if (psHandle->u8PressCount > 0 && (u64ms - psHandle->u64timerMultiStarted) > gu64InPinMulticlickMaxDelayMs)
+        if (psHandle->u8PressCount > 0 && (u32ms - psHandle->u32timerMultiStarted) > gu32InPinMulticlickMaxDelayMs)
         {
             InPin_vSendEvent(psHandle, (uint8_t)INPIN_MULTI_E, (uint32_t)psHandle->u8PressCount);
             psHandle->u8PressCount = 0U;
@@ -117,17 +126,17 @@ void InPin_vLoop(INPIN_HANDLE_T *psHandle, uint64_t u64ms)
         if (eChange == INPIN_CHANGE_UP_E)
         {
             psHandle->ePinState = INPIN_DEBOUNCEUP_E;
-            psHandle->u64TimerDebounceStarted = u64ms;
+            psHandle->u32TimerDebounceStarted = u32ms;
         }
     }
     break;
     case INPIN_DEBOUNCEUP_E:
     {
-        if (u64ms - psHandle->u64TimerDebounceStarted < gu64InPinDebounceMs)
+        if (u32ms - psHandle->u32TimerDebounceStarted < gu32InPinDebounceMs)
             break;
 
         psHandle->ePinState = INPIN_UP_E;
-        psHandle->u64timerMultiStarted = u64ms;
+        psHandle->u32timerMultiStarted = u32ms;
         psHandle->u8PressCount++;
         InPin_vSendEvent(psHandle, (uint8_t)psHandle->ePinState, (int)psHandle->u8PressCount);
         MySensorsPresent_vSetState(psMySensorsPresentHnd, (uint8_t) true);
@@ -135,7 +144,7 @@ void InPin_vLoop(INPIN_HANDLE_T *psHandle, uint64_t u64ms)
     break;
     case INPIN_UP_E:
     {
-        if (u64ms - psHandle->u64timerMultiStarted > gu64InPinMulticlickMaxDelayMs)
+        if (u32ms - psHandle->u32timerMultiStarted > gu32InPinMulticlickMaxDelayMs)
         {
             psHandle->ePinState = INPIN_LONG_E;
             InPin_vSendEvent(psHandle, (uint8_t)psHandle->ePinState, 0U);
@@ -144,7 +153,7 @@ void InPin_vLoop(INPIN_HANDLE_T *psHandle, uint64_t u64ms)
         else if (eChange == INPIN_CHANGE_DOWN_E)
         {
             psHandle->ePinState = INPIN_DEBOUNCEDOWN_E;
-            psHandle->u64TimerDebounceStarted = u64ms;
+            psHandle->u32TimerDebounceStarted = u32ms;
         }
     }
     break;
@@ -153,7 +162,7 @@ void InPin_vLoop(INPIN_HANDLE_T *psHandle, uint64_t u64ms)
         if (eChange == INPIN_CHANGE_DOWN_E)
         {
             psHandle->ePinState = INPIN_DEBOUNCEDOWN_E;
-            psHandle->u64TimerDebounceStarted = u64ms;
+            psHandle->u32TimerDebounceStarted = u32ms;
         }
     }
     break;

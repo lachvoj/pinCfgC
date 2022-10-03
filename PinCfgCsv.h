@@ -1,7 +1,6 @@
 #ifndef PINCFGCSV_H
 #define PINCFGCSV_H
 
-#include "LooPreIf.h"
 #include "MysensorsIf.h"
 #include "PinIf.h"
 #include "Types.h"
@@ -14,24 +13,26 @@ typedef enum
     PINCFG_MAXLEN_ERROR_E,
     PINCFG_TYPE_ERROR_E,
     PINCFG_OUTOFMEMORY_ERROR_E,
+    PINCFG_MEMORYINIT_ERROR_E,
     PINCFG_ERROR_E
 } PINCFG_RESULT_T;
 
 PINCFG_RESULT_T PinCfgCsv_eParse(
     const char *pcCfgBuf,
-    const bool bValidate,
-    const bool bRemoteConfigEnabled,
-    LOOPRE_IF_T **apsLoopables,
-    uint8_t *u8LoopablesLen,
-    const uint8_t u8LoopablesMaxLen,
-    LOOPRE_IF_T **apsPresentables,
-    uint8_t *u8PresentablesLen,
-    const uint8_t u8PresentablesMaxLen,
-    MYSENOSRS_IF_T *psMySensorsIf,
-    PIN_IF_T *psPinIf,
     char *pcOutString,
-    const uint16_t u16OutStrMaxLen);
+    const uint16_t u16OutStrMaxLen,
+    const bool bValidate,
+    uint8_t *pcMemory,
+    size_t szMemorySize,
+    const bool bRemoteConfigEnabled,
+    MYSENOSRS_IF_T *psMySensorsIf,
+    PIN_IF_T *psPinIf);
 
-PINCFG_RESULT_T PinCfgCsv_eValidate(const char *pcCfgBuf, char *pcOutString, const uint16_t u16OutStrMaxLen);
+inline PINCFG_RESULT_T PinCfgCsv_eValidate(const char *pcCfgBuf, char *pcOutString, const uint16_t u16OutStrMaxLen)
+{
+    return PinCfgCsv_eParse(pcCfgBuf, pcOutString, u16OutStrMaxLen, true, NULL, 0, false, NULL, NULL);
+}
+
+// inline PINCFG_RESULT_T PinCfgCsv_eLoop();
 
 #endif // PINCFGCSV_H

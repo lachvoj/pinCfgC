@@ -15,10 +15,10 @@ typedef struct MEMORY_HANDLE
 
 static MEMORY_HANDLE_T gsMemory;
 
-bool Memory_bInit(uint8_t *pu8Memory, size_t szSize)
+MEMORY_RESULT_T Memory_eInit(uint8_t *pu8Memory, size_t szSize)
 {
-    if (gsMemory.bIsInitialized)
-        return false;
+    if (szSize == 0)
+        return MEMORY_ERROR_E;
 
     memset(pu8Memory, 0x00U, szSize);
 
@@ -29,7 +29,7 @@ bool Memory_bInit(uint8_t *pu8Memory, size_t szSize)
 
     Memory_vTempFree();
 
-    return true;
+    return MEMORY_OK_E;
 }
 
 void *Memory_vpAlloc(size_t szSize)

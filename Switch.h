@@ -24,8 +24,8 @@ typedef struct
 {
     MYSENSORSPRESENT_HANDLE_T sMySenPresent;
     SWITCH_MODE_T eMode;
-    uint64_t u64ImpulseDuration;
-    uint64_t u64ImpulseStarted;
+    uint32_t u32ImpulseDuration;
+    uint32_t u32ImpulseStarted;
     uint8_t u8OutPin;
     uint8_t u8FbPin;
 } SWITCH_HANDLE_T;
@@ -35,11 +35,11 @@ SWITCH_RESULT_T Switch_eInit(
     STRING_POINT_T *sName,
     uint8_t u8Id,
     bool bPresent,
-    uint64_t u64ImpulseDuration,
+    uint32_t u32ImpulseDuration,
     SWITCH_MODE_T eMode,
     uint8_t u8OutPin,
     uint8_t u8FbPin);
 
-void Switch_vLoop(SWITCH_HANDLE_T *psHandle, uint64_t u64ms);
+void Switch_vLoop(SWITCH_HANDLE_T *psHandle, uint32_t u32ms);
 
 #endif // SWITCH_H
