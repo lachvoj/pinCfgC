@@ -113,7 +113,7 @@ PINCFG_RESULT_T PinCfgCsv_eParse(
             sTempStrPt = sLine;
             PinCfgStr_vGetSplitElemByIndex(&sTempStrPt, ',', 1);
             uint8_t u8SwitchesCount;
-            if (PinCfgStr_eAtoi(&sTempStrPt, (int *)&u8SwitchesCount) != PINCFG_STR_OK_E || u8SwitchesCount < 0)
+            if (PinCfgStr_eAtoU8(&sTempStrPt, &u8SwitchesCount) != PINCFG_STR_OK_E || u8SwitchesCount < 0)
             {
                 PinCfgCsv_vAddToString("W: Switch: Invalid format for count.\n", pcOutString, (size_t)u16OutStrMaxLen);
                 continue;
@@ -133,7 +133,7 @@ PINCFG_RESULT_T PinCfgCsv_eParse(
                 sTempStrPt = sLine;
                 PinCfgStr_vGetSplitElemByIndex(&sTempStrPt, ',', u8NumberOffset);
                 uint8_t u8Pin;
-                if (PinCfgStr_eAtoi(&sTempStrPt, (int *)&u8Pin) != PINCFG_STR_OK_E || u8Pin < 1)
+                if (PinCfgStr_eAtoU8(&sTempStrPt, &u8Pin) != PINCFG_STR_OK_E || u8Pin < 1)
                 {
                     PinCfgCsv_vAddToString("W: Switch: Invalid pin number.\n", pcOutString, (size_t)u16OutStrMaxLen);
                     continue;
@@ -175,7 +175,7 @@ PINCFG_RESULT_T PinCfgCsv_eParse(
             sTempStrPt = sLine;
             PinCfgStr_vGetSplitElemByIndex(&sTempStrPt, ',', 1);
             uint8_t u8InPinsCount;
-            if (PinCfgStr_eAtoi(&sTempStrPt, (int *)&u8InPinsCount) != PINCFG_STR_OK_E || u8InPinsCount < 0)
+            if (PinCfgStr_eAtoU8(&sTempStrPt, &u8InPinsCount) != PINCFG_STR_OK_E || u8InPinsCount < 0)
             {
                 PinCfgCsv_vAddToString("W: InPin: Invalid format for count.\n", pcOutString, (size_t)u16OutStrMaxLen);
                 continue;
@@ -194,7 +194,7 @@ PINCFG_RESULT_T PinCfgCsv_eParse(
                 sTempStrPt = sLine;
                 PinCfgStr_vGetSplitElemByIndex(&sTempStrPt, ',', u8NumberOffset);
                 uint8_t u8Pin;
-                if (PinCfgStr_eAtoi(&sTempStrPt, (int *)&u8Pin) != PINCFG_STR_OK_E || u8Pin < 1)
+                if (PinCfgStr_eAtoU8(&sTempStrPt, &u8Pin) != PINCFG_STR_OK_E || u8Pin < 1)
                 {
                     PinCfgCsv_vAddToString("W: InPin: Invalid pin number.\n", pcOutString, (size_t)u16OutStrMaxLen);
                     continue;
@@ -250,8 +250,7 @@ PINCFG_RESULT_T PinCfgCsv_eParse(
             sTempStrPt = sLine;
             PinCfgStr_vGetSplitElemByIndex(&sTempStrPt, ',', 3);
             uint8_t u8EventType;
-            if (PinCfgStr_eAtoi(&sTempStrPt, (int *)&u8EventType) != PINCFG_STR_OK_E || u8EventType < 0 ||
-                u8EventType > 3)
+            if (PinCfgStr_eAtoU8(&sTempStrPt, &u8EventType) != PINCFG_STR_OK_E || u8EventType > 3)
             {
                 PinCfgCsv_vAddToString(
                     "W: Trigger: Invalid format for event type.\n", pcOutString, (size_t)u16OutStrMaxLen);
@@ -260,8 +259,8 @@ PINCFG_RESULT_T PinCfgCsv_eParse(
 
             sTempStrPt = sLine;
             PinCfgStr_vGetSplitElemByIndex(&sTempStrPt, ',', 4);
-            int32_t u8EventCount;
-            if (PinCfgStr_eAtoi(&sTempStrPt, (int *)&u8EventCount) != PINCFG_STR_OK_E || u8EventCount < 0)
+            uint8_t u8EventCount;
+            if (PinCfgStr_eAtoU8(&sTempStrPt, &u8EventCount) != PINCFG_STR_OK_E)
             {
                 PinCfgCsv_vAddToString(
                     "W: Trigger: Invalid format for event count.\n", pcOutString, (size_t)u16OutStrMaxLen);
@@ -270,8 +269,8 @@ PINCFG_RESULT_T PinCfgCsv_eParse(
 
             sTempStrPt = sLine;
             PinCfgStr_vGetSplitElemByIndex(&sTempStrPt, ',', 5);
-            int16_t s16DrivesCount;
-            if (PinCfgStr_eAtoi(&sTempStrPt, (int *)&s16DrivesCount) != PINCFG_STR_OK_E || s16DrivesCount < 0)
+            uint8_t u8DrivesCount;
+            if (PinCfgStr_eAtoU8(&sTempStrPt, &u8DrivesCount) != PINCFG_STR_OK_E)
             {
                 PinCfgCsv_vAddToString(
                     "W: Trigger: Invalid format for drives count.\n", pcOutString, (size_t)u16OutStrMaxLen);
@@ -280,7 +279,7 @@ PINCFG_RESULT_T PinCfgCsv_eParse(
 
             TRIGGER_SWITCHACTION_T *pasSwActs = NULL;
             uint8_t u8DrivesCountReal = 0U;
-            for (uint8_t i = 0; i < s16DrivesCount; i++)
+            for (uint8_t i = 0; i < u8DrivesCount; i++)
             {
                 uint8_t u8NameOffset = 6 + i * 2;
                 SWITCH_HANDLE_T *psDriven = NULL;
@@ -306,9 +305,8 @@ PINCFG_RESULT_T PinCfgCsv_eParse(
 
                 sTempStrPt = sLine;
                 PinCfgStr_vGetSplitElemByIndex(&sTempStrPt, ',', (u8NameOffset + 1));
-                int8_t d8DrivenAction;
-                if (PinCfgStr_eAtoi(&sTempStrPt, (int *)&d8DrivenAction) != PINCFG_STR_OK_E || d8DrivenAction < 0 ||
-                    d8DrivenAction > 2)
+                uint8_t u8DrivenAction;
+                if (PinCfgStr_eAtoU8(&sTempStrPt, &u8DrivenAction) != PINCFG_STR_OK_E || u8DrivenAction > 2)
                 {
                     PinCfgCsv_vAddToString(
                         "W: Trigger: Invalid switch action.\n", pcOutString, (size_t)u16OutStrMaxLen);
@@ -327,7 +325,7 @@ PINCFG_RESULT_T PinCfgCsv_eParse(
                         return PINCFG_OUTOFMEMORY_ERROR_E;
                     }
                     psSwAct->psSwitchHnd = psDriven;
-                    psSwAct->eAction = (TRIGGER_ACTION_T)d8DrivenAction;
+                    psSwAct->eAction = (TRIGGER_ACTION_T)u8DrivenAction;
                     if (pasSwActs == NULL)
                     {
                         pasSwActs = psSwAct;

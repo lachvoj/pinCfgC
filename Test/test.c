@@ -1,5 +1,6 @@
 #include <stdio.h>
 
+#include "ExtCfgReceiver.h"
 #include "InPin.h"
 #include "Memory.h"
 #include "MySensorsPresent.h"
@@ -103,6 +104,7 @@ static uint8_t testMemory[MEMORY_SZ];
 int main()
 {
     // sizes
+    printf("sizeof(EXTCFGRECEIVER_HANDLE_T): %ld\n", sizeof(EXTCFGRECEIVER_HANDLE_T));
     printf("sizeof(SWITCH_HANDLE_T): %ld\n", sizeof(SWITCH_HANDLE_T));
     printf("sizeof(INPIN_HANDLE_T): %ld\n", sizeof(INPIN_HANDLE_T));
     printf("sizeof(TRIGGER_HANDLE_T): %ld\n", sizeof(TRIGGER_HANDLE_T));
@@ -190,7 +192,7 @@ int main()
                            "T,vtl12,i1,3,1,2,o2,2,o3,2";
 
     char acOutStr[OUT_STR_MAX_LEN_D];
-    PinCfgCsv_eParse(
+    PINCFG_RESULT_T eParseResult = PinCfgCsv_eParse(
         pcConfig,
         acOutStr,
         (uint16_t)OUT_STR_MAX_LEN_D,
@@ -200,6 +202,13 @@ int main()
         true,
         psMySensorsIf,
         psPinIf);
+
+    printf(
+        "Parse result is: %d (0-PINCFG_OK_E, 1-PINCFG_NULLPTR_ERROR_E, 2-PINCFG_INVALID_FORMAT_E, "
+        "3-PINCFG_MAXLEN_ERROR_E, 4-PINCFG_TYPE_ERROR_E, 5-PINCFG_OUTOFMEMORY_ERROR_E, 6-PINCFG_MEMORYINIT_ERROR_E, "
+        "7-PINCFG_ERROR_E)\n",
+        eParseResult);
+    printf("Parse out string is:\n%s\n", acOutStr);
 
     return 0;
 }

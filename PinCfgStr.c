@@ -63,16 +63,16 @@ void PinCfgStr_vGetSplitElemByIndex(STRING_POINT_T *psStrPt, const char cDelimit
     }
 }
 
-PINCFG_STR_RESULT_T PinCfgStr_eAtoi(const STRING_POINT_T *psStrPt, int *pdOut)
+PINCFG_STR_RESULT_T PinCfgStr_eAtoU8(const STRING_POINT_T *psStrPt, uint8_t *pu8Out)
 {
-    if ((psStrPt->szLen + 1) > PINCFG_STR_ATOI_BUF_SZ_D)
+    if ((psStrPt->szLen + 1) > 4)
         return PINCFG_STR_INSUFFICIENT_BUFFER_E;
 
-    char cTempStr[PINCFG_STR_ATOI_BUF_SZ_D];
+    char cTempStr[4];
     memcpy(cTempStr, psStrPt->pcStrStart, psStrPt->szLen);
     cTempStr[psStrPt->szLen] = '\0';
     errno = 0;
-    *pdOut = atoi(cTempStr);
+    *pu8Out = (uint8_t)atoi(cTempStr);
     if (errno)
         return PINCFG_STR_UNSUCCESSFULL_CONVERSION_E;
 

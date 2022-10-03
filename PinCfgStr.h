@@ -5,10 +5,6 @@
 
 #include "Types.h"
 
-#ifndef PINCFG_STR_ATOI_BUF_SZ_D
-#define PINCFG_STR_ATOI_BUF_SZ_D 10
-#endif
-
 typedef struct
 {
     const char *pcStrStart;
@@ -31,7 +27,7 @@ size_t PinCfgStr_szGetSplitCount(const STRING_POINT_T *psInStrPt, const char cDe
 
 void PinCfgStr_vGetSplitElemByIndex(STRING_POINT_T *psStrPt, const char cDelimiter, const size_t szIndex);
 
-PINCFG_STR_RESULT_T PinCfgStr_eAtoi(const STRING_POINT_T *psStrPt, int *pdOut);
+PINCFG_STR_RESULT_T PinCfgStr_eAtoU8(const STRING_POINT_T *psStrPt, uint8_t *pu8Out);
 
 PINCFG_STR_RESULT_T PinCfgStr_eSplitStrPt(
     const STRING_POINT_T *psInStrPt,
