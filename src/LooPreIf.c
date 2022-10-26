@@ -4,7 +4,7 @@
 #include "Switch.h"
 
 // loopable
-void loop(struct LOOPRE_IF_T *psHandle, uint32_t u32ms)
+void LooPreIf_vLoop(LOOPRE_IF_T *psHandle, uint32_t u32ms)
 {
     if (psHandle->ePinCfgType == PINCFG_INPIN_E)
         InPin_vLoop((INPIN_HANDLE_T *)psHandle, u32ms);
@@ -13,7 +13,7 @@ void loop(struct LOOPRE_IF_T *psHandle, uint32_t u32ms)
 }
 
 // presentable
-uint8_t getId(struct LOOPRE_IF_T *psHandle)
+uint8_t LooPreIf_u8GetId(LOOPRE_IF_T *psHandle)
 {
     if (psHandle->ePinCfgType == PINCFG_INPIN_E || psHandle->ePinCfgType == PINCFG_SWITCH_E)
         return MySensorsPresent_u8GetId((MYSENSORSPRESENT_HANDLE_T *)psHandle);
@@ -23,7 +23,7 @@ uint8_t getId(struct LOOPRE_IF_T *psHandle)
     return 0x00U;
 }
 
-const char *getName(struct LOOPRE_IF_T *psHandle)
+const char *LooPreIf_pcGetName(LOOPRE_IF_T *psHandle)
 {
     if (psHandle->ePinCfgType == PINCFG_INPIN_E || psHandle->ePinCfgType == PINCFG_SWITCH_E)
         return MySensorsPresent_pcGetName((MYSENSORSPRESENT_HANDLE_T *)psHandle);
@@ -33,7 +33,7 @@ const char *getName(struct LOOPRE_IF_T *psHandle)
     return NULL;
 }
 
-void rcvMessage(struct LOOPRE_IF_T *psHandle, const void *pvMessage)
+void LooPreIf_vRcvMessage(LOOPRE_IF_T *psHandle, const void *pvMessage)
 {
     if (psHandle->ePinCfgType == PINCFG_INPIN_E || psHandle->ePinCfgType == PINCFG_SWITCH_E)
         MySensorsPresent_vRcvMessage((MYSENSORSPRESENT_HANDLE_T *)psHandle, pvMessage);
@@ -41,7 +41,7 @@ void rcvMessage(struct LOOPRE_IF_T *psHandle, const void *pvMessage)
         ExtCfgReceiver_vRcvMessage((EXTCFGRECEIVER_HANDLE_T *)psHandle, pvMessage);
 }
 
-void present(struct LOOPRE_IF_T *psHandle)
+void LooPreIf_vPresent(LOOPRE_IF_T *psHandle)
 {
     if (psHandle->ePinCfgType == PINCFG_INPIN_E || psHandle->ePinCfgType == PINCFG_SWITCH_E)
         MySensorsPresent_vPresent((MYSENSORSPRESENT_HANDLE_T *)psHandle);
@@ -49,7 +49,7 @@ void present(struct LOOPRE_IF_T *psHandle)
         ExtCfgReceiver_vPresent((EXTCFGRECEIVER_HANDLE_T *)psHandle);
 }
 
-void presentState(struct LOOPRE_IF_T *psHandle)
+void LooPreIf_vPresentState(LOOPRE_IF_T *psHandle)
 {
     if (psHandle->ePinCfgType == PINCFG_INPIN_E || psHandle->ePinCfgType == PINCFG_SWITCH_E)
         MySensorsPresent_vPresentState((MYSENSORSPRESENT_HANDLE_T *)psHandle);

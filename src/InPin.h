@@ -3,7 +3,6 @@
 
 #include "LooPreIf.h"
 #include "MySensorsPresent.h"
-#include "PinIf.h"
 #include "PinSubscriberIf.h"
 #include "Types.h"
 
@@ -49,7 +48,6 @@ INPIN_RESULT_T InPin_eInit(
     uint8_t u8InPin);
 INPIN_RESULT_T InPin_eAddSubscriber(INPIN_HANDLE_T *psHandle, PINSUBSCRIBER_IF_T *psSubscriber);
 void InPin_vSendEvent(INPIN_HANDLE_T *psHandle, uint8_t u8EventType, uint32_t u32Data);
-bool InPin_bReadPin(INPIN_HANDLE_T *psHandle);
 
 // loopable IF
 void InPin_vLoop(INPIN_HANDLE_T *psHandle, uint32_t u32ms);

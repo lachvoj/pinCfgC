@@ -1,20 +1,18 @@
+#include <Arduino.h>
 #include <errno.h>
 
-#include "ExternalInterfaces.h"
+#include "Globals.h"
 #include "InPin.h"
 #include "PinSubscriberIf.h"
 
-static uint32_t gu32InPinDebounceMs;
-static uint32_t gu32InPinMulticlickMaxDelayMs;
-
 void InPin_SetDebounceMs(uint32_t u32Debounce)
 {
-    gu32InPinDebounceMs = u32Debounce;
+    psGlobals->u32InPinDebounceMs = u32Debounce;
 }
 
 void InPin_SetMulticlickMaxDelayMs(uint32_t u32MultikMaxDelay)
 {
-    gu32InPinMulticlickMaxDelayMs = u32MultikMaxDelay;
+    psGlobals->u32InPinMulticlickMaxDelayMs = u32MultikMaxDelay;
 }
 
 INPIN_RESULT_T InPin_eInit(
@@ -36,6 +34,9 @@ INPIN_RESULT_T InPin_eInit(
     psHandle->u8InPin = u8InPin;
     psHandle->u32TimerDebounceStarted--;
     psHandle->u32timerMultiStarted--;
+
+    pinMode(u8InPin, INPUT_PULLUP);
+    digitalWrite(u8InPin, HIGH); // enabling pullup
 
     return INPIN_OK_E;
 }
@@ -72,11 +73,6 @@ void InPin_vSendEvent(INPIN_HANDLE_T *psHandle, uint8_t u8EventType, uint32_t u3
     }
 }
 
-bool InPin_bReadPin(INPIN_HANDLE_T *psHandle)
-{
-    return (bool)psPinCfg_PinIf->u8ReadPin(psHandle->u8InPin);
-}
-
 // loopable IF
 typedef enum
 {
@@ -92,7 +88,7 @@ void InPin_vLoop(INPIN_HANDLE_T *psHandle, uint32_t u32ms)
     INPIN_CHANGE_T eChange = INPIN_CHANGE_NOCHANGE_E;
     if (psHandle->ePinState != INPIN_DEBOUNCEDOWN_E && psHandle->ePinState != INPIN_DEBOUNCEUP_E)
     {
-        bool bPinState = InPin_bReadPin(psHandle);
+        bool bPinState = (bool)digitalRead(psHandle->u8InPin);
         if (bPinState != psHandle->bLastPinState)
         {
             if (bPinState)
@@ -108,7 +104,7 @@ void InPin_vLoop(INPIN_HANDLE_T *psHandle, uint32_t u32ms)
     {
     case INPIN_DEBOUNCEDOWN_E:
     {
-        if (u32ms - psHandle->u32TimerDebounceStarted < gu32InPinDebounceMs)
+        if (u32ms - psHandle->u32TimerDebounceStarted < psGlobals->u32InPinDebounceMs)
             break;
 
         psHandle->ePinState = INPIN_DOWN_E;
@@ -118,7 +114,7 @@ void InPin_vLoop(INPIN_HANDLE_T *psHandle, uint32_t u32ms)
     break;
     case INPIN_DOWN_E:
     {
-        if (psHandle->u8PressCount > 0 && (u32ms - psHandle->u32timerMultiStarted) > gu32InPinMulticlickMaxDelayMs)
+        if (psHandle->u8PressCount > 0 && (u32ms - psHandle->u32timerMultiStarted) > psGlobals->u32InPinMulticlickMaxDelayMs)
         {
             InPin_vSendEvent(psHandle, (uint8_t)INPIN_MULTI_E, (uint32_t)psHandle->u8PressCount);
             psHandle->u8PressCount = 0U;
@@ -132,7 +128,7 @@ void InPin_vLoop(INPIN_HANDLE_T *psHandle, uint32_t u32ms)
     break;
     case INPIN_DEBOUNCEUP_E:
     {
-        if (u32ms - psHandle->u32TimerDebounceStarted < gu32InPinDebounceMs)
+        if (u32ms - psHandle->u32TimerDebounceStarted < psGlobals->u32InPinDebounceMs)
             break;
 
         psHandle->ePinState = INPIN_UP_E;
@@ -144,7 +140,7 @@ void InPin_vLoop(INPIN_HANDLE_T *psHandle, uint32_t u32ms)
     break;
     case INPIN_UP_E:
     {
-        if (u32ms - psHandle->u32timerMultiStarted > gu32InPinMulticlickMaxDelayMs)
+        if (u32ms - psHandle->u32timerMultiStarted > psGlobals->u32InPinMulticlickMaxDelayMs)
         {
             psHandle->ePinState = INPIN_LONG_E;
             InPin_vSendEvent(psHandle, (uint8_t)psHandle->ePinState, 0U);

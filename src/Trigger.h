@@ -5,13 +5,6 @@
 #include "Switch.h"
 #include "Types.h"
 
-#ifndef PINCFG_TRIGGER_MAX_SWITCHES_D
-#define PINCFG_TRIGGER_MAX_SWITCHES_D 5
-#endif
-#if (PINCFG_TRIGGER_MAX_SWITCHES_D > 255)
-#error PINCFG_TRIGGER_MAX_SWITCHES_D is more then 255!
-#endif
-
 typedef enum
 {
     TRIGGER_OK_E,

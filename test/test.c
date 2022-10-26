@@ -1,6 +1,8 @@
 #include <stdio.h>
 
+#include "ArduinoMock.h"
 #include "ExtCfgReceiver.h"
+#include "Globals.h"
 #include "InPin.h"
 #include "Memory.h"
 #include "MySensorsPresent.h"
@@ -10,7 +12,7 @@
 #include "Trigger.h"
 
 #ifndef MEMORY_SZ
-#define MEMORY_SZ 3000
+#define MEMORY_SZ 3003
 #endif
 
 #ifndef AS_OUT_MAX_LEN_D
@@ -25,11 +27,11 @@
 #define OUT_STR_MAX_LEN_D 250
 #endif
 
-// MYSENSORS_IF mock
+// PINCFG_IF mock
 uint8_t mock_bRequest_u8Id;
 PINCFG_ELEMENT_TYPE_T mock_bRequest_eType;
 bool mock_bRequest_bReturn;
-bool bRequest(const uint8_t u8Id, const PINCFG_ELEMENT_TYPE_T eType)
+bool bRequest(const PINCFG_ELEMENT_TYPE_T eType, const uint8_t u8Id)
 {
     mock_bRequest_u8Id = u8Id;
     mock_bRequest_eType = eType;
@@ -40,7 +42,7 @@ uint8_t mock_bPresent_u8Id;
 uint8_t mock_bPresent_eType;
 const char *mock_bPresent_pcName;
 bool mock_bPresent_bReturn;
-bool bPresent(const uint8_t u8Id, const PINCFG_ELEMENT_TYPE_T eType, const char *pcName)
+bool bPresent(const PINCFG_ELEMENT_TYPE_T eType, const uint8_t u8Id, const char *pcName)
 {
     mock_bPresent_u8Id = u8Id;
     mock_bPresent_eType = eType;
@@ -52,40 +54,22 @@ uint8_t mock_bSend_u8Id;
 uint8_t mock_bSend_eType;
 const void *mock_bSend_pvMessage;
 bool mock_bSend_bReturn;
-bool bSend(const uint8_t u8Id, const PINCFG_ELEMENT_TYPE_T eType, const void *pvMessage)
+bool bSend(const PINCFG_ELEMENT_TYPE_T eType, const uint8_t u8Id, const void *pvMessage)
 {
     mock_bSend_u8Id = u8Id;
     mock_bSend_eType = eType;
     mock_bSend_pvMessage = pvMessage;
     return mock_bSend_bReturn;
 }
-// end MYSENSORS_IF mock
 
-// PIN_IF_T mock
-uint8_t mock_vPinMode_u8Pin;
-uint8_t mock_vPinMode_u8Mode;
-void vPinMode(uint8_t u8Pin, uint8_t u8Mode)
+const char *mock_u8SaveCfg_pcCfg;
+int8_t mock_u8SaveCfg_u8Return;
+int8_t i8SaveCfg(const char *pcCfg)
 {
-    mock_vPinMode_u8Pin = u8Pin;
-    mock_vPinMode_u8Mode = u8Mode;
+    mock_u8SaveCfg_pcCfg = pcCfg;
+    return mock_u8SaveCfg_u8Return;
 }
-
-uint8_t mock_u8ReadPin_u8Pin;
-uint8_t mock_u8ReadPin_u8return;
-uint8_t u8ReadPin(uint8_t u8Pin)
-{
-    mock_u8ReadPin_u8Pin = u8Pin;
-    return mock_u8ReadPin_u8return;
-}
-
-uint8_t mock_vWritePin_u8Pin;
-uint8_t mock_vWritePin_u8Value;
-void vWritePin(uint8_t u8Pin, uint8_t u8Value)
-{
-    mock_vWritePin_u8Pin = u8Pin;
-    mock_vWritePin_u8Value = u8Value;
-}
-// end PIN_IF_T mock
+// end PINCFG_IF mock
 
 // utils
 void printStringPointArray(STRING_POINT_T *asStrPts, uint8_t u8StrPtsLen)
@@ -101,38 +85,80 @@ void printStringPointArray(STRING_POINT_T *asStrPts, uint8_t u8StrPtsLen)
 // end utils
 
 static uint8_t testMemory[MEMORY_SZ];
+
+int vMemoryTest(void)
+{
+    int iRet = 0;
+
+    printf("\n");
+    Memory_eInit(testMemory, MEMORY_SZ);
+    // memory test
+    void *a1 = Memory_vpAlloc(2);
+    void *a2 = Memory_vpAlloc(3);
+    void *a3 = Memory_vpAlloc(MEMORY_SZ);
+
+    printf("Test:Memory:Alloc: ");
+    if (a1 == testMemory + sizeof(GLOBALS_HANDLE_T) && a2 == a1 + sizeof(void *) && a3 == NULL)
+        printf("PASSED.\n");
+    else
+
+    // temp memory alloc test
+    Memory_eInit(testMemory, MEMORY_SZ);
+    void *vpTemp1 = Memory_vpTempAlloc(11);
+    void *vpTemp2 = Memory_vpTempAlloc(11);
+    void *vpTemp3 = Memory_vpTempAlloc(MEMORY_SZ);
+
+    printf("Test:Memory:TempAlloc: ");
+    if (vpTemp1 == psGlobals->pvMemEnd - (sizeof(void *) * 2) && vpTemp2 == vpTemp1 - (sizeof(void *) * 2) ||
+        vpTemp3 == NULL)
+        printf("PASSED.\n");
+    else
+    {
+        printf("FAILED.\n");
+        iRet++;
+    }
+
+    char src[] = "Hello!";
+    strcpy(vpTemp1, src);
+    strcpy(vpTemp2, src);
+    Memory_vTempFree();
+
+    vpTemp1 = Memory_vpTempAlloc(8);
+    *((uint8_t *)(vpTemp1)) = 0xff;
+    *((uint8_t *)(vpTemp1) + 1) = 0xff;
+    *((uint8_t *)(vpTemp1) + 2) = 0xff;
+    *((uint8_t *)(vpTemp1) + 3) = 0xff;
+    *((uint8_t *)(vpTemp1) + 4) = 0xff;
+    *((uint8_t *)(vpTemp1) + 5) = 0xff;
+    *((uint8_t *)(vpTemp1) + 6) = 0xff;
+    *((uint8_t *)(vpTemp1) + 7) = 0xff;
+    *((uint8_t *)(vpTemp1) + 8) = 0xff;
+    Memory_vTempFree();
+
+    printf("\n");
+
+    return iRet;
+}
+
 int main()
 {
     // sizes
+    printf("sizeof(GLOBALS_HANDLE_T): %ld\n", sizeof(GLOBALS_HANDLE_T));
     printf("sizeof(EXTCFGRECEIVER_HANDLE_T): %ld\n", sizeof(EXTCFGRECEIVER_HANDLE_T));
     printf("sizeof(SWITCH_HANDLE_T): %ld\n", sizeof(SWITCH_HANDLE_T));
     printf("sizeof(INPIN_HANDLE_T): %ld\n", sizeof(INPIN_HANDLE_T));
     printf("sizeof(TRIGGER_HANDLE_T): %ld\n", sizeof(TRIGGER_HANDLE_T));
     printf("sizeof(TRIGGER_SWITCHACTION_T): %ld\n", sizeof(TRIGGER_SWITCHACTION_T));
 
+    vMemoryTest();
+
     Memory_eInit(testMemory, MEMORY_SZ);
-
-    // memory test
-    void *a1 = Memory_vpAlloc(2);
-    void *a2 = Memory_vpAlloc(3);
-    void *a3 = Memory_vpAlloc(MEMORY_SZ);
-
-    printf("Mem addr: %ld\n", (long unsigned int)&testMemory);
-    printf("allocated1 addr: %ld\n", (long unsigned int)a1);
-    printf("allocated2 addr: %ld\n", (long unsigned int)a2);
-    printf("allocated3 addr: %ld\n", (long unsigned int)a3);
-
-    // mysensor if mock setup
-    MYSENOSRS_IF_T *psMySensorsIf = (MYSENOSRS_IF_T *)Memory_vpAlloc(sizeof(MYSENOSRS_IF_T));
-    psMySensorsIf->bRequest = bRequest;
-    psMySensorsIf->bPresent = bPresent;
-    psMySensorsIf->bSend = bSend;
-
-    // pin if mock setup
-    PIN_IF_T *psPinIf = (PIN_IF_T *)Memory_vpAlloc(sizeof(PIN_IF_T));
-    psPinIf->vPinMode = vPinMode;
-    psPinIf->u8ReadPin = u8ReadPin;
-    psPinIf->vWritePin = vWritePin;
+    // pincfg if mock setup
+    PINCFG_IF_T psPincfgIf;
+    psPincfgIf.bRequest = bRequest;
+    psPincfgIf.bPresent = bPresent;
+    psPincfgIf.bSend = bSend;
+    psPincfgIf.i8SaveCfg = i8SaveCfg;
 
     // name mock setup
     char pcName[] = "Ahoj";
@@ -185,30 +211,28 @@ int main()
 
     // PinCfgCsv
     const char *pcConfig = "# (bluePill)\n"
-                           "S,12,o1,13,o2,12,o3,11,o4,10,o5,9,o6,8,o7,7,o8,6,o9,5,o10,4,o11,3,o12,2\n"
-                           "I,12,i1,16,i2,15,i3,14,i4,31,i5,30,i6,201,i7,195,i8,194,i9,193,i10,192,i11,19,i12,18\n"
+                           "S,o1,13,o2,12,o3,11,o4,10,o5,9,o6,8,o7,7,o8,6,o9,5,o10,4,o11,3,o12,2\n"
+                           "I,i1,16,i2,15,i3,14,i4,31,i5,30,i6,201,i7,195,i8,194,i9,193,i10,192,i11,19,i12,18\n"
                            "#triggers\n"
-                           "T,vtl11,i1,3,1,1,o2,2\n"
-                           "T,vtl12,i1,3,1,2,o2,2,o3,2";
+                           "T,vtl11,i1,3,1,o2,2\n"
+                           "T,vtl12,i1,3,1,o2,2,o3,2";
 
-    char acOutStr[OUT_STR_MAX_LEN_D];
-    PINCFG_RESULT_T eParseResult = PinCfgCsv_eParse(
-        pcConfig,
-        acOutStr,
-        (uint16_t)OUT_STR_MAX_LEN_D,
-        false,
-        testMemory,
-        (size_t)MEMORY_SZ,
-        true,
-        psMySensorsIf,
-        psPinIf);
+    PINCFG_RESULT_T eInitResult = PinCfgCsv_eInit(testMemory, MEMORY_SZ, &psPincfgIf);
+    if (eInitResult == PINCFG_OK_E)
+    {
+        strcpy(PinCfgCsv_pcGetCfgBuf(), pcConfig);
 
-    printf(
-        "Parse result is: %d (0-PINCFG_OK_E, 1-PINCFG_NULLPTR_ERROR_E, 2-PINCFG_INVALID_FORMAT_E, "
-        "3-PINCFG_MAXLEN_ERROR_E, 4-PINCFG_TYPE_ERROR_E, 5-PINCFG_OUTOFMEMORY_ERROR_E, 6-PINCFG_MEMORYINIT_ERROR_E, "
-        "7-PINCFG_ERROR_E)\n",
-        eParseResult);
-    printf("Parse out string is:\n%s\n", acOutStr);
+        char acOutStr[OUT_STR_MAX_LEN_D];
+        PINCFG_RESULT_T eParseResult = PinCfgCsv_eParse(acOutStr, (uint16_t)OUT_STR_MAX_LEN_D, false, true);
+
+        printf(
+            "Parse result is: %d (0-PINCFG_OK_E, 1-PINCFG_NULLPTR_ERROR_E, 2-PINCFG_INVALID_FORMAT_E, "
+            "3-PINCFG_MAXLEN_ERROR_E, 4-PINCFG_TYPE_ERROR_E, 5-PINCFG_OUTOFMEMORY_ERROR_E, "
+            "6-PINCFG_MEMORYINIT_ERROR_E, "
+            "7-PINCFG_ERROR_E)\n",
+            eParseResult);
+        printf("Parse out string is:\n%s\n", acOutStr);
+    }
 
     return 0;
 }

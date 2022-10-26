@@ -1,38 +1,30 @@
 #include <string.h>
 
 #include "ExtCfgReceiver.h"
-#include "ExternalInterfaces.h"
+#include "Globals.h"
 #include "Memory.h"
-
-static char *pcStartCfgStr = "#{#";
-static char *pcEndCfgStr = "#}#";
-static char *ppcStatusStr[] = {"OFF", "RECEIVING", "RECEIVED", "VALIDATING", "VALIDATION OK", "VALIDATION ERROR"};
 
 static void ExtCfgReceiver_vConfigurationReceived(EXTCFGRECEIVER_HANDLE_T *psHandle);
 
-EXTCFGRECEIVER_RESULT_T ExtCfgReceiver_eInit(
-    EXTCFGRECEIVER_HANDLE_T *psHandle,
-    STRING_POINT_T *psName,
-    uint8_t u8Id,
-    bool bPresent)
+EXTCFGRECEIVER_RESULT_T ExtCfgReceiver_eInit(EXTCFGRECEIVER_HANDLE_T *psHandle, uint8_t u8Id, bool bPresent)
 {
-    if (psHandle == NULL || psName == NULL)
+    if (psHandle == NULL)
     {
         return EXTCFGRECEIVER_NULLPTR_ERROR_E;
     }
+    // globals init
+    psGlobals->apcStatusStr[0] = "OFF";
+    psGlobals->apcStatusStr[1] = "RECEIVING";
+    psGlobals->apcStatusStr[2] = "RECEIVED";
+    psGlobals->apcStatusStr[3] = "VALIDATING";
+    psGlobals->apcStatusStr[4] = "VALIDATION OK";
+    psGlobals->apcStatusStr[5] = "VALIDATION ERROR";
 
-    char *pcName = (char *)Memory_vpAlloc(psName->szLen + 1);
-    if (pcName == NULL)
-    {
-        return EXTCFGRECEIVER_ALLOCATION_ERROR_E;
-    }
     // LOOPRE init
     psHandle->sLooPreIf.ePinCfgType = PINCFG_EXTCFGRECEIVER_E;
-    // Initialize handle items
-    memcpy((void *)pcName, (const void *)psName->pcStrStart, (size_t)psName->szLen);
-    pcName[psName->szLen] = '\0';
 
-    psHandle->pcName = pcName;
+    // Initialize handle items
+    psHandle->pcName = "cfgReceviver";
     psHandle->u8Id = u8Id;
     psHandle->eState = EXTCFGRECEIVER_OFF_E;
 
@@ -41,8 +33,8 @@ EXTCFGRECEIVER_RESULT_T ExtCfgReceiver_eInit(
 
 void ExtCfgReceiver_vSetState(EXTCFGRECEIVER_HANDLE_T *psHandle, const char *psState)
 {
-    strcpy(psHandle->acState, ppcStatusStr[psHandle->eState]);
-    psPinCfg_MySensorsIf->bSend(psHandle->u8Id, PINCFG_EXTCFGRECEIVER_E, (void *)psHandle->acState);
+    strcpy(psHandle->acState, psGlobals->apcStatusStr[psHandle->eState]);
+    psGlobals->sPinCfgIf.bSend(PINCFG_EXTCFGRECEIVER_E, psHandle->u8Id, (void *)psHandle->acState);
 }
 
 // presentable IF
@@ -59,44 +51,44 @@ const char *ExtCfgReceiver_pcGetName(EXTCFGRECEIVER_HANDLE_T *psHandle)
 void ExtCfgReceiver_vRcvMessage(EXTCFGRECEIVER_HANDLE_T *psHandle, const void *pvMessage)
 {
     const char *pcMessage = (const char *)pvMessage;
-    EXTCFGRECEIVER_STATE_T eOldState = psHandle->eState;
+    // EXTCFGRECEIVER_STATE_T eOldState = psHandle->eState;
 
     if (psHandle->eState == EXTCFGRECEIVER_OFF_E)
     {
-        char *pcStartString = strstr(pcMessage, pcStartCfgStr);
+        char *pcStartString = strstr(pcMessage, PINCFG_CONF_START_STR);
         if (pcStartString != NULL)
         {
             psHandle->u16CfgNext = 0;
-            strcpy(psHandle->acConfiguration + psHandle->u16CfgNext, pcStartString + strlen(pcStartCfgStr));
+            strcpy(psGlobals->acCfgBuf + psHandle->u16CfgNext, pcStartString + strlen(PINCFG_CONF_START_STR));
             psHandle->eState = EXTCFGRECEIVER_RECEIVNG_E;
         }
     }
     else if (psHandle->eState == EXTCFGRECEIVER_RECEIVNG_E)
     {
-        char *pcEndString = strstr(pcMessage, pcEndCfgStr);
+        char *pcEndString = strstr(pcMessage, PINCFG_CONF_END_STR);
         if (pcEndString != NULL)
         {
             size_t szLen = pcEndString - pcMessage;
             psHandle->eState = EXTCFGRECEIVER_RECEIVED_E;
-            memcpy(psHandle->acConfiguration + psHandle->u16CfgNext, pcMessage, szLen);
+            memcpy(psGlobals->acCfgBuf + psHandle->u16CfgNext, pcMessage, szLen);
             ExtCfgReceiver_vConfigurationReceived(psHandle);
         }
         else
         {
-            strcpy(psHandle->acConfiguration + psHandle->u16CfgNext, pcMessage);
+            strcpy(psGlobals->acCfgBuf + psHandle->u16CfgNext, pcMessage);
         }
     }
 }
 
 void ExtCfgReceiver_vPresent(EXTCFGRECEIVER_HANDLE_T *psHandle)
 {
-    psPinCfg_MySensorsIf->bPresent(psHandle->u8Id, PINCFG_EXTCFGRECEIVER_E, psHandle->pcName);
+    psGlobals->sPinCfgIf.bPresent(PINCFG_EXTCFGRECEIVER_E, psHandle->u8Id, psHandle->pcName);
 }
 
 void ExtCfgReceiver_vPresentState(EXTCFGRECEIVER_HANDLE_T *psHandle)
 {
-    psPinCfg_MySensorsIf->bSend(psHandle->u8Id, PINCFG_EXTCFGRECEIVER_E, (void *)psHandle->acState);
-    psPinCfg_MySensorsIf->bRequest(psHandle->u8Id, PINCFG_EXTCFGRECEIVER_E);
+    psGlobals->sPinCfgIf.bSend(PINCFG_EXTCFGRECEIVER_E, psHandle->u8Id, (void *)psHandle->acState);
+    psGlobals->sPinCfgIf.bRequest(PINCFG_EXTCFGRECEIVER_E, psHandle->u8Id);
 }
 
 // private

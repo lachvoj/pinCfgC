@@ -3,7 +3,6 @@
 
 #include "LooPreIf.h"
 #include "MySensorsPresent.h"
-#include "PinIf.h"
 #include "Types.h"
 
 typedef enum

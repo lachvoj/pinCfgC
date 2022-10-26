@@ -1,4 +1,5 @@
-#include "ExternalInterfaces.h"
+#include <Arduino.h>
+
 #include "Switch.h"
 
 static inline void Switch_vWritePin(SWITCH_HANDLE_T *psHandle, uint8_t u8Value);
@@ -34,6 +35,13 @@ SWITCH_RESULT_T Switch_eInit(
     if (u32ImpulseDuration != 0U)
         psHandle->u32ImpulseDuration = u32ImpulseDuration;
 
+    if (u8FbPin > 0)
+    {
+        pinMode(u8FbPin, INPUT_PULLUP);
+        digitalWrite(u8FbPin, HIGH); // enabling pullup
+    }
+    pinMode(u8OutPin, OUTPUT);
+
     return SWITCH_OK_E;
 }
 
@@ -43,7 +51,7 @@ void Switch_vLoop(SWITCH_HANDLE_T *psHandle, uint32_t u32ms)
 
     if (psHandle->u8FbPin > 0)
     {
-        uint8_t u8ActualPinState = psPinCfg_PinIf->u8ReadPin(psHandle->u8FbPin);
+        uint8_t u8ActualPinState = (uint8_t)digitalRead(psHandle->u8FbPin);
         if (psPresentHnd->u8State != u8ActualPinState)
         {
             psPresentHnd->u8State = u8ActualPinState;
@@ -78,5 +86,5 @@ void Switch_vLoop(SWITCH_HANDLE_T *psHandle, uint32_t u32ms)
 // private
 static inline void Switch_vWritePin(SWITCH_HANDLE_T *psHandle, uint8_t u8Value)
 {
-    return psPinCfg_PinIf->vWritePin(psHandle->u8OutPin, u8Value);
+    digitalWrite(psHandle->u8OutPin, u8Value);
 }

@@ -1,6 +1,6 @@
 #include <string.h>
 
-#include "ExternalInterfaces.h"
+#include "Globals.h"
 #include "Memory.h"
 #include "MySensorsPresent.h"
 
@@ -35,7 +35,7 @@ MYSENSORSPRESENT_RESULT_T MySensorsPresent_eInit(
 
 void MySensorsPresent_vSendMySensorsStatus(MYSENSORSPRESENT_HANDLE_T *psHandle)
 {
-    psPinCfg_MySensorsIf->bSend(psHandle->u8Id, psHandle->sLooPreIf.ePinCfgType, (void *)(&psHandle->u8State));
+    psGlobals->sPinCfgIf.bSend(psHandle->u8Id, psHandle->sLooPreIf.ePinCfgType, (void *)(&psHandle->u8State));
 }
 
 void MySensorsPresent_vSetState(MYSENSORSPRESENT_HANDLE_T *psHandle, uint8_t u8State)
@@ -75,11 +75,11 @@ void MySensorsPresent_vRcvMessage(MYSENSORSPRESENT_HANDLE_T *psHandle, const voi
 
 void MySensorsPresent_vPresent(MYSENSORSPRESENT_HANDLE_T *psHandle)
 {
-    psPinCfg_MySensorsIf->bPresent(psHandle->u8Id, psHandle->sLooPreIf.ePinCfgType, psHandle->pcName);
+    psGlobals->sPinCfgIf.bPresent(psHandle->u8Id, psHandle->sLooPreIf.ePinCfgType, psHandle->pcName);
 }
 
 void MySensorsPresent_vPresentState(MYSENSORSPRESENT_HANDLE_T *psHandle)
 {
     MySensorsPresent_vSendMySensorsStatus(psHandle);
-    psPinCfg_MySensorsIf->bRequest(psHandle->u8Id, psHandle->sLooPreIf.ePinCfgType);
+    psGlobals->sPinCfgIf.bRequest(psHandle->sLooPreIf.ePinCfgType, psHandle->u8Id);
 }

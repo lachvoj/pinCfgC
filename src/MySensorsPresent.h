@@ -2,7 +2,7 @@
 #define MYSENSORSPRESENT_H
 
 #include "LooPreIf.h"
-#include "MysensorsIf.h"
+#include "PincfgIf.h"
 #include "PinCfgStr.h"
 #include "Types.h"
 

@@ -2,17 +2,9 @@
 #define EXTCFGRECEIVER_H
 
 #include "LooPreIf.h"
-#include "MysensorsIf.h"
+#include "PincfgIf.h"
 #include "PinCfgStr.h"
 #include "Types.h"
-
-#ifndef PINCFG_CONFIG_MAX_SZ_D
-#define PINCFG_CONFIG_MAX_SZ_D 512
-#endif
-
-#ifndef PINCFG_TXTSTATE_MAX_SZ_D
-#define PINCFG_TXTSTATE_MAX_SZ_D 25
-#endif
 
 typedef enum
 {
@@ -27,8 +19,7 @@ typedef enum
 typedef struct
 {
     LOOPRE_IF_T sLooPreIf;
-    char *pcName;
-    char acConfiguration[PINCFG_CONFIG_MAX_SZ_D];
+    const char *pcName;
     char acState[PINCFG_TXTSTATE_MAX_SZ_D];
     uint16_t u16CfgNext;
     EXTCFGRECEIVER_STATE_T eState;
@@ -45,7 +36,6 @@ typedef enum
 
 EXTCFGRECEIVER_RESULT_T ExtCfgReceiver_eInit(
     EXTCFGRECEIVER_HANDLE_T *psHandle,
-    STRING_POINT_T *psName,
     uint8_t u8Id,
     bool bPresent);
 

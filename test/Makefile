@@ -5,14 +5,14 @@ SHELL = /bin/sh
 # ARDUINODIR=$(MYSENSORDIR)/hal/architecture/Linux/drivers/core
 BUILDDIR=build
 OBJDIR=$(BUILDDIR)
-SRCDIR=..
+SRCDIR=../src
 CC = gcc
 SRC = $(wildcard $(SRCDIR)/*.c)
-OBJ = $(patsubst $(SRCDIR)/%.c, $(OBJDIR)/%.o, $(SRC)) $(OBJDIR)/test.o
+OBJ = $(patsubst $(SRCDIR)/%.c, $(OBJDIR)/%.o, $(SRC)) $(OBJDIR)/ArduinoMock.o $(OBJDIR)/test.o 
 EXE = test
 
-CFLAGS = -Wall -g -Wstack-usage=200
-INCLUDES = -I. -I$(SRCDIR)#-I$(MYSENSORDIR) -I$(ARDUINODIR)
+CFLAGS = -Wall -g -Wstack-usage=200 -D'F(x)=((const char*)x)'
+INCLUDES = -I. -I../include -I$(SRCDIR)#-I$(MYSENSORDIR) -I$(ARDUINODIR)
 LIBS = -lm
 
 .PHONY: all
@@ -26,7 +26,7 @@ echo:
 
 run: test
 	@echo "\n"
-	@./test
+	@./$(BUILDDIR)/test
 	@echo "\n"
 
 clean:
