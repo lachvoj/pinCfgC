@@ -12,13 +12,6 @@ EXTCFGRECEIVER_RESULT_T ExtCfgReceiver_eInit(EXTCFGRECEIVER_HANDLE_T *psHandle, 
     {
         return EXTCFGRECEIVER_NULLPTR_ERROR_E;
     }
-    // globals init
-    psGlobals->apcStatusStr[0] = "OFF";
-    psGlobals->apcStatusStr[1] = "RECEIVING";
-    psGlobals->apcStatusStr[2] = "RECEIVED";
-    psGlobals->apcStatusStr[3] = "VALIDATING";
-    psGlobals->apcStatusStr[4] = "VALIDATION OK";
-    psGlobals->apcStatusStr[5] = "VALIDATION ERROR";
 
     // LOOPRE init
     psHandle->sLooPreIf.ePinCfgType = PINCFG_EXTCFGRECEIVER_E;
@@ -33,7 +26,16 @@ EXTCFGRECEIVER_RESULT_T ExtCfgReceiver_eInit(EXTCFGRECEIVER_HANDLE_T *psHandle, 
 
 void ExtCfgReceiver_vSetState(EXTCFGRECEIVER_HANDLE_T *psHandle, const char *psState)
 {
-    strcpy(psHandle->acState, psGlobals->apcStatusStr[psHandle->eState]);
+    switch (psHandle->eState)
+    {
+    case 0: strcpy(psHandle->acState, "OFF"); break;
+    case 1: strcpy(psHandle->acState, "RECEIVING"); break;
+    case 2: strcpy(psHandle->acState, "RECEIVED"); break;
+    case 3: strcpy(psHandle->acState, "VALIDATING"); break;
+    case 4: strcpy(psHandle->acState, "VALIDATION OK"); break;
+    case 5: strcpy(psHandle->acState, "VALIDATION ERROR"); break;
+    default: break;
+    }
     psGlobals->sPinCfgIf.bSend(PINCFG_EXTCFGRECEIVER_E, psHandle->u8Id, (void *)psHandle->acState);
 }
 

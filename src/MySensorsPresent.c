@@ -70,7 +70,7 @@ const char *MySensorsPresent_pcGetName(MYSENSORSPRESENT_HANDLE_T *psHandle)
 
 void MySensorsPresent_vRcvMessage(MYSENSORSPRESENT_HANDLE_T *psHandle, const void *pvMessage)
 {
-    MySensorsPresent_vSetState(psHandle, *((uint16_t *)pvMessage));
+    MySensorsPresent_vSetState(psHandle, *((uint8_t *)pvMessage));
 }
 
 void MySensorsPresent_vPresent(MYSENSORSPRESENT_HANDLE_T *psHandle)

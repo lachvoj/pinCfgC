@@ -105,7 +105,7 @@ PINCFG_RESULT_T PinCfgCsv_eParse(
 
     PinCfgStr_vInitStrPoint(&sTempStrPt, psGlobals->acCfgBuf, strlen(psGlobals->acCfgBuf));
     u8LinesLen = (uint8_t)PinCfgStr_szGetSplitCount(&sTempStrPt, '\n');
-    if (u8LinesLen == 0)
+    if (u8LinesLen == 1 && sTempStrPt.szLen == 0)
     {
         PinCfgCsv_vAddToString(pcOutString, u16OutStrMaxLen, "E:Invalid format. Empty configuration.\n", -1);
         return PINCFG_ERROR_E;
@@ -172,6 +172,7 @@ PINCFG_RESULT_T PinCfgCsv_eParse(
                     psLooPreIfElement = (LOOPRE_IF_T *)Memory_vpAlloc(sizeof(SWITCH_HANDLE_T));
                     if (psLooPreIfElement == NULL)
                     {
+                        Memory_eReset();
                         PinCfgCsv_vAddToString(
                             pcOutString, u16OutStrMaxLen, "E:L:%d:Switch: Out of memory.\n", (int16_t)u8LinesProcessed);
                         return PINCFG_OUTOFMEMORY_ERROR_E;
@@ -240,6 +241,7 @@ PINCFG_RESULT_T PinCfgCsv_eParse(
                     psLooPreIfElement = (LOOPRE_IF_T *)Memory_vpAlloc(sizeof(INPIN_HANDLE_T));
                     if (psLooPreIfElement == NULL)
                     {
+                        Memory_eReset();
                         PinCfgCsv_vAddToString(pcOutString, u16OutStrMaxLen, "E:L:%d:InPin: Out of memory.\n", (int16_t)u8LinesProcessed);
                         return PINCFG_OUTOFMEMORY_ERROR_E;
                     }
@@ -347,6 +349,7 @@ PINCFG_RESULT_T PinCfgCsv_eParse(
                     psSwAct = (TRIGGER_SWITCHACTION_T *)Memory_vpAlloc(sizeof(TRIGGER_SWITCHACTION_T));
                     if (psSwAct == NULL)
                     {
+                        Memory_eReset();
                         PinCfgCsv_vAddToString(
                             pcOutString,
                             u16OutStrMaxLen,
@@ -373,6 +376,7 @@ PINCFG_RESULT_T PinCfgCsv_eParse(
                 psTriggerHnd = (TRIGGER_HANDLE_T *)Memory_vpAlloc(sizeof(TRIGGER_HANDLE_T));
                 if (psTriggerHnd == NULL)
                 {
+                    Memory_eReset();
                     PinCfgCsv_vAddToString(
                         pcOutString, u16OutStrMaxLen, "E:L:%d:Trigger: Out of memory.\n", (int16_t)u8LinesProcessed);
                     return PINCFG_OUTOFMEMORY_ERROR_E;
@@ -539,10 +543,8 @@ static inline void PinCfgCsv_vAddToString(
     size_t szBufNeeded;
     if (i16Line >= 0)
         szBufNeeded = snprintf(NULL, 0, pcMsgToBeAdded, i16Line) + 1;
-    else
-        szBufNeeded = strlen(pcMsgToBeAdded) + 1;
 
-    if ((szBufNeeded + strlen(pcOutMsg)) > (szOutMsgMaxLen - 1))
+    if ((int)(szBufNeeded + strlen(pcOutMsg)) > (szOutMsgMaxLen - 1))
         return;
 
     if (i16Line >= 0)

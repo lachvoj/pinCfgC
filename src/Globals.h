@@ -7,9 +7,9 @@
 typedef struct
 {
     // memory
-    void *pvMemEnd;
-    void *pvMemNext;
-    void *pvMemTempEnd;
+    char *pvMemEnd;
+    char *pvMemNext;
+    char *pvMemTempEnd;
     bool bMemIsInitialized;
     // external interface
     PINCFG_IF_T sPinCfgIf;
@@ -19,8 +19,6 @@ typedef struct
     // InPin
     uint32_t u32InPinDebounceMs;
     uint32_t u32InPinMulticlickMaxDelayMs;
-    //ext cfg receiver
-    const char *apcStatusStr[6];
     // cfg buf
     char acCfgBuf[PINCFG_CONFIG_MAX_SZ_D];
 } GLOBALS_HANDLE_T;

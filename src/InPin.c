@@ -43,7 +43,7 @@ INPIN_RESULT_T InPin_eInit(
 
 INPIN_RESULT_T InPin_eAddSubscriber(INPIN_HANDLE_T *psHandle, PINSUBSCRIBER_IF_T *psSubscriber)
 {
-    if (psSubscriber == NULL)
+    if (psHandle == NULL || psSubscriber == NULL)
         return INPIN_NULLPTR_ERROR_E;
 
     if (psHandle->psFirstSubscriber != NULL)
