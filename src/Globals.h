@@ -11,8 +11,6 @@ typedef struct
     char *pvMemNext;
     char *pvMemTempEnd;
     bool bMemIsInitialized;
-    // external interface
-    PINCFG_IF_T sPinCfgIf;
     // pincfgcsv
     LOOPRE_IF_T *psLoopablesFirst;
     LOOPRE_IF_T *psPresentablesFirst;

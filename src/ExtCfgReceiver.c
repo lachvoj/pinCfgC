@@ -3,6 +3,7 @@
 #include "ExtCfgReceiver.h"
 #include "Globals.h"
 #include "Memory.h"
+#include "PincfgIf.h"
 
 static void ExtCfgReceiver_vConfigurationReceived(EXTCFGRECEIVER_HANDLE_T *psHandle);
 
@@ -36,7 +37,7 @@ void ExtCfgReceiver_vSetState(EXTCFGRECEIVER_HANDLE_T *psHandle, const char *psS
     case 5: strcpy(psHandle->acState, "VALIDATION ERROR"); break;
     default: break;
     }
-    psGlobals->sPinCfgIf.bSend(PINCFG_EXTCFGRECEIVER_E, psHandle->u8Id, (void *)psHandle->acState);
+    bSend(PINCFG_EXTCFGRECEIVER_E, psHandle->u8Id, (void *)psHandle->acState);
 }
 
 // presentable IF
@@ -84,13 +85,13 @@ void ExtCfgReceiver_vRcvMessage(EXTCFGRECEIVER_HANDLE_T *psHandle, const void *p
 
 void ExtCfgReceiver_vPresent(EXTCFGRECEIVER_HANDLE_T *psHandle)
 {
-    psGlobals->sPinCfgIf.bPresent(PINCFG_EXTCFGRECEIVER_E, psHandle->u8Id, psHandle->pcName);
+    bPresent(PINCFG_EXTCFGRECEIVER_E, psHandle->u8Id, psHandle->pcName);
 }
 
 void ExtCfgReceiver_vPresentState(EXTCFGRECEIVER_HANDLE_T *psHandle)
 {
-    psGlobals->sPinCfgIf.bSend(PINCFG_EXTCFGRECEIVER_E, psHandle->u8Id, (void *)psHandle->acState);
-    psGlobals->sPinCfgIf.bRequest(PINCFG_EXTCFGRECEIVER_E, psHandle->u8Id);
+    bSend(PINCFG_EXTCFGRECEIVER_E, psHandle->u8Id, (void *)psHandle->acState);
+    bRequest(PINCFG_EXTCFGRECEIVER_E, psHandle->u8Id);
 }
 
 // private

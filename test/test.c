@@ -36,7 +36,6 @@ void setUp(void)
     Memory_eInit(testMemory, MEMORY_SZ);
     vArduinoMock_setup();
     vPinCfgIfMock_setup();
-    psGlobals->sPinCfgIf = sPincfgIf;
 }
 
 void tearDown(void)
@@ -283,38 +282,45 @@ void test_vPinCfgCsv(void)
 {
     PINCFG_RESULT_T eParseResult;
     char acOutStr[OUT_STR_MAX_LEN_D];
+    size_t szMemoryRequired;
 
     Memory_vpAlloc((size_t)(psGlobals->pvMemTempEnd - psGlobals->pvMemNext - sizeof(char *)));
-    eParseResult = PinCfgCsv_eParse(acOutStr, (uint16_t)OUT_STR_MAX_LEN_D, false, true);
+    eParseResult = PinCfgCsv_eParse(&szMemoryRequired, acOutStr, (uint16_t)OUT_STR_MAX_LEN_D, false, true);
+    TEST_ASSERT_EQUAL(0, szMemoryRequired);
     TEST_ASSERT_EQUAL(PINCFG_OUTOFMEMORY_ERROR_E, eParseResult);
     TEST_ASSERT_EQUAL_STRING("E:ExtCfgReceiver: Out of memory.\n", acOutStr);
     Memory_eReset();
 
-    eParseResult = PinCfgCsv_eParse(acOutStr, (uint16_t)OUT_STR_MAX_LEN_D, false, true);
+    eParseResult = PinCfgCsv_eParse(&szMemoryRequired, acOutStr, (uint16_t)OUT_STR_MAX_LEN_D, false, true);
+    TEST_ASSERT_EQUAL(sizeof(EXTCFGRECEIVER_HANDLE_T), szMemoryRequired);
     TEST_ASSERT_EQUAL(PINCFG_ERROR_E, eParseResult);
     TEST_ASSERT_EQUAL_STRING("E:Invalid format. Empty configuration.\n", acOutStr);
     Memory_eReset();
 
     strncpy(PinCfgCsv_pcGetCfgBuf(), "S", PINCFG_CONFIG_MAX_SZ_D);
-    eParseResult = PinCfgCsv_eParse(acOutStr, (uint16_t)OUT_STR_MAX_LEN_D, false, true);
+    eParseResult = PinCfgCsv_eParse(&szMemoryRequired, acOutStr, (uint16_t)OUT_STR_MAX_LEN_D, false, true);
+    TEST_ASSERT_EQUAL(sizeof(EXTCFGRECEIVER_HANDLE_T), szMemoryRequired);
     TEST_ASSERT_EQUAL(PINCFG_OK_E, eParseResult);
     TEST_ASSERT_EQUAL_STRING("W:L:0:Not defined or invalid format.\nI: Configuration parsed.\n", acOutStr);
     Memory_eReset();
 
     strncpy(PinCfgCsv_pcGetCfgBuf(), "S,o1", PINCFG_CONFIG_MAX_SZ_D);
-    eParseResult = PinCfgCsv_eParse(acOutStr, (uint16_t)OUT_STR_MAX_LEN_D, false, true);
+    eParseResult = PinCfgCsv_eParse(&szMemoryRequired, acOutStr, (uint16_t)OUT_STR_MAX_LEN_D, false, true);
+    TEST_ASSERT_EQUAL(sizeof(EXTCFGRECEIVER_HANDLE_T), szMemoryRequired);
     TEST_ASSERT_EQUAL(PINCFG_OK_E, eParseResult);
     TEST_ASSERT_EQUAL_STRING("W:L:0:Switch: Invalid number of arguments.\nI: Configuration parsed.\n", acOutStr);
     Memory_eReset();
 
     strncpy(PinCfgCsv_pcGetCfgBuf(), "S,o1,afsd", PINCFG_CONFIG_MAX_SZ_D);
-    eParseResult = PinCfgCsv_eParse(acOutStr, (uint16_t)OUT_STR_MAX_LEN_D, false, true);
+    eParseResult = PinCfgCsv_eParse(&szMemoryRequired, acOutStr, (uint16_t)OUT_STR_MAX_LEN_D, false, true);
+    TEST_ASSERT_EQUAL(sizeof(EXTCFGRECEIVER_HANDLE_T), szMemoryRequired);
     TEST_ASSERT_EQUAL(PINCFG_OK_E, eParseResult);
     TEST_ASSERT_EQUAL_STRING("W:L:0:Switch: Invalid pin number.\nI: Configuration parsed.\n", acOutStr);
     Memory_eReset();
 
     strncpy(PinCfgCsv_pcGetCfgBuf(), "S,o1,afsd,o2", PINCFG_CONFIG_MAX_SZ_D);
-    eParseResult = PinCfgCsv_eParse(acOutStr, (uint16_t)OUT_STR_MAX_LEN_D, false, true);
+    eParseResult = PinCfgCsv_eParse(&szMemoryRequired, acOutStr, (uint16_t)OUT_STR_MAX_LEN_D, false, true);
+    TEST_ASSERT_EQUAL(sizeof(EXTCFGRECEIVER_HANDLE_T), szMemoryRequired);
     TEST_ASSERT_EQUAL(PINCFG_OK_E, eParseResult);
     TEST_ASSERT_EQUAL_STRING(
         "W:L:0:Switch: Invalid number of items defining names and pins.\nI: Configuration parsed.\n", acOutStr);
@@ -323,7 +329,8 @@ void test_vPinCfgCsv(void)
     Memory_vpAlloc(
         (size_t)(psGlobals->pvMemTempEnd - psGlobals->pvMemNext - sizeof(char *) - sizeof(EXTCFGRECEIVER_HANDLE_T)));
     strncpy(PinCfgCsv_pcGetCfgBuf(), "S,o1,2", PINCFG_CONFIG_MAX_SZ_D);
-    eParseResult = PinCfgCsv_eParse(acOutStr, (uint16_t)OUT_STR_MAX_LEN_D, false, true);
+    eParseResult = PinCfgCsv_eParse(&szMemoryRequired, acOutStr, (uint16_t)OUT_STR_MAX_LEN_D, false, true);
+    TEST_ASSERT_EQUAL(sizeof(EXTCFGRECEIVER_HANDLE_T), szMemoryRequired);
     TEST_ASSERT_EQUAL(PINCFG_OUTOFMEMORY_ERROR_E, eParseResult);
     TEST_ASSERT_EQUAL_STRING("E:L:0:Switch: Out of memory.\n", acOutStr);
     Memory_eReset();
@@ -337,7 +344,12 @@ void test_vPinCfgCsv(void)
         "T,vtl11,i1,3,1,o2,2\n"
         "T,vtl12,i1,3,1,o2,2,o3,2",
         PINCFG_CONFIG_MAX_SZ_D);
-    eParseResult = PinCfgCsv_eParse(acOutStr, (uint16_t)OUT_STR_MAX_LEN_D, false, true);
+    eParseResult = PinCfgCsv_eParse(&szMemoryRequired, acOutStr, (uint16_t)OUT_STR_MAX_LEN_D, false, true);
+    TEST_ASSERT_EQUAL(
+        sizeof(EXTCFGRECEIVER_HANDLE_T) + (12 * sizeof(SWITCH_HANDLE_T) + 12 * sizeof(char *)) +
+            (12 * sizeof(INPIN_HANDLE_T) + 12 * sizeof(char *)) + (2 * sizeof(TRIGGER_HANDLE_T)) +
+            (3 * sizeof(TRIGGER_SWITCHACTION_T)),
+        szMemoryRequired);
     TEST_ASSERT_EQUAL(PINCFG_OK_E, eParseResult);
     TEST_ASSERT_EQUAL_STRING("I: Configuration parsed.\n", acOutStr);
 }

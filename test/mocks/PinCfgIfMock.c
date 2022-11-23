@@ -1,11 +1,10 @@
 #include "PinCfgIfMock.h"
 
-PINCFG_IF_T sPincfgIf;
 
 bool bRequest(const PINCFG_ELEMENT_TYPE_T eType, const uint8_t u8Id);
 bool bPresent(const PINCFG_ELEMENT_TYPE_T eType, const uint8_t u8Id, const char *pcName);
 bool bSend(const PINCFG_ELEMENT_TYPE_T eType, const uint8_t u8Id, const void *pvMessage);
-int8_t i8SaveCfg(const char *pcCfg);
+uint8_t u8SaveCfg(const char *pcCfg);
 
 void vPinCfgIfMock_setup(void)
 {
@@ -17,11 +16,6 @@ void vPinCfgIfMock_setup(void)
     mock_bSend_bReturn = false;
     mock_u8SaveCfg_u32Called = 0;
     mock_u8SaveCfg_u8Return = false;
-
-    sPincfgIf.bRequest = bRequest;
-    sPincfgIf.bPresent = bPresent;
-    sPincfgIf.bSend = bSend;
-    sPincfgIf.i8SaveCfg = i8SaveCfg;
 }
 
 uint8_t mock_bRequest_u8Id;
@@ -67,7 +61,7 @@ bool bSend(const PINCFG_ELEMENT_TYPE_T eType, const uint8_t u8Id, const void *pv
 const char *mock_u8SaveCfg_pcCfg;
 int8_t mock_u8SaveCfg_u8Return;
 uint32_t mock_u8SaveCfg_u32Called;
-int8_t i8SaveCfg(const char *pcCfg)
+uint8_t u8SaveCfg(const char *pcCfg)
 {
     mock_u8SaveCfg_pcCfg = pcCfg;
     mock_u8SaveCfg_u32Called++;

@@ -25,8 +25,6 @@ extern const char *mock_u8SaveCfg_pcCfg;
 extern int8_t mock_u8SaveCfg_u8Return;
 extern uint32_t mock_u8SaveCfg_u32Called;
 
-extern PINCFG_IF_T sPincfgIf;
-
 void vPinCfgIfMock_setup(void);
 
 #endif // PINCFGIFMOCK_H

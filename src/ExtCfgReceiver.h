@@ -2,7 +2,6 @@
 #define EXTCFGRECEIVER_H
 
 #include "LooPreIf.h"
-#include "PincfgIf.h"
 #include "PinCfgStr.h"
 #include "Types.h"
 
