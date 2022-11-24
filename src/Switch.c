@@ -1,4 +1,8 @@
+#ifdef ARDUINO
 #include <Arduino.h>
+#else
+#include <ArduinoMock.h>
+#endif
 
 #include "Switch.h"
 

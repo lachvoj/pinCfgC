@@ -45,7 +45,7 @@ char *PinCfgCsv_pcGetCfgBuf(void)
 }
 
 PINCFG_RESULT_T PinCfgCsv_eParse(
-    size_t *szMemoryRequired,
+    size_t *pszMemoryRequired,
     char *pcOutString,
     const uint16_t u16OutStrMaxLen,
     const bool bValidate,
@@ -73,8 +73,8 @@ PINCFG_RESULT_T PinCfgCsv_eParse(
     uint8_t u8DrivenAction;
     uint8_t u8DrivesCountReal = 0U;
 
-    if (szMemoryRequired != NULL)
-        *szMemoryRequired = 0;
+    if (pszMemoryRequired != NULL)
+        *pszMemoryRequired = 0;
 
     if (pcOutString != NULL && u16OutStrMaxLen > 0)
         pcOutString[0] = '\0';
@@ -100,8 +100,8 @@ PINCFG_RESULT_T PinCfgCsv_eParse(
             PinCfgCsv_vAddToString(pcOutString, u16OutStrMaxLen, "W:ExtCfgReceiver: Init failed!\n", -1);
         }
     }
-    if (szMemoryRequired != NULL)
-        *szMemoryRequired += szGetAllocatedSize(sizeof(EXTCFGRECEIVER_HANDLE_T));
+    if (pszMemoryRequired != NULL)
+        *pszMemoryRequired += szGetAllocatedSize(sizeof(EXTCFGRECEIVER_HANDLE_T));
 
     PinCfgStr_vInitStrPoint(&sTempStrPt, psGlobals->acCfgBuf, strlen(psGlobals->acCfgBuf));
     u8LinesLen = (uint8_t)PinCfgStr_szGetSplitCount(&sTempStrPt, '\n');
@@ -199,8 +199,8 @@ PINCFG_RESULT_T PinCfgCsv_eParse(
                             pcOutString, u16OutStrMaxLen, "W:L:%d:Switch: Init failed!\n", (int16_t)u8LinesProcessed);
                     }
                 }
-                if (szMemoryRequired != NULL)
-                    *szMemoryRequired +=
+                if (pszMemoryRequired != NULL)
+                    *pszMemoryRequired +=
                         szGetAllocatedSize(sizeof(SWITCH_HANDLE_T)) + szGetAllocatedSize(sTempStrPt.szLen + 1);
             }
         }
@@ -268,8 +268,8 @@ PINCFG_RESULT_T PinCfgCsv_eParse(
                             pcOutString, u16OutStrMaxLen, "W:L:%d:InPin: Init failed!\n", (int16_t)u8LinesProcessed);
                     }
                 }
-                if (szMemoryRequired != NULL)
-                    *szMemoryRequired +=
+                if (pszMemoryRequired != NULL)
+                    *pszMemoryRequired +=
                         szGetAllocatedSize(sizeof(INPIN_HANDLE_T)) + szGetAllocatedSize(sTempStrPt.szLen + 1);
             }
         }
@@ -371,8 +371,8 @@ PINCFG_RESULT_T PinCfgCsv_eParse(
                         pasSwActs = psSwAct;
                     }
                 }
-                if (szMemoryRequired != NULL)
-                    *szMemoryRequired += szGetAllocatedSize(sizeof(TRIGGER_SWITCHACTION_T));
+                if (pszMemoryRequired != NULL)
+                    *pszMemoryRequired += szGetAllocatedSize(sizeof(TRIGGER_SWITCHACTION_T));
             }
             if (u8DrivesCountReal == 0U || pasSwActs == NULL)
             {
@@ -406,8 +406,8 @@ PINCFG_RESULT_T PinCfgCsv_eParse(
                         pcOutString, u16OutStrMaxLen, "W:L:%d:Trigger: Init failed!\n", (int16_t)u8LinesProcessed);
                 }
             }
-            if (szMemoryRequired != NULL)
-                *szMemoryRequired += szGetAllocatedSize(sizeof(TRIGGER_HANDLE_T));
+            if (pszMemoryRequired != NULL)
+                *pszMemoryRequired += szGetAllocatedSize(sizeof(TRIGGER_HANDLE_T));
         }
         else
         {
@@ -420,9 +420,9 @@ PINCFG_RESULT_T PinCfgCsv_eParse(
     return PINCFG_OK_E;
 }
 
-PINCFG_RESULT_T PinCfgCsv_eValidate(size_t *szMemoryRequired, char *pcOutString, const uint16_t u16OutStrMaxLen)
+PINCFG_RESULT_T PinCfgCsv_eValidate(size_t *pszMemoryRequired, char *pcOutString, const uint16_t u16OutStrMaxLen)
 {
-    return PinCfgCsv_eParse(szMemoryRequired, pcOutString, u16OutStrMaxLen, true, false);
+    return PinCfgCsv_eParse(pszMemoryRequired, pcOutString, u16OutStrMaxLen, true, false);
 }
 
 #ifdef MY_CONTROLLER_HA
@@ -552,7 +552,7 @@ static void PinCfgCsv_vAddToString(
     if (pcOutMsg == NULL || szOutMsgMaxLen == 0)
         return;
 
-    size_t szBufNeeded;
+    size_t szBufNeeded = 0;
     if (i16Line >= 0)
         szBufNeeded = snprintf(NULL, 0, pcMsgToBeAdded, i16Line) + 1;
 

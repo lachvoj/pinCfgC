@@ -15,5 +15,6 @@ MEMORY_RESULT_T Memory_eReset(void);
 void *Memory_vpAlloc(size_t szSize);
 void *Memory_vpTempAlloc(size_t szSize);
 void Memory_vTempFree(void);
+size_t Memory_szGetFree(void);
 
 #endif // MEMORY_H

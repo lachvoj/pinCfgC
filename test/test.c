@@ -1,7 +1,9 @@
 #include <stdio.h>
 #include <unity.h>
 
+#ifndef ARDUINO
 #include "ArduinoMock.h"
+#endif
 #include "ExtCfgReceiver.h"
 #include "Globals.h"
 #include "InPin.h"
@@ -34,8 +36,11 @@ static uint8_t testMemory[MEMORY_SZ];
 void setUp(void)
 {
     Memory_eInit(testMemory, MEMORY_SZ);
-    vArduinoMock_setup();
     vPinCfgIfMock_setup();
+
+#ifndef ARDUINO
+    vArduinoMock_setup();
+#endif
 }
 
 void tearDown(void)
@@ -54,10 +59,12 @@ void test_vMemory(void)
     eMemRes = Memory_eInit(testMemory, MEMORY_SZ);
     TEST_ASSERT_EQUAL(MEMORY_OK_E, eMemRes);
     // memory test
-    char *a1 = Memory_vpAlloc(2);
-    char *a2 = Memory_vpAlloc(3);
-    char *a3 = Memory_vpAlloc(MEMORY_SZ);
+    char *a1 = (char *)Memory_vpAlloc(2);
+    char *a2 = (char *)Memory_vpAlloc(3);
+    char *a3 = (char *)Memory_vpAlloc(MEMORY_SZ);
     TEST_ASSERT_EQUAL(ENOMEM, errno);
+    TEST_ASSERT_EQUAL(
+        MEMORY_SZ - sizeof(GLOBALS_HANDLE_T) - (2 * sizeof(char *)) - (MEMORY_SZ % sizeof(char *)), Memory_szGetFree());
 
     TEST_ASSERT_EQUAL(a1, (char *)testMemory + sizeof(GLOBALS_HANDLE_T));
     TEST_ASSERT_EQUAL(a2, a1 + sizeof(char *));
@@ -65,9 +72,9 @@ void test_vMemory(void)
 
     // temp memory alloc test
     Memory_eInit(testMemory, MEMORY_SZ);
-    char *vpTemp1 = Memory_vpTempAlloc(11);
-    char *vpTemp2 = Memory_vpTempAlloc(11);
-    char *vpTemp3 = Memory_vpTempAlloc(MEMORY_SZ);
+    char *vpTemp1 = (char *)Memory_vpTempAlloc((sizeof(char *) * 2) - 2);
+    char *vpTemp2 = (char *)Memory_vpTempAlloc((sizeof(char *) * 2) - 2);
+    char *vpTemp3 = (char *)Memory_vpTempAlloc(MEMORY_SZ);
 
     TEST_ASSERT_EQUAL(vpTemp1, (char *)psGlobals->pvMemEnd - (sizeof(char *) * 2));
     TEST_ASSERT_EQUAL(vpTemp2, vpTemp1 - (sizeof(char *) * 2));
@@ -83,7 +90,7 @@ void test_vMemory(void)
     TEST_ASSERT_EQUAL_STRING("", vpTemp1);
     TEST_ASSERT_EQUAL_STRING("", vpTemp2);
 
-    vpTemp1 = Memory_vpTempAlloc(8);
+    vpTemp1 = (char *)Memory_vpTempAlloc(8);
     vpTemp1[0] = 0xff;
     vpTemp1[1] = 0xff;
     vpTemp1[2] = 0xff;
@@ -177,17 +184,17 @@ void test_vMySenosrsPresent(void)
 
     // init test
     MYSENSORSPRESENT_RESULT_T eResult;
-    eResult = MySensorsPresent_eInit(NULL, &sName, 1, 1, true);
+    eResult = MySensorsPresent_eInit(NULL, &sName, 1, PINCFG_INPIN_E, true);
     TEST_ASSERT_EQUAL(MYSENSORSPRESENT_NULLPTR_ERROR_E, eResult);
-    eResult = MySensorsPresent_eInit(psPresentHandle, NULL, 1, 1, true);
+    eResult = MySensorsPresent_eInit(psPresentHandle, NULL, 1, PINCFG_INPIN_E, true);
     TEST_ASSERT_EQUAL(MYSENSORSPRESENT_NULLPTR_ERROR_E, eResult);
-    eResult = MySensorsPresent_eInit(NULL, NULL, 1, 1, true);
+    eResult = MySensorsPresent_eInit(NULL, NULL, 1, PINCFG_INPIN_E, true);
     TEST_ASSERT_EQUAL(MYSENSORSPRESENT_NULLPTR_ERROR_E, eResult);
     Memory_vpTempAlloc((size_t)(psGlobals->pvMemTempEnd - psGlobals->pvMemNext - sizeof(char *)));
-    eResult = MySensorsPresent_eInit(psPresentHandle, &sName, 1, 1, true);
+    eResult = MySensorsPresent_eInit(psPresentHandle, &sName, 1, PINCFG_INPIN_E, true);
     Memory_vTempFree();
     TEST_ASSERT_EQUAL(MYSENSORSPRESENT_ALLOCATION_ERROR_E, eResult);
-    eResult = MySensorsPresent_eInit(psPresentHandle, &sName, 1, 1, true);
+    eResult = MySensorsPresent_eInit(psPresentHandle, &sName, 1, PINCFG_INPIN_E, true);
     TEST_ASSERT_EQUAL_STRING(acName, psPresentHandle->pcName);
     TEST_ASSERT_EQUAL_UINT8(1, psPresentHandle->u8Id);
     TEST_ASSERT_EQUAL(PINCFG_INPIN_E, psPresentHandle->sLooPreIf.ePinCfgType);
@@ -247,18 +254,20 @@ void test_vInPin(void)
     INPIN_RESULT_T eResult;
 
     // init
-    eResult = InPin_eInit(NULL, &sName, 2, false, 1);
+    eResult = InPin_eInit(NULL, &sName, 2, false, 16);
     TEST_ASSERT_EQUAL(INPIN_NULLPTR_ERROR_E, eResult);
-    eResult = InPin_eInit(psInPinHandle, NULL, 2, false, 1);
+    eResult = InPin_eInit(psInPinHandle, NULL, 2, false, 16);
     TEST_ASSERT_EQUAL(INPIN_SUBINIT_ERROR_E, eResult);
-    eResult = InPin_eInit(psInPinHandle, &sName, 2, false, 1);
+    eResult = InPin_eInit(psInPinHandle, &sName, 2, false, 16);
     TEST_ASSERT_EQUAL(INPIN_OK_E, eResult);
-    TEST_ASSERT_EQUAL(1, mock_pinMode_u8Pin);
+#ifndef ARDUINO
+    TEST_ASSERT_EQUAL(16, mock_pinMode_u8Pin);
     TEST_ASSERT_EQUAL(INPUT_PULLUP, mock_pinMode_u8Mode);
     TEST_ASSERT_EQUAL(1, mock_pinMode_u32Called);
-    TEST_ASSERT_EQUAL(1, mock_digitalWrite_u8Pin);
+    TEST_ASSERT_EQUAL(16, mock_digitalWrite_u8Pin);
     TEST_ASSERT_EQUAL(HIGH, mock_digitalWrite_u8Value);
     TEST_ASSERT_EQUAL(1, mock_digitalWrite_u32Called);
+#endif
 
     // add subscirber
     PINSUBSCRIBER_IF_T *psPinSubscriber1 = (PINSUBSCRIBER_IF_T *)Memory_vpAlloc(sizeof(PINSUBSCRIBER_IF_T));
@@ -338,7 +347,7 @@ void test_vPinCfgCsv(void)
     strncpy(
         PinCfgCsv_pcGetCfgBuf(),
         "# (bluePill)\n"
-        "S,o1,13,o2,12,o3,11,o4,10,o5,9,o6,8,o7,7,o8,6,o9,5,o10,4,o11,3,o12,2\n"
+        "S,o1,13,o2,12,o5,9,o6,8,o7,7,o8,6,o9,5,o10,4,o11,3,o12,2\n"
         "I,i1,16,i2,15,i3,14,i4,31,i5,30,i6,201,i7,195,i8,194,i9,193,i10,192,i11,19,i12,18\n"
         "#triggers\n"
         "T,vtl11,i1,3,1,o2,2\n"
@@ -346,12 +355,30 @@ void test_vPinCfgCsv(void)
         PINCFG_CONFIG_MAX_SZ_D);
     eParseResult = PinCfgCsv_eParse(&szMemoryRequired, acOutStr, (uint16_t)OUT_STR_MAX_LEN_D, false, true);
     TEST_ASSERT_EQUAL(
-        sizeof(EXTCFGRECEIVER_HANDLE_T) + (12 * sizeof(SWITCH_HANDLE_T) + 12 * sizeof(char *)) +
+        sizeof(EXTCFGRECEIVER_HANDLE_T) + (10 * sizeof(SWITCH_HANDLE_T) + 10 * sizeof(char *)) +
             (12 * sizeof(INPIN_HANDLE_T) + 12 * sizeof(char *)) + (2 * sizeof(TRIGGER_HANDLE_T)) +
             (3 * sizeof(TRIGGER_SWITCHACTION_T)),
         szMemoryRequired);
     TEST_ASSERT_EQUAL(PINCFG_OK_E, eParseResult);
     TEST_ASSERT_EQUAL_STRING("I: Configuration parsed.\n", acOutStr);
+}
+
+void test_vExtCfgReceiver(void)
+{
+    EXTCFGRECEIVER_HANDLE_T *psExtReceiver = (EXTCFGRECEIVER_HANDLE_T *)Memory_vpAlloc(sizeof(EXTCFGRECEIVER_HANDLE_T));
+    ExtCfgReceiver_eInit(psExtReceiver, 0, true);
+
+    ExtCfgReceiver_vRcvMessage(psExtReceiver, "#{#S,o1,13\n");
+    TEST_ASSERT_EQUAL(1, mock_bSend_u32Called);
+    TEST_ASSERT_EQUAL_STRING("RECEIVING", mock_bSend_pvMessage);
+    TEST_ASSERT_EQUAL_STRING("S,o1,13\n", psGlobals->acCfgBuf);
+    ExtCfgReceiver_vRcvMessage(psExtReceiver, "I,i1,16\n");
+    TEST_ASSERT_EQUAL_STRING("S,o1,13\nI,i1,16\n", psGlobals->acCfgBuf);
+    ExtCfgReceiver_vRcvMessage(psExtReceiver, "T,vtl11,i1,3,1,o2,2\n#}#");
+    TEST_ASSERT_EQUAL_STRING("S,o1,13\nI,i1,16\nT,vtl11,i1,3,1,o2,2\n", psGlobals->acCfgBuf);
+    TEST_ASSERT_EQUAL(2, mock_bSend_u32Called);
+    TEST_ASSERT_EQUAL_STRING("VALIDATION OK", mock_bSend_pvMessage);
+    TEST_ASSERT_EQUAL(1, mock_u8SaveCfg_u32Called);
 }
 
 int main(void)
@@ -372,6 +399,7 @@ int main(void)
     RUN_TEST(test_vMySenosrsPresent);
     RUN_TEST(test_vInPin);
     RUN_TEST(test_vPinCfgCsv);
+    RUN_TEST(test_vExtCfgReceiver);
 
     return UNITY_END();
 }

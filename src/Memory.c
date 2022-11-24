@@ -19,6 +19,8 @@ MEMORY_RESULT_T Memory_eInit(uint8_t *pu8Memory, size_t szSize)
     psGlobals->pvMemEnd = (char *)(pu8Memory + ((szSize - 1) / sizeof(char *)) * sizeof(char *));
     psGlobals->pvMemNext = (char *)(pu8Memory + sizeof(GLOBALS_HANDLE_T));
     psGlobals->pvMemTempEnd = psGlobals->pvMemNext;
+    psGlobals->psLoopablesFirst = NULL;
+    psGlobals->psPresentablesFirst = NULL;
     psGlobals->bMemIsInitialized = true;
 
     Memory_vTempFree();
@@ -98,4 +100,9 @@ void Memory_vTempFree(void)
         }
         psGlobals->pvMemTempEnd = psGlobals->pvMemEnd;
     }
+}
+
+size_t Memory_szGetFree(void)
+{
+    return (size_t)(psGlobals->pvMemTempEnd - psGlobals->pvMemNext);
 }

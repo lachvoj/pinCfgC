@@ -20,13 +20,13 @@ PINCFG_RESULT_T PinCfgCsv_eInit(uint8_t *pu8Memory, size_t szMemorySize);
 char *PinCfgCsv_pcGetCfgBuf(void);
 
 PINCFG_RESULT_T PinCfgCsv_eParse(
-    size_t *szMemoryRequired,
+    size_t *pszMemoryRequired,
     char *pcOutString,
     const uint16_t u16OutStrMaxLen,
     const bool bValidate,
     const bool bRemoteConfigEnabled);
 
-PINCFG_RESULT_T PinCfgCsv_eValidate(size_t *szMemoryRequired, char *pcOutString, const uint16_t u16OutStrMaxLen);
+PINCFG_RESULT_T PinCfgCsv_eValidate(size_t *pszMemoryRequired, char *pcOutString, const uint16_t u16OutStrMaxLen);
 
 void PinCfgCsv_vLoop(uint32_t u32ms);
 
