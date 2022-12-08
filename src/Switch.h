@@ -33,7 +33,6 @@ SWITCH_RESULT_T Switch_eInit(
     SWITCH_HANDLE_T *psHandle,
     STRING_POINT_T *sName,
     uint8_t u8Id,
-    bool bPresent,
     uint32_t u32ImpulseDuration,
     SWITCH_MODE_T eMode,
     uint8_t u8OutPin,

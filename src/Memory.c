@@ -49,9 +49,7 @@ void *Memory_vpAlloc(size_t szSize)
         return pvResult;
     }
 
-    size_t szToAlloc = szSize / sizeof(char *);
-    if (szSize % sizeof(char *) > 0)
-        szToAlloc++;
+    size_t szToAlloc = (szSize + sizeof(char *) - 1) / sizeof(char *);
 
     char *pvNextAfterAllocation = (char *)((char **)psGlobals->pvMemNext + szToAlloc);
     if (pvNextAfterAllocation >= psGlobals->pvMemTempEnd)
@@ -74,9 +72,7 @@ void *Memory_vpTempAlloc(size_t szSize)
         return NULL;
     }
 
-    size_t szToAlloc = szSize / sizeof(char *);
-    if (szSize % sizeof(char *) > 0)
-        szToAlloc++;
+    size_t szToAlloc = (szSize + sizeof(char *) - 1) / sizeof(char *);
 
     char *pvTempEndAfterAllocation = (char *)((char **)psGlobals->pvMemTempEnd - szToAlloc);
     if (pvTempEndAfterAllocation <= psGlobals->pvMemNext)

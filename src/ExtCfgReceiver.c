@@ -15,7 +15,7 @@ void resetFunc(void)
 }
 #endif
 
-EXTCFGRECEIVER_RESULT_T ExtCfgReceiver_eInit(EXTCFGRECEIVER_HANDLE_T *psHandle, uint8_t u8Id, bool bPresent)
+EXTCFGRECEIVER_RESULT_T ExtCfgReceiver_eInit(EXTCFGRECEIVER_HANDLE_T *psHandle, uint8_t u8Id)
 {
     if (psHandle == NULL)
     {
@@ -24,20 +24,28 @@ EXTCFGRECEIVER_RESULT_T ExtCfgReceiver_eInit(EXTCFGRECEIVER_HANDLE_T *psHandle, 
 
     // LOOPRE init
     psHandle->sLooPreIf.ePinCfgType = PINCFG_EXTCFGRECEIVER_E;
+    psHandle->sLooPreIf.pcName = "cfgReceviver";
+    psHandle->sLooPreIf.u8Id = u8Id;
+#ifdef MY_CONTROLLER_HA
+    psHandle->sLooPreIf.bStatePresented = false;
+#endif
 
     // Initialize handle items
-    psHandle->pcName = "cfgReceviver";
-    psHandle->u8Id = u8Id;
-    psHandle->eState = EXTCFGRECEIVER_OFF_E;
+    psHandle->eState = EXTCFGRECEIVER_LISTENING_E;
+    strcpy(psHandle->acState, "LISTENING");
 
     return EXTCFGRECEIVER_OK_E;
 }
-
-void ExtCfgReceiver_vSetState(EXTCFGRECEIVER_HANDLE_T *psHandle, const char *psState)
+void ExtCfgReceiver_vSetState(
+    EXTCFGRECEIVER_HANDLE_T *psHandle,
+    EXTCFGRECEIVER_STATE_T eState,
+    const char *psState,
+    bool bSendState)
 {
+    psHandle->eState = eState;
     switch (psHandle->eState)
     {
-    case EXTCFGRECEIVER_OFF_E: strcpy(psHandle->acState, "OFF"); break;
+    case EXTCFGRECEIVER_LISTENING_E: strcpy(psHandle->acState, "LISTENING"); break;
     case EXTCFGRECEIVER_RECEIVNG_E: strcpy(psHandle->acState, "RECEIVING"); break;
     case EXTCFGRECEIVER_RECEIVED_E: strcpy(psHandle->acState, "RECEIVED"); break;
     case EXTCFGRECEIVER_VALIDATING_E: strcpy(psHandle->acState, "VALIDATING"); break;
@@ -53,39 +61,32 @@ void ExtCfgReceiver_vSetState(EXTCFGRECEIVER_HANDLE_T *psHandle, const char *psS
     break;
     default: break;
     }
-    bSend(PINCFG_EXTCFGRECEIVER_E, psHandle->u8Id, (void *)psHandle->acState);
+
+    if (bSendState)
+        bSendText(psHandle->sLooPreIf.u8Id, psHandle->acState);
 }
 
 // presentable IF
-uint8_t ExtCfgReceiver_u8GetId(EXTCFGRECEIVER_HANDLE_T *psHandle)
+void ExtCfgReceiver_vRcvMessage(EXTCFGRECEIVER_HANDLE_T *psHandle, const char *pcMessage)
 {
-    return psHandle->u8Id;
-}
-
-const char *ExtCfgReceiver_pcGetName(EXTCFGRECEIVER_HANDLE_T *psHandle)
-{
-    return psHandle->pcName;
-}
-
-void ExtCfgReceiver_vRcvMessage(EXTCFGRECEIVER_HANDLE_T *psHandle, const void *pvMessage)
-{
-    const char *pcMessage = (const char *)pvMessage;
+#ifdef MY_CONTROLLER_HA
+    psHandle->sLooPreIf.bStatePresented = true;
+#endif
     // EXTCFGRECEIVER_STATE_T eOldState = psHandle->eState;
 
-    if (psHandle->eState == EXTCFGRECEIVER_OFF_E)
+    if (psHandle->eState == EXTCFGRECEIVER_LISTENING_E)
     {
-        char *pcStartString = strstr(pcMessage, PINCFG_CONF_START_STR);
+        char *pcStartString = strstr(pcMessage, "#[#");
         if (pcStartString != NULL)
         {
-            strcpy(psGlobals->acCfgBuf, pcStartString + strlen(PINCFG_CONF_START_STR));
-            psHandle->u16CfgNext = strlen(pcMessage) - strlen(PINCFG_CONF_START_STR);
-            psHandle->eState = EXTCFGRECEIVER_RECEIVNG_E;
-            ExtCfgReceiver_vSetState(psHandle, NULL);
+            strcpy(psGlobals->acCfgBuf, pcStartString + strlen("#[#"));
+            psHandle->u16CfgNext = strlen(pcMessage) - strlen("#[#");
+            ExtCfgReceiver_vSetState(psHandle, EXTCFGRECEIVER_RECEIVNG_E, NULL, true);
         }
     }
     else if (psHandle->eState == EXTCFGRECEIVER_RECEIVNG_E)
     {
-        char *pcEndString = strstr(pcMessage, PINCFG_CONF_END_STR);
+        char *pcEndString = strstr(pcMessage, "#]#");
         if (pcEndString != NULL)
         {
             size_t szLen = pcEndString - pcMessage;
@@ -104,37 +105,37 @@ void ExtCfgReceiver_vRcvMessage(EXTCFGRECEIVER_HANDLE_T *psHandle, const void *p
 
 void ExtCfgReceiver_vPresent(EXTCFGRECEIVER_HANDLE_T *psHandle)
 {
-    bPresent(PINCFG_EXTCFGRECEIVER_E, psHandle->u8Id, psHandle->pcName);
+    bPresentInfo(psHandle->sLooPreIf.u8Id, psHandle->sLooPreIf.pcName);
 }
 
 void ExtCfgReceiver_vPresentState(EXTCFGRECEIVER_HANDLE_T *psHandle)
 {
-    bSend(PINCFG_EXTCFGRECEIVER_E, psHandle->u8Id, (void *)psHandle->acState);
-    bRequest(PINCFG_EXTCFGRECEIVER_E, psHandle->u8Id);
+    bSendText(psHandle->sLooPreIf.u8Id, psHandle->acState);
+    bRequestText(psHandle->sLooPreIf.u8Id);
 }
 
 // private
 static void ExtCfgReceiver_vConfigurationReceived(EXTCFGRECEIVER_HANDLE_T *psHandle)
 {
-    // TODO:
-    // validate cfg
-    // apply cfg
-    // save cfg
     size_t szMemoryRequired;
+    // size_t szFreeMemory = Memory_szGetFree() - 30U;
     PINCFG_RESULT_T eValidationResult = PinCfgCsv_eValidate(&szMemoryRequired, NULL, 0);
     if (eValidationResult == PINCFG_OK_E)
     {
-        psHandle->eState = EXTCFGRECEIVER_VALIDATION_OK_E;
-        ExtCfgReceiver_vSetState(psHandle, NULL);
+        ExtCfgReceiver_vSetState(psHandle, EXTCFGRECEIVER_VALIDATION_OK_E, NULL, true);
         if (u8SaveCfg(psGlobals->acCfgBuf) == 0U)
         {
+#ifdef ARDUINO_ARCH_STM32F1
+            asm("b Reset_Handler");
+#else
             resetFunc();
+#endif
         }
     }
     else
     {
         psHandle->eState = EXTCFGRECEIVER_VALIDATION_ERROR_E;
-        ExtCfgReceiver_vSetState(psHandle, NULL);
+        ExtCfgReceiver_vSetState(psHandle, EXTCFGRECEIVER_VALIDATION_ERROR_E, NULL, true);
     }
-    psHandle->eState = EXTCFGRECEIVER_OFF_E;
+    psHandle->eState = EXTCFGRECEIVER_LISTENING_E;
 }

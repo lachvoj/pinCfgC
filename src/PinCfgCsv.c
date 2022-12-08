@@ -1,3 +1,8 @@
+#ifdef ARDUINO
+#include <Arduino.h>
+#else
+#include <ArduinoMock.h>
+#endif
 #include <stdarg.h>
 #include <stdio.h>
 #include <string.h>
@@ -11,6 +16,7 @@
 #include "Switch.h"
 #include "Trigger.h"
 
+static inline LOOPRE_IF_T *PinCfgCsv_psFindInPresentablesById(uint8_t u8Id);
 static inline void PinCfgCsv_vAddToLoopables(LOOPRE_IF_T *psLoopable);
 static LOOPRE_IF_T *PinCfgCsv_psFindInLoopablesByName(const STRING_POINT_T *psName);
 static inline void PinCfgCsv_vAddToPresentables(LOOPRE_IF_T *psLoopable);
@@ -52,7 +58,7 @@ PINCFG_RESULT_T PinCfgCsv_eParse(
     const bool bRemoteConfigEnabled)
 {
     LOOPRE_IF_T *psLooPreIfElement;
-    TRIGGER_SWITCHACTION_T *pasSwActs = NULL;
+    TRIGGER_SWITCHACTION_T *pasSwActs;
     TRIGGER_SWITCHACTION_T *psSwAct;
     TRIGGER_HANDLE_T *psTriggerHnd;
     INPIN_HANDLE_T *psEmiter = NULL;
@@ -71,7 +77,12 @@ PINCFG_RESULT_T PinCfgCsv_eParse(
     uint8_t u8EventCount;
 
     uint8_t u8DrivenAction;
-    uint8_t u8DrivesCountReal = 0U;
+    uint8_t u8DrivesCountReal;
+    size_t szNumberOfWarnings = 0;
+
+    // TODO: put this into configuration
+    InPin_SetDebounceMs(PINCFG_DEBOUNCE_MS_D);
+    InPin_SetMulticlickMaxDelayMs(PINCFG_MULTICLICK_MAX_DELAY_MS_D);
 
     if (pszMemoryRequired != NULL)
         *pszMemoryRequired = 0;
@@ -89,7 +100,7 @@ PINCFG_RESULT_T PinCfgCsv_eParse(
             return PINCFG_OUTOFMEMORY_ERROR_E;
         }
 
-        if (ExtCfgReceiver_eInit((EXTCFGRECEIVER_HANDLE_T *)psLooPreIfElement, u8PresentablesCount, true) ==
+        if (ExtCfgReceiver_eInit((EXTCFGRECEIVER_HANDLE_T *)psLooPreIfElement, u8PresentablesCount) ==
             EXTCFGRECEIVER_OK_E)
         {
             PinCfgCsv_vAddToPresentables(psLooPreIfElement);
@@ -98,13 +109,14 @@ PINCFG_RESULT_T PinCfgCsv_eParse(
         else
         {
             PinCfgCsv_vAddToString(pcOutString, u16OutStrMaxLen, "W:ExtCfgReceiver: Init failed!\n", -1);
+            szNumberOfWarnings++;
         }
     }
     if (pszMemoryRequired != NULL)
         *pszMemoryRequired += szGetAllocatedSize(sizeof(EXTCFGRECEIVER_HANDLE_T));
 
     PinCfgStr_vInitStrPoint(&sTempStrPt, psGlobals->acCfgBuf, strlen(psGlobals->acCfgBuf));
-    u8LinesLen = (uint8_t)PinCfgStr_szGetSplitCount(&sTempStrPt, '\n');
+    u8LinesLen = (uint8_t)PinCfgStr_szGetSplitCount(&sTempStrPt, PINCFG_LINE_SEPARATOR_D);
     if (u8LinesLen == 1 && sTempStrPt.szLen == 0)
     {
         PinCfgCsv_vAddToString(pcOutString, u16OutStrMaxLen, "E:Invalid format. Empty configuration.\n", -1);
@@ -114,20 +126,21 @@ PINCFG_RESULT_T PinCfgCsv_eParse(
     for (u8LinesProcessed = 0; u8LinesProcessed < u8LinesLen; u8LinesProcessed++)
     {
         PinCfgStr_vInitStrPoint(&sLine, psGlobals->acCfgBuf, strlen(psGlobals->acCfgBuf));
-        PinCfgStr_vGetSplitElemByIndex(&sLine, '\n', u8LinesProcessed);
+        PinCfgStr_vGetSplitElemByIndex(&sLine, PINCFG_LINE_SEPARATOR_D, u8LinesProcessed);
         if (sLine.pcStrStart[0] == '#') // comment continue
             continue;
 
-        u8LineItemsLen = (uint8_t)PinCfgStr_szGetSplitCount(&sLine, ',');
+        u8LineItemsLen = (uint8_t)PinCfgStr_szGetSplitCount(&sLine, PINCFG_VALUE_SEPARATOR_D);
         if (u8LineItemsLen < 2)
         {
             PinCfgCsv_vAddToString(
                 pcOutString, u16OutStrMaxLen, "W:L:%d:Not defined or invalid format.\n", (int16_t)u8LinesProcessed);
+            szNumberOfWarnings++;
             continue;
         }
 
         sTempStrPt = sLine;
-        PinCfgStr_vGetSplitElemByIndex(&sTempStrPt, ',', 0);
+        PinCfgStr_vGetSplitElemByIndex(&sTempStrPt, PINCFG_VALUE_SEPARATOR_D, 0);
         // switches
         if (sTempStrPt.szLen == 1 && sTempStrPt.pcStrStart[0] == 'S')
         {
@@ -138,6 +151,7 @@ PINCFG_RESULT_T PinCfgCsv_eParse(
                     u16OutStrMaxLen,
                     "W:L:%d:Switch: Invalid number of arguments.\n",
                     (int16_t)u8LinesProcessed);
+                szNumberOfWarnings++;
                 continue;
             }
 
@@ -149,6 +163,7 @@ PINCFG_RESULT_T PinCfgCsv_eParse(
                     u16OutStrMaxLen,
                     "W:L:%d:Switch: Invalid number of items defining names and pins.\n",
                     (int16_t)u8LinesProcessed);
+                szNumberOfWarnings++;
                 continue;
             }
             u8Count = (uint8_t)((u8LineItemsLen - 1) / 2);
@@ -157,7 +172,7 @@ PINCFG_RESULT_T PinCfgCsv_eParse(
                 u8Offset = 1 + i * 2;
 
                 sTempStrPt = sLine;
-                PinCfgStr_vGetSplitElemByIndex(&sTempStrPt, ',', (u8Offset + 1));
+                PinCfgStr_vGetSplitElemByIndex(&sTempStrPt, PINCFG_VALUE_SEPARATOR_D, (u8Offset + 1));
                 if (PinCfgStr_eAtoU8(&sTempStrPt, &u8Pin) != PINCFG_STR_OK_E || u8Pin < 1)
                 {
                     PinCfgCsv_vAddToString(
@@ -165,10 +180,11 @@ PINCFG_RESULT_T PinCfgCsv_eParse(
                         u16OutStrMaxLen,
                         "W:L:%d:Switch: Invalid pin number.\n",
                         (int16_t)u8LinesProcessed);
+                    szNumberOfWarnings++;
                     continue;
                 }
                 sTempStrPt = sLine;
-                PinCfgStr_vGetSplitElemByIndex(&sTempStrPt, ',', u8Offset);
+                PinCfgStr_vGetSplitElemByIndex(&sTempStrPt, PINCFG_VALUE_SEPARATOR_D, u8Offset);
                 if (!bValidate)
                 {
                     psLooPreIfElement = (LOOPRE_IF_T *)Memory_vpAlloc(sizeof(SWITCH_HANDLE_T));
@@ -183,7 +199,6 @@ PINCFG_RESULT_T PinCfgCsv_eParse(
                             (SWITCH_HANDLE_T *)psLooPreIfElement,
                             &sTempStrPt,
                             u8PresentablesCount,
-                            true,
                             0U,
                             SWITCH_CLASSIC_E,
                             (uint8_t)u8Pin,
@@ -197,6 +212,7 @@ PINCFG_RESULT_T PinCfgCsv_eParse(
                     {
                         PinCfgCsv_vAddToString(
                             pcOutString, u16OutStrMaxLen, "W:L:%d:Switch: Init failed!\n", (int16_t)u8LinesProcessed);
+                        szNumberOfWarnings++;
                     }
                 }
                 if (pszMemoryRequired != NULL)
@@ -214,6 +230,7 @@ PINCFG_RESULT_T PinCfgCsv_eParse(
                     u16OutStrMaxLen,
                     "W:L:%d:InPin: Invalid number of arguments.\n",
                     (int16_t)u8LinesProcessed);
+                szNumberOfWarnings++;
                 continue;
             }
 
@@ -225,6 +242,7 @@ PINCFG_RESULT_T PinCfgCsv_eParse(
                     u16OutStrMaxLen,
                     "W:L:%d:InPin: Invalid number of items defining names and pins.\n",
                     (int16_t)u8LinesProcessed);
+                szNumberOfWarnings++;
                 continue;
             }
             u8Count = ((u8LineItemsLen - 1) / 2);
@@ -232,15 +250,16 @@ PINCFG_RESULT_T PinCfgCsv_eParse(
             {
                 u8Offset = 1 + i * 2;
                 sTempStrPt = sLine;
-                PinCfgStr_vGetSplitElemByIndex(&sTempStrPt, ',', (u8Offset + 1));
+                PinCfgStr_vGetSplitElemByIndex(&sTempStrPt, PINCFG_VALUE_SEPARATOR_D, (u8Offset + 1));
                 if (PinCfgStr_eAtoU8(&sTempStrPt, &u8Pin) != PINCFG_STR_OK_E || u8Pin < 1)
                 {
                     PinCfgCsv_vAddToString(
                         pcOutString, u16OutStrMaxLen, "W:L:%d:InPin: Invalid pin number.\n", (int16_t)u8LinesProcessed);
+                    szNumberOfWarnings++;
                     continue;
                 }
                 sTempStrPt = sLine;
-                PinCfgStr_vGetSplitElemByIndex(&sTempStrPt, ',', u8Offset);
+                PinCfgStr_vGetSplitElemByIndex(&sTempStrPt, PINCFG_VALUE_SEPARATOR_D, u8Offset);
                 if (!bValidate)
                 {
                     psLooPreIfElement = (LOOPRE_IF_T *)Memory_vpAlloc(sizeof(INPIN_HANDLE_T));
@@ -252,11 +271,8 @@ PINCFG_RESULT_T PinCfgCsv_eParse(
                         return PINCFG_OUTOFMEMORY_ERROR_E;
                     }
                     if (InPin_eInit(
-                            (INPIN_HANDLE_T *)psLooPreIfElement,
-                            &sTempStrPt,
-                            u8PresentablesCount,
-                            true,
-                            (uint8_t)u8Pin) == INPIN_OK_E)
+                            (INPIN_HANDLE_T *)psLooPreIfElement, &sTempStrPt, u8PresentablesCount, (uint8_t)u8Pin) ==
+                        INPIN_OK_E)
                     {
                         PinCfgCsv_vAddToPresentables(psLooPreIfElement);
                         u8PresentablesCount++;
@@ -266,6 +282,7 @@ PINCFG_RESULT_T PinCfgCsv_eParse(
                     {
                         PinCfgCsv_vAddToString(
                             pcOutString, u16OutStrMaxLen, "W:L:%d:InPin: Init failed!\n", (int16_t)u8LinesProcessed);
+                        szNumberOfWarnings++;
                     }
                 }
                 if (pszMemoryRequired != NULL)
@@ -283,33 +300,56 @@ PINCFG_RESULT_T PinCfgCsv_eParse(
                     u16OutStrMaxLen,
                     "W:L:%d:Trigger: Invalid number of arguments.\n",
                     (int16_t)u8LinesProcessed);
+                szNumberOfWarnings++;
                 continue;
             }
 
             sTempStrPt = sLine;
-            PinCfgStr_vGetSplitElemByIndex(&sTempStrPt, ',', 2);
-            psEmiter = (INPIN_HANDLE_T *)PinCfgCsv_psFindInLoopablesByName(&sTempStrPt);
-            if (psEmiter == NULL)
+            PinCfgStr_vGetSplitElemByIndex(&sTempStrPt, PINCFG_VALUE_SEPARATOR_D, 2);
+
+            if (bValidate)
             {
-                PinCfgCsv_vAddToString(
-                    pcOutString, u16OutStrMaxLen, "W:L:%d:Trigger: Invalid InPin name.\n", (int16_t)u8LinesProcessed);
-                continue;
+                if (PinCfgCsv_pcStrstrpt(psGlobals->acCfgBuf, &sTempStrPt) == NULL)
+                {
+                    PinCfgCsv_vAddToString(
+                        pcOutString,
+                        u16OutStrMaxLen,
+                        "W:L:%d:Trigger: Switch name not found.\n",
+                        (int16_t)u8LinesProcessed);
+                    szNumberOfWarnings++;
+                    continue;
+                }
+            }
+            else
+            {
+                psEmiter = (INPIN_HANDLE_T *)PinCfgCsv_psFindInLoopablesByName(&sTempStrPt);
+                if (psEmiter == NULL)
+                {
+                    PinCfgCsv_vAddToString(
+                        pcOutString,
+                        u16OutStrMaxLen,
+                        "W:L:%d:Trigger: Invalid InPin name.\n",
+                        (int16_t)u8LinesProcessed);
+                    szNumberOfWarnings++;
+                    continue;
+                }
             }
 
             sTempStrPt = sLine;
-            PinCfgStr_vGetSplitElemByIndex(&sTempStrPt, ',', 3);
-            if (PinCfgStr_eAtoU8(&sTempStrPt, &u8EventType) != PINCFG_STR_OK_E || u8EventType > 3)
+            PinCfgStr_vGetSplitElemByIndex(&sTempStrPt, PINCFG_VALUE_SEPARATOR_D, 3);
+            if (PinCfgStr_eAtoU8(&sTempStrPt, &u8EventType) != PINCFG_STR_OK_E || u8EventType > (uint8_t)TRIGGER_LONG)
             {
                 PinCfgCsv_vAddToString(
                     pcOutString,
                     u16OutStrMaxLen,
                     "W:L:%d:Trigger: Invalid format for event type.\n",
                     (int16_t)u8LinesProcessed);
+                szNumberOfWarnings++;
                 continue;
             }
 
             sTempStrPt = sLine;
-            PinCfgStr_vGetSplitElemByIndex(&sTempStrPt, ',', 4);
+            PinCfgStr_vGetSplitElemByIndex(&sTempStrPt, PINCFG_VALUE_SEPARATOR_D, 4);
             if (PinCfgStr_eAtoU8(&sTempStrPt, &u8EventCount) != PINCFG_STR_OK_E)
             {
                 PinCfgCsv_vAddToString(
@@ -317,29 +357,49 @@ PINCFG_RESULT_T PinCfgCsv_eParse(
                     u16OutStrMaxLen,
                     "W:L:%d:Trigger: Invalid format for event count.\n",
                     u8LinesProcessed);
+                szNumberOfWarnings++;
                 continue;
             }
 
             sTempStrPt = sLine;
             u8Count = (uint8_t)((u8LineItemsLen - 5) / 2);
+            u8DrivesCountReal = 0;
+            pasSwActs = NULL;
             for (i = 0; i < u8Count; i++)
             {
                 u8Offset = 5 + i * 2;
                 sTempStrPt = sLine;
-                PinCfgStr_vGetSplitElemByIndex(&sTempStrPt, ',', u8Offset);
-                psLooPreIfElement = PinCfgCsv_psFindInLoopablesByName(&sTempStrPt);
-                if (psLooPreIfElement == NULL)
+                PinCfgStr_vGetSplitElemByIndex(&sTempStrPt, PINCFG_VALUE_SEPARATOR_D, u8Offset);
+                if (bValidate)
                 {
-                    PinCfgCsv_vAddToString(
-                        pcOutString,
-                        u16OutStrMaxLen,
-                        "W:L:%d:Trigger: Invalid switch name.\n",
-                        (int16_t)u8LinesProcessed);
-                    continue;
+                    if (PinCfgCsv_pcStrstrpt(psGlobals->acCfgBuf, &sTempStrPt) == NULL)
+                    {
+                        PinCfgCsv_vAddToString(
+                            pcOutString,
+                            u16OutStrMaxLen,
+                            "W:L:%d:Trigger: Switch name not found.\n",
+                            (int16_t)u8LinesProcessed);
+                        szNumberOfWarnings++;
+                        continue;
+                    }
+                }
+                else
+                {
+                    psLooPreIfElement = PinCfgCsv_psFindInLoopablesByName(&sTempStrPt);
+                    if (psLooPreIfElement == NULL)
+                    {
+                        PinCfgCsv_vAddToString(
+                            pcOutString,
+                            u16OutStrMaxLen,
+                            "W:L:%d:Trigger: Invalid switch name.\n",
+                            (int16_t)u8LinesProcessed);
+                        szNumberOfWarnings++;
+                        continue;
+                    }
                 }
 
                 sTempStrPt = sLine;
-                PinCfgStr_vGetSplitElemByIndex(&sTempStrPt, ',', (u8Offset + 1));
+                PinCfgStr_vGetSplitElemByIndex(&sTempStrPt, PINCFG_VALUE_SEPARATOR_D, (u8Offset + 1));
                 if (PinCfgStr_eAtoU8(&sTempStrPt, &u8DrivenAction) != PINCFG_STR_OK_E || u8DrivenAction > 2)
                 {
                     PinCfgCsv_vAddToString(
@@ -347,6 +407,7 @@ PINCFG_RESULT_T PinCfgCsv_eParse(
                         u16OutStrMaxLen,
                         "W:L:%d:Trigger: Invalid switch action.\n",
                         (int16_t)u8LinesProcessed);
+                    szNumberOfWarnings++;
                     continue;
                 }
                 u8DrivesCountReal++;
@@ -374,15 +435,17 @@ PINCFG_RESULT_T PinCfgCsv_eParse(
                 if (pszMemoryRequired != NULL)
                     *pszMemoryRequired += szGetAllocatedSize(sizeof(TRIGGER_SWITCHACTION_T));
             }
-            if (u8DrivesCountReal == 0U || pasSwActs == NULL)
-            {
-                PinCfgCsv_vAddToString(
-                    pcOutString, u16OutStrMaxLen, "W:L:%d:Trigger: Nothing to drive.\n", (int16_t)u8LinesProcessed);
-                continue;
-            }
 
             if (!bValidate)
             {
+                if ((u8DrivesCountReal == 0U || pasSwActs == NULL))
+                {
+                    PinCfgCsv_vAddToString(
+                        pcOutString, u16OutStrMaxLen, "W:L:%d:Trigger: Nothing to drive.\n", (int16_t)u8LinesProcessed);
+                    szNumberOfWarnings++;
+                    continue;
+                }
+
                 psTriggerHnd = (TRIGGER_HANDLE_T *)Memory_vpAlloc(sizeof(TRIGGER_HANDLE_T));
                 if (psTriggerHnd == NULL)
                 {
@@ -404,6 +467,7 @@ PINCFG_RESULT_T PinCfgCsv_eParse(
                 {
                     PinCfgCsv_vAddToString(
                         pcOutString, u16OutStrMaxLen, "W:L:%d:Trigger: Init failed!\n", (int16_t)u8LinesProcessed);
+                    szNumberOfWarnings++;
                 }
             }
             if (pszMemoryRequired != NULL)
@@ -412,10 +476,13 @@ PINCFG_RESULT_T PinCfgCsv_eParse(
         else
         {
             PinCfgCsv_vAddToString(pcOutString, u16OutStrMaxLen, "W:L:%d:Unknown type.\n", (int16_t)u8LinesProcessed);
+            szNumberOfWarnings++;
         }
     }
-
     PinCfgCsv_vAddToString(pcOutString, u16OutStrMaxLen, "I: Configuration parsed.\n", -1);
+
+    if (szNumberOfWarnings > 0)
+        return PINCFG_WARNINGS_E;
 
     return PINCFG_OK_E;
 }
@@ -426,7 +493,7 @@ PINCFG_RESULT_T PinCfgCsv_eValidate(size_t *pszMemoryRequired, char *pcOutString
 }
 
 #ifdef MY_CONTROLLER_HA
-static bool bInitialValueSent;
+static bool bInitialValueSent = false;
 #endif
 
 void PinCfgCsv_vLoop(uint32_t u32ms)
@@ -437,17 +504,25 @@ void PinCfgCsv_vLoop(uint32_t u32ms)
 #ifdef MY_CONTROLLER_HA
     if (!bInitialValueSent)
     {
-        LOOPRE_IF_T *psCurrentPresentable = psGlobals->psPresentablesFirst;
-        while (psCurrentPresentable->psNextPresentable != NULL)
+        LOOPRE_IF_T *psCurrent = psGlobals->psPresentablesFirst;
+        bool bAllPresented = true;
+        while (psCurrent != NULL)
         {
-            LooPreIf_vPresentState(psCurrentPresentable);
-            psCurrentPresentable = psCurrentPresentable->psNextPresentable;
+            if (!psCurrent->bStatePresented)
+            {
+                LooPreIf_vPresentState(psCurrent);
+                delay(100);
+                bAllPresented = false;
+            }
+            psCurrent = psCurrent->psNextPresentable;
         }
+        if (bAllPresented)
+            bInitialValueSent = true;
     }
 #endif
 
     LOOPRE_IF_T *psCurrent = psGlobals->psLoopablesFirst;
-    while (psCurrent->psNextLoopable != NULL)
+    while (psCurrent != NULL)
     {
         LooPreIf_vLoop(psCurrent, u32ms);
         psCurrent = psCurrent->psNextLoopable;
@@ -460,38 +535,50 @@ void PinCfgCsv_vPresentation(void)
         return;
 
     LOOPRE_IF_T *psCurrent = psGlobals->psPresentablesFirst;
-    while (psCurrent->psNextPresentable != NULL)
+    while (psCurrent != NULL)
     {
         LooPreIf_vPresent(psCurrent);
         psCurrent = psCurrent->psNextPresentable;
+        delay(100);
     }
 }
 
-void PinCfgCfg_vReceive(const uint8_t u8Id, void *pvMsgData)
+void PinCfgCfg_vReceiveStatus(const uint8_t u8Id, uint8_t u8Status)
 {
     if (psGlobals == NULL)
         return;
 
-#ifdef MY_CONTROLLER_HA
-    if (!bInitialValueSent)
+    LOOPRE_IF_T *psReceiver = PinCfgCsv_psFindInPresentablesById(u8Id);
+    if (psReceiver != NULL)
     {
-        bInitialValueSent = true;
+        LooPreIf_vRcvStatusMessage(psReceiver, u8Status);
     }
-#endif
+}
 
-    LOOPRE_IF_T *psCurrent = psGlobals->psPresentablesFirst;
-    while (psCurrent->psNextPresentable != NULL)
+void PinCfgCfg_vReceiveText(const uint8_t u8Id, const char *pvMsgData)
+{
+    if (psGlobals == NULL)
+        return;
+
+    LOOPRE_IF_T *psReceiver = PinCfgCsv_psFindInPresentablesById(u8Id);
+    if (psReceiver != NULL)
     {
-        if (LooPreIf_u8GetId(psCurrent) == u8Id)
-        {
-            LooPreIf_vRcvMessage(psCurrent, pvMsgData);
-            break;
-        }
-        psCurrent = psCurrent->psNextPresentable;
+        LooPreIf_vRcvTextMessage(psReceiver, pvMsgData);
     }
 }
 
 // private
+static inline LOOPRE_IF_T *PinCfgCsv_psFindInPresentablesById(uint8_t u8Id)
+{
+    LOOPRE_IF_T *psCurrent = psGlobals->psPresentablesFirst;
+    while (psCurrent != NULL && (LooPreIf_u8GetId(psCurrent) != u8Id))
+    {
+        psCurrent = psCurrent->psNextPresentable;
+    }
+
+    return psCurrent;
+}
+
 static inline void PinCfgCsv_vAddToLoopables(LOOPRE_IF_T *psLoopable)
 {
     if (psGlobals->psLoopablesFirst == NULL)
@@ -509,16 +596,14 @@ static inline void PinCfgCsv_vAddToLoopables(LOOPRE_IF_T *psLoopable)
 
 static LOOPRE_IF_T *PinCfgCsv_psFindInLoopablesByName(const STRING_POINT_T *psName)
 {
-    LOOPRE_IF_T *psReturn = NULL;
+    LOOPRE_IF_T *psReturn = psGlobals->psLoopablesFirst;
     char *pcTempStr = (char *)Memory_vpTempAlloc(psName->szLen + 1);
 
     if (pcTempStr != NULL)
     {
         memcpy(pcTempStr, psName->pcStrStart, psName->szLen);
         pcTempStr[psName->szLen] = '\0';
-        psReturn = psGlobals->psLoopablesFirst;
-        while (psReturn != NULL &&
-               strcmp(MySensorsPresent_pcGetName((MYSENSORSPRESENT_HANDLE_T *)psReturn), pcTempStr) != 0)
+        while (psReturn != NULL && strcmp(LooPreIf_pcGetName(psReturn), pcTempStr) != 0)
         {
             psReturn = psReturn->psNextLoopable;
         }

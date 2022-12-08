@@ -20,12 +20,20 @@
 #error PINCFG_TRIGGER_MAX_SWITCHES_D is more then 255!
 #endif
 
-#ifndef PINCFG_CONF_START_STR
-#define PINCFG_CONF_START_STR "#{#"
+#ifndef PINCFG_DEBOUNCE_MS_D
+#define PINCFG_DEBOUNCE_MS_D 100
 #endif
 
-#ifndef PINCFG_CONF_END_STR
-#define PINCFG_CONF_END_STR "#}#"
+#ifndef PINCFG_MULTICLICK_MAX_DELAY_MS_D
+#define PINCFG_MULTICLICK_MAX_DELAY_MS_D 500
+#endif
+
+#ifndef PINCFG_LINE_SEPARATOR_D
+#define PINCFG_LINE_SEPARATOR_D '/'
+#endif
+
+#ifndef PINCFG_VALUE_SEPARATOR_D
+#define PINCFG_VALUE_SEPARATOR_D ','
 #endif
 
 typedef enum

@@ -42,4 +42,6 @@ PINCFG_STR_RESULT_T PinCfgStr_eRemoveEmpty(STRING_POINT_T *pasStrPts, uint8_t *u
 
 PINCFG_STR_RESULT_T PinCfgStr_eRemoveStartingWith(STRING_POINT_T *pasStrPts, uint8_t *u8StrPtsLen, const char cStart);
 
+const char *PinCfgCsv_pcStrstrpt(const char *pcHaystack, const STRING_POINT_T *psNeedle);
+
 #endif // PINCFGSTRING_H

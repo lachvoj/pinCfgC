@@ -1,6 +1,7 @@
 #include <errno.h>
 #include <stdlib.h>
 
+#include "Memory.h"
 #include "PinCfgStr.h"
 
 void PinCfgStr_vInitStrPoint(STRING_POINT_T *psStrPoint, const char *pcStrStart, size_t szLen)
@@ -165,4 +166,20 @@ PINCFG_STR_RESULT_T PinCfgStr_eRemoveStartingWith(STRING_POINT_T *pasStrPts, uin
     }
 
     return PINCFG_STR_OK_E;
+}
+
+const char *PinCfgCsv_pcStrstrpt(const char *pcHaystack, const STRING_POINT_T *psNeedle)
+{
+    char *pcTempStr = (char *)Memory_vpTempAlloc(psNeedle->szLen + 3);
+    if (pcTempStr != NULL)
+    {
+        memcpy((void *)(pcTempStr + 1), (void *)psNeedle->pcStrStart, psNeedle->szLen);
+        pcTempStr[0] = PINCFG_VALUE_SEPARATOR_D;
+        pcTempStr[psNeedle->szLen + 1] = PINCFG_VALUE_SEPARATOR_D;
+        pcTempStr[psNeedle->szLen + 2] = '\0';
+        pcTempStr = strstr(pcHaystack, pcTempStr);
+    }
+    Memory_vTempFree();
+
+    return pcTempStr;
 }

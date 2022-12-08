@@ -23,13 +23,12 @@ INPIN_RESULT_T InPin_eInit(
     INPIN_HANDLE_T *psHandle,
     STRING_POINT_T *sName,
     uint8_t u8Id,
-    bool bPresent,
     uint8_t u8InPin)
 {
     if (psHandle == NULL)
         return INPIN_NULLPTR_ERROR_E;
 
-    if (MySensorsPresent_eInit(&psHandle->sMySenPresent, sName, u8Id, PINCFG_INPIN_E, bPresent) !=
+    if (MySensorsPresent_eInit(&psHandle->sMySenPresent, sName, u8Id, PINCFG_INPIN_E) !=
         MYSENSORSPRESENT_OK_E)
     {
         return INPIN_SUBINIT_ERROR_E;
@@ -113,12 +112,13 @@ void InPin_vLoop(INPIN_HANDLE_T *psHandle, uint32_t u32ms)
 
         psHandle->ePinState = INPIN_DOWN_E;
         InPin_vSendEvent(psHandle, (uint8_t)psHandle->ePinState, 0U);
-        MySensorsPresent_vSetState(psMySensorsPresentHnd, (uint8_t) false);
+        MySensorsPresent_vSetState(psMySensorsPresentHnd, (uint8_t) false, true);
     }
     break;
     case INPIN_DOWN_E:
     {
-        if (psHandle->u8PressCount > 0 && (u32ms - psHandle->u32timerMultiStarted) > psGlobals->u32InPinMulticlickMaxDelayMs)
+        if (psHandle->u8PressCount > 0 &&
+            (u32ms - psHandle->u32timerMultiStarted) > psGlobals->u32InPinMulticlickMaxDelayMs)
         {
             InPin_vSendEvent(psHandle, (uint8_t)INPIN_MULTI_E, (uint32_t)psHandle->u8PressCount);
             psHandle->u8PressCount = 0U;
@@ -139,7 +139,7 @@ void InPin_vLoop(INPIN_HANDLE_T *psHandle, uint32_t u32ms)
         psHandle->u32timerMultiStarted = u32ms;
         psHandle->u8PressCount++;
         InPin_vSendEvent(psHandle, (uint8_t)psHandle->ePinState, (int)psHandle->u8PressCount);
-        MySensorsPresent_vSetState(psMySensorsPresentHnd, (uint8_t) true);
+        MySensorsPresent_vSetState(psMySensorsPresentHnd, (uint8_t) true, true);
     }
     break;
     case INPIN_UP_E:

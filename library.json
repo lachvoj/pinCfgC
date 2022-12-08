@@ -1,24 +1,23 @@
 {
-    "name": "pinCfgC",
-    "version": "1.0.0",
-    "description": "Digital IO configuration by csv.",
-    "keywords": "IO, config",
-    "repository":
+  "name": "pinCfgC",
+  "version": "1.0.0",
+  "description": "Digital IO configuration by csv.",
+  "keywords": "IO, config",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/lachvoj/pinCfgC.git"
+  },
+  "authors": [
     {
-      "type": "git",
-      "url": "https://github.com/lachvoj/pinCfgC.git"
-    },
-    "authors":
-    [
-      {
-        "name": "Vojtech Ľach",
-        "email": "vojto@awesomenet.eu"
-      }
-    ],
-    "license": "GPL-3.0-or-later",
-    "homepage": "https://www.helloworld.org/",
-    "dependencies": {
-    },
-    "frameworks": "*",
-    "platforms": "*"
-  }
+      "name": "Vojtech Ľach",
+      "email": "vojto@awesomenet.eu"
+    }
+  ],
+  "license": "GPL-3.0-or-later",
+  "homepage": "https://www.helloworld.org/",
+  "dependencies": {},
+  "frameworks": [
+    "arduino"
+  ],
+  "platforms": "*"
+}

@@ -15,14 +15,14 @@ typedef enum
 
 typedef enum
 {
-    TRIGGER_DOWN_E,
+    TRIGGER_DOWN_E = 0,
     TRIGGER_UP_E,
     TRIGGER_LONG
 } TRIGGER_EVENTTYPE_T;
 
 typedef enum
 {
-    TRIGGER_A_TOGGLE_E,
+    TRIGGER_A_TOGGLE_E = 0,
     TRIGGER_A_UP_E,
     TRIGGER_A_DOWN_E
 } TRIGGER_ACTION_T;

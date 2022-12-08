@@ -15,30 +15,22 @@ void LooPreIf_vLoop(LOOPRE_IF_T *psHandle, uint32_t u32ms)
 // presentable
 uint8_t LooPreIf_u8GetId(LOOPRE_IF_T *psHandle)
 {
-    if (psHandle->ePinCfgType == PINCFG_INPIN_E || psHandle->ePinCfgType == PINCFG_SWITCH_E)
-        return MySensorsPresent_u8GetId((MYSENSORSPRESENT_HANDLE_T *)psHandle);
-    else if (psHandle->ePinCfgType == PINCFG_EXTCFGRECEIVER_E)
-        return ExtCfgReceiver_u8GetId((EXTCFGRECEIVER_HANDLE_T *)psHandle);
-
-    return 0x00U;
+    return psHandle->u8Id;
 }
 
 const char *LooPreIf_pcGetName(LOOPRE_IF_T *psHandle)
 {
-    if (psHandle->ePinCfgType == PINCFG_INPIN_E || psHandle->ePinCfgType == PINCFG_SWITCH_E)
-        return MySensorsPresent_pcGetName((MYSENSORSPRESENT_HANDLE_T *)psHandle);
-    else if (psHandle->ePinCfgType == PINCFG_EXTCFGRECEIVER_E)
-        return ExtCfgReceiver_pcGetName((EXTCFGRECEIVER_HANDLE_T *)psHandle);
-
-    return NULL;
+    return psHandle->pcName;
 }
 
-void LooPreIf_vRcvMessage(LOOPRE_IF_T *psHandle, const void *pvMessage)
+void LooPreIf_vRcvStatusMessage(LOOPRE_IF_T *psHandle, uint8_t u8Status)
 {
-    if (psHandle->ePinCfgType == PINCFG_INPIN_E || psHandle->ePinCfgType == PINCFG_SWITCH_E)
-        MySensorsPresent_vRcvMessage((MYSENSORSPRESENT_HANDLE_T *)psHandle, pvMessage);
-    else if (psHandle->ePinCfgType == PINCFG_EXTCFGRECEIVER_E)
-        ExtCfgReceiver_vRcvMessage((EXTCFGRECEIVER_HANDLE_T *)psHandle, pvMessage);
+    MySensorsPresent_vRcvMessage((MYSENSORSPRESENT_HANDLE_T *)psHandle, u8Status);
+}
+
+void LooPreIf_vRcvTextMessage(LOOPRE_IF_T *psHandle, const char *pcMessage)
+{
+    ExtCfgReceiver_vRcvMessage((EXTCFGRECEIVER_HANDLE_T *)psHandle, pcMessage);
 }
 
 void LooPreIf_vPresent(LOOPRE_IF_T *psHandle)

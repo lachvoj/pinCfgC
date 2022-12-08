@@ -12,7 +12,8 @@ typedef enum
     PINCFG_TYPE_ERROR_E,
     PINCFG_OUTOFMEMORY_ERROR_E,
     PINCFG_MEMORYINIT_ERROR_E,
-    PINCFG_ERROR_E
+    PINCFG_ERROR_E,
+    PINCFG_WARNINGS_E
 } PINCFG_RESULT_T;
 
 PINCFG_RESULT_T PinCfgCsv_eInit(uint8_t *pu8Memory, size_t szMemorySize);
@@ -32,6 +33,7 @@ void PinCfgCsv_vLoop(uint32_t u32ms);
 
 void PinCfgCsv_vPresentation(void);
 
-void PinCfgCfg_vReceive(const uint8_t u8Id, void *pvMsgData);
+void PinCfgCfg_vReceiveStatus(const uint8_t u8Id, uint8_t u8Status);
+void PinCfgCfg_vReceiveText(const uint8_t u8Id, const char *pvMsgData);
 
 #endif // PINCFGCSV_H

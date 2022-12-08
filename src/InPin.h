@@ -44,7 +44,6 @@ INPIN_RESULT_T InPin_eInit(
     INPIN_HANDLE_T *psHandle,
     STRING_POINT_T *sName,
     uint8_t u8Id,
-    bool bPresent,
     uint8_t u8InPin);
 INPIN_RESULT_T InPin_eAddSubscriber(INPIN_HANDLE_T *psHandle, PINSUBSCRIBER_IF_T *psSubscriber);
 void InPin_vSendEvent(INPIN_HANDLE_T *psHandle, uint8_t u8EventType, uint32_t u32Data);

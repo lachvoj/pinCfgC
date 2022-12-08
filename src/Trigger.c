@@ -39,12 +39,12 @@ void Trigger_vEventHandle(TRIGGER_HANDLE_T *psHandle, uint8_t u8EventType, uint3
         else if (psHandle->pasSwAct[i].eAction == TRIGGER_A_UP_E)
         {
             MySensorsPresent_vSetState(
-                (MYSENSORSPRESENT_HANDLE_T *)(psHandle->pasSwAct[i].psSwitchHnd), (uint8_t) true);
+                (MYSENSORSPRESENT_HANDLE_T *)(psHandle->pasSwAct[i].psSwitchHnd), (uint8_t) true, true);
         }
         else if (psHandle->pasSwAct[i].eAction == TRIGGER_A_DOWN_E)
         {
             MySensorsPresent_vSetState(
-                (MYSENSORSPRESENT_HANDLE_T *)(psHandle->pasSwAct[i].psSwitchHnd), (uint8_t) false);
+                (MYSENSORSPRESENT_HANDLE_T *)(psHandle->pasSwAct[i].psSwitchHnd), (uint8_t) false, true);
         }
     }
 }

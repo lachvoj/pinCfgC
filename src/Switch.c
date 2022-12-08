@@ -16,7 +16,6 @@ SWITCH_RESULT_T Switch_eInit(
     SWITCH_HANDLE_T *psHandle,
     STRING_POINT_T *sName,
     uint8_t u8Id,
-    bool bPresent,
     uint32_t u32ImpulseDuration,
     SWITCH_MODE_T eMode,
     uint8_t u8OutPin,
@@ -25,7 +24,7 @@ SWITCH_RESULT_T Switch_eInit(
     if (psHandle == NULL)
         return SWITCH_NULLPTR_ERROR_E;
 
-    if (MySensorsPresent_eInit(&psHandle->sMySenPresent, sName, u8Id, PINCFG_SWITCH_E, bPresent) !=
+    if (MySensorsPresent_eInit(&psHandle->sMySenPresent, sName, u8Id, PINCFG_SWITCH_E) !=
         MYSENSORSPRESENT_OK_E)
     {
         return SWITCH_SUBINIT_ERROR_E;
