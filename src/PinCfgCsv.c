@@ -16,10 +16,10 @@
 #include "Switch.h"
 #include "Trigger.h"
 
-static inline LOOPRE_IF_T *PinCfgCsv_psFindInPresentablesById(uint8_t u8Id);
-static inline void PinCfgCsv_vAddToLoopables(LOOPRE_IF_T *psLoopable);
-static LOOPRE_IF_T *PinCfgCsv_psFindInLoopablesByName(const STRING_POINT_T *psName);
-static inline void PinCfgCsv_vAddToPresentables(LOOPRE_IF_T *psLoopable);
+static inline LOOPRE_T *PinCfgCsv_psFindInPresentablesById(uint8_t u8Id);
+static inline void PinCfgCsv_vAddToLoopables(LOOPRE_T *psLoopable);
+static LOOPRE_T *PinCfgCsv_psFindInLoopablesByName(const STRING_POINT_T *psName);
+static inline void PinCfgCsv_vAddToPresentables(LOOPRE_T *psLoopable);
 static void PinCfgCsv_vAddToString(
     char *pcOutMsg,
     const uint16_t szOutMsgMaxLen,
@@ -39,6 +39,23 @@ PINCFG_RESULT_T PinCfgCsv_eInit(uint8_t *pu8Memory, size_t szMemorySize)
         return PINCFG_MEMORYINIT_ERROR_E;
     }
 
+    // V tabs init
+    // switch
+    psGlobals->sSwitchVTab.vLoop = Switch_vLoop;
+    psGlobals->sSwitchVTab.vRcvStatus = MySensorsPresent_vRcvMessage;
+    psGlobals->sSwitchVTab.vPresent = MySensorsPresent_vPresent;
+    psGlobals->sSwitchVTab.vPresentState = MySensorsPresent_vPresentState;
+    // inpin
+    psGlobals->sInPinVTab.vLoop = InPin_vLoop;
+    psGlobals->sInPinVTab.vRcvStatus = MySensorsPresent_vRcvMessage;
+    psGlobals->sInPinVTab.vPresent = MySensorsPresent_vPresent;
+    psGlobals->sInPinVTab.vPresentState = MySensorsPresent_vPresentState;
+    // inpin
+    psGlobals->sExtCfgReceiverVTab.vLoop = NULL;
+    psGlobals->sExtCfgReceiverVTab.vRcvText = ExtCfgReceiver_vRcvMessage;
+    psGlobals->sExtCfgReceiverVTab.vPresent = ExtCfgReceiver_vPresent;
+    psGlobals->sExtCfgReceiverVTab.vPresentState = ExtCfgReceiver_vPresentState;
+
     return PINCFG_OK_E;
 }
 
@@ -57,7 +74,7 @@ PINCFG_RESULT_T PinCfgCsv_eParse(
     const bool bValidate,
     const bool bRemoteConfigEnabled)
 {
-    LOOPRE_IF_T *psLooPreIfElement;
+    LOOPRE_T *psLooPreElement;
     TRIGGER_SWITCHACTION_T *pasSwActs;
     TRIGGER_SWITCHACTION_T *psSwAct;
     TRIGGER_HANDLE_T *psTriggerHnd;
@@ -92,18 +109,18 @@ PINCFG_RESULT_T PinCfgCsv_eParse(
 
     if (!bValidate && bRemoteConfigEnabled)
     {
-        psLooPreIfElement = (LOOPRE_IF_T *)Memory_vpAlloc(sizeof(EXTCFGRECEIVER_HANDLE_T));
-        if (psLooPreIfElement == NULL)
+        psLooPreElement = (LOOPRE_T *)Memory_vpAlloc(sizeof(EXTCFGRECEIVER_HANDLE_T));
+        if (psLooPreElement == NULL)
         {
             Memory_eReset();
             PinCfgCsv_vAddToString(pcOutString, u16OutStrMaxLen, "E:ExtCfgReceiver: Out of memory.\n", -1);
             return PINCFG_OUTOFMEMORY_ERROR_E;
         }
 
-        if (ExtCfgReceiver_eInit((EXTCFGRECEIVER_HANDLE_T *)psLooPreIfElement, u8PresentablesCount) ==
+        if (ExtCfgReceiver_eInit((EXTCFGRECEIVER_HANDLE_T *)psLooPreElement, u8PresentablesCount) ==
             EXTCFGRECEIVER_OK_E)
         {
-            PinCfgCsv_vAddToPresentables(psLooPreIfElement);
+            PinCfgCsv_vAddToPresentables(psLooPreElement);
             u8PresentablesCount++;
         }
         else
@@ -187,8 +204,8 @@ PINCFG_RESULT_T PinCfgCsv_eParse(
                 PinCfgStr_vGetSplitElemByIndex(&sTempStrPt, PINCFG_VALUE_SEPARATOR_D, u8Offset);
                 if (!bValidate)
                 {
-                    psLooPreIfElement = (LOOPRE_IF_T *)Memory_vpAlloc(sizeof(SWITCH_HANDLE_T));
-                    if (psLooPreIfElement == NULL)
+                    psLooPreElement = (LOOPRE_T *)Memory_vpAlloc(sizeof(SWITCH_HANDLE_T));
+                    if (psLooPreElement == NULL)
                     {
                         Memory_eReset();
                         PinCfgCsv_vAddToString(
@@ -196,7 +213,7 @@ PINCFG_RESULT_T PinCfgCsv_eParse(
                         return PINCFG_OUTOFMEMORY_ERROR_E;
                     }
                     if (Switch_eInit(
-                            (SWITCH_HANDLE_T *)psLooPreIfElement,
+                            (SWITCH_HANDLE_T *)psLooPreElement,
                             &sTempStrPt,
                             u8PresentablesCount,
                             0U,
@@ -204,9 +221,9 @@ PINCFG_RESULT_T PinCfgCsv_eParse(
                             (uint8_t)u8Pin,
                             0U) == SWITCH_OK_E)
                     {
-                        PinCfgCsv_vAddToPresentables(psLooPreIfElement);
+                        PinCfgCsv_vAddToPresentables(psLooPreElement);
                         u8PresentablesCount++;
-                        PinCfgCsv_vAddToLoopables(psLooPreIfElement);
+                        PinCfgCsv_vAddToLoopables(psLooPreElement);
                     }
                     else
                     {
@@ -262,8 +279,8 @@ PINCFG_RESULT_T PinCfgCsv_eParse(
                 PinCfgStr_vGetSplitElemByIndex(&sTempStrPt, PINCFG_VALUE_SEPARATOR_D, u8Offset);
                 if (!bValidate)
                 {
-                    psLooPreIfElement = (LOOPRE_IF_T *)Memory_vpAlloc(sizeof(INPIN_HANDLE_T));
-                    if (psLooPreIfElement == NULL)
+                    psLooPreElement = (LOOPRE_T *)Memory_vpAlloc(sizeof(INPIN_HANDLE_T));
+                    if (psLooPreElement == NULL)
                     {
                         Memory_eReset();
                         PinCfgCsv_vAddToString(
@@ -271,12 +288,12 @@ PINCFG_RESULT_T PinCfgCsv_eParse(
                         return PINCFG_OUTOFMEMORY_ERROR_E;
                     }
                     if (InPin_eInit(
-                            (INPIN_HANDLE_T *)psLooPreIfElement, &sTempStrPt, u8PresentablesCount, (uint8_t)u8Pin) ==
+                            (INPIN_HANDLE_T *)psLooPreElement, &sTempStrPt, u8PresentablesCount, (uint8_t)u8Pin) ==
                         INPIN_OK_E)
                     {
-                        PinCfgCsv_vAddToPresentables(psLooPreIfElement);
+                        PinCfgCsv_vAddToPresentables(psLooPreElement);
                         u8PresentablesCount++;
-                        PinCfgCsv_vAddToLoopables(psLooPreIfElement);
+                        PinCfgCsv_vAddToLoopables(psLooPreElement);
                     }
                     else
                     {
@@ -385,8 +402,8 @@ PINCFG_RESULT_T PinCfgCsv_eParse(
                 }
                 else
                 {
-                    psLooPreIfElement = PinCfgCsv_psFindInLoopablesByName(&sTempStrPt);
-                    if (psLooPreIfElement == NULL)
+                    psLooPreElement = PinCfgCsv_psFindInLoopablesByName(&sTempStrPt);
+                    if (psLooPreElement == NULL)
                     {
                         PinCfgCsv_vAddToString(
                             pcOutString,
@@ -425,7 +442,7 @@ PINCFG_RESULT_T PinCfgCsv_eParse(
                             u8LinesProcessed);
                         return PINCFG_OUTOFMEMORY_ERROR_E;
                     }
-                    psSwAct->psSwitchHnd = (SWITCH_HANDLE_T *)psLooPreIfElement;
+                    psSwAct->psSwitchHnd = (SWITCH_HANDLE_T *)psLooPreElement;
                     psSwAct->eAction = (TRIGGER_ACTION_T)u8DrivenAction;
                     if (pasSwActs == NULL)
                     {
@@ -504,13 +521,13 @@ void PinCfgCsv_vLoop(uint32_t u32ms)
 #ifdef MY_CONTROLLER_HA
     if (!bInitialValueSent)
     {
-        LOOPRE_IF_T *psCurrent = psGlobals->psPresentablesFirst;
+        LOOPRE_T *psCurrent = psGlobals->psPresentablesFirst;
         bool bAllPresented = true;
         while (psCurrent != NULL)
         {
             if (!psCurrent->bStatePresented)
             {
-                LooPreIf_vPresentState(psCurrent);
+                psCurrent->psVtab->vPresentState(psCurrent);
                 delay(100);
                 bAllPresented = false;
             }
@@ -521,10 +538,10 @@ void PinCfgCsv_vLoop(uint32_t u32ms)
     }
 #endif
 
-    LOOPRE_IF_T *psCurrent = psGlobals->psLoopablesFirst;
+    LOOPRE_T *psCurrent = psGlobals->psLoopablesFirst;
     while (psCurrent != NULL)
     {
-        LooPreIf_vLoop(psCurrent, u32ms);
+        psCurrent->psVtab->vLoop(psCurrent, u32ms);
         psCurrent = psCurrent->psNextLoopable;
     }
 }
@@ -534,10 +551,10 @@ void PinCfgCsv_vPresentation(void)
     if (psGlobals == NULL)
         return;
 
-    LOOPRE_IF_T *psCurrent = psGlobals->psPresentablesFirst;
+    LOOPRE_T *psCurrent = psGlobals->psPresentablesFirst;
     while (psCurrent != NULL)
     {
-        LooPreIf_vPresent(psCurrent);
+        psCurrent->psVtab->vPresent(psCurrent);
         psCurrent = psCurrent->psNextPresentable;
         delay(100);
     }
@@ -548,10 +565,10 @@ void PinCfgCfg_vReceiveStatus(const uint8_t u8Id, uint8_t u8Status)
     if (psGlobals == NULL)
         return;
 
-    LOOPRE_IF_T *psReceiver = PinCfgCsv_psFindInPresentablesById(u8Id);
+    LOOPRE_T *psReceiver = PinCfgCsv_psFindInPresentablesById(u8Id);
     if (psReceiver != NULL)
     {
-        LooPreIf_vRcvStatusMessage(psReceiver, u8Status);
+        psReceiver->psVtab->vRcvStatus(psReceiver, u8Status);
     }
 }
 
@@ -560,18 +577,18 @@ void PinCfgCfg_vReceiveText(const uint8_t u8Id, const char *pvMsgData)
     if (psGlobals == NULL)
         return;
 
-    LOOPRE_IF_T *psReceiver = PinCfgCsv_psFindInPresentablesById(u8Id);
+    LOOPRE_T *psReceiver = PinCfgCsv_psFindInPresentablesById(u8Id);
     if (psReceiver != NULL)
     {
-        LooPreIf_vRcvTextMessage(psReceiver, pvMsgData);
+        psReceiver->psVtab->vRcvText(psReceiver, pvMsgData);
     }
 }
 
 // private
-static inline LOOPRE_IF_T *PinCfgCsv_psFindInPresentablesById(uint8_t u8Id)
+static inline LOOPRE_T *PinCfgCsv_psFindInPresentablesById(uint8_t u8Id)
 {
-    LOOPRE_IF_T *psCurrent = psGlobals->psPresentablesFirst;
-    while (psCurrent != NULL && (LooPreIf_u8GetId(psCurrent) != u8Id))
+    LOOPRE_T *psCurrent = psGlobals->psPresentablesFirst;
+    while (psCurrent != NULL && (LooPre_u8GetId(psCurrent) != u8Id))
     {
         psCurrent = psCurrent->psNextPresentable;
     }
@@ -579,13 +596,13 @@ static inline LOOPRE_IF_T *PinCfgCsv_psFindInPresentablesById(uint8_t u8Id)
     return psCurrent;
 }
 
-static inline void PinCfgCsv_vAddToLoopables(LOOPRE_IF_T *psLoopable)
+static inline void PinCfgCsv_vAddToLoopables(LOOPRE_T *psLoopable)
 {
     if (psGlobals->psLoopablesFirst == NULL)
         psGlobals->psLoopablesFirst = psLoopable;
     else
     {
-        LOOPRE_IF_T *psCurrent = psGlobals->psLoopablesFirst;
+        LOOPRE_T *psCurrent = psGlobals->psLoopablesFirst;
         while (psCurrent->psNextLoopable != NULL)
         {
             psCurrent = psCurrent->psNextLoopable;
@@ -594,16 +611,16 @@ static inline void PinCfgCsv_vAddToLoopables(LOOPRE_IF_T *psLoopable)
     }
 }
 
-static LOOPRE_IF_T *PinCfgCsv_psFindInLoopablesByName(const STRING_POINT_T *psName)
+static LOOPRE_T *PinCfgCsv_psFindInLoopablesByName(const STRING_POINT_T *psName)
 {
-    LOOPRE_IF_T *psReturn = psGlobals->psLoopablesFirst;
+    LOOPRE_T *psReturn = psGlobals->psLoopablesFirst;
     char *pcTempStr = (char *)Memory_vpTempAlloc(psName->szLen + 1);
 
     if (pcTempStr != NULL)
     {
         memcpy(pcTempStr, psName->pcStrStart, psName->szLen);
         pcTempStr[psName->szLen] = '\0';
-        while (psReturn != NULL && strcmp(LooPreIf_pcGetName(psReturn), pcTempStr) != 0)
+        while (psReturn != NULL && strcmp(LooPre_pcGetName(psReturn), pcTempStr) != 0)
         {
             psReturn = psReturn->psNextLoopable;
         }
@@ -613,13 +630,13 @@ static LOOPRE_IF_T *PinCfgCsv_psFindInLoopablesByName(const STRING_POINT_T *psNa
     return psReturn;
 }
 
-static inline void PinCfgCsv_vAddToPresentables(LOOPRE_IF_T *psPresentable)
+static inline void PinCfgCsv_vAddToPresentables(LOOPRE_T *psPresentable)
 {
     if (psGlobals->psPresentablesFirst == NULL)
         psGlobals->psPresentablesFirst = psPresentable;
     else
     {
-        LOOPRE_IF_T *psCurrent = psGlobals->psPresentablesFirst;
+        LOOPRE_T *psCurrent = psGlobals->psPresentablesFirst;
         while (psCurrent->psNextPresentable != NULL)
         {
             psCurrent = psCurrent->psNextPresentable;

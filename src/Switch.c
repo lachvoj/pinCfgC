@@ -5,12 +5,13 @@
 #endif
 
 #include "Switch.h"
+#include "Globals.h"
 
 static inline void Switch_vWritePin(SWITCH_HANDLE_T *psHandle, uint8_t u8Value);
 
 // loopable IF
-void Switch_vLoop_withFb(LOOPRE_IF_T *psHandle, uint32_t u32ms);
-void Switch_vLoop_noFb(LOOPRE_IF_T *psHandle, uint32_t u32ms);
+void Switch_vLoop_withFb(LOOPRE_T *psHandle, uint32_t u32ms);
+void Switch_vLoop_noFb(LOOPRE_T *psHandle, uint32_t u32ms);
 
 SWITCH_RESULT_T Switch_eInit(
     SWITCH_HANDLE_T *psHandle,
@@ -24,11 +25,14 @@ SWITCH_RESULT_T Switch_eInit(
     if (psHandle == NULL)
         return SWITCH_NULLPTR_ERROR_E;
 
-    if (MySensorsPresent_eInit(&psHandle->sMySenPresent, sName, u8Id, PINCFG_SWITCH_E) !=
+    if (MySensorsPresent_eInit(&psHandle->sMySenPresent, sName, u8Id) !=
         MYSENSORSPRESENT_OK_E)
     {
         return SWITCH_SUBINIT_ERROR_E;
     }
+
+    // vtab init
+    psHandle->sMySenPresent.sLooPre.psVtab = &psGlobals->sSwitchVTab;
 
     psHandle->eMode = eMode;
     psHandle->u8OutPin = u8OutPin;
@@ -48,9 +52,10 @@ SWITCH_RESULT_T Switch_eInit(
     return SWITCH_OK_E;
 }
 
-void Switch_vLoop(SWITCH_HANDLE_T *psHandle, uint32_t u32ms)
+void Switch_vLoop(LOOPRE_T *psBaseHandle, uint32_t u32ms)
 {
-    MYSENSORSPRESENT_HANDLE_T *psPresentHnd = (MYSENSORSPRESENT_HANDLE_T *)psHandle;
+    MYSENSORSPRESENT_HANDLE_T *psPresentHnd = (MYSENSORSPRESENT_HANDLE_T *)psBaseHandle;
+    SWITCH_HANDLE_T *psHandle = (SWITCH_HANDLE_T *)psBaseHandle;
 
     if (psHandle->u8FbPin > 0)
     {

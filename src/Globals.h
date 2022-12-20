@@ -1,7 +1,8 @@
 #ifndef GLOBALS_H
 #define GLOBALS_H
 
-#include "LooPreIf.h"
+#include "LooPre.h"
+#include "PinSubscriberIf.h"
 #include "PincfgIf.h"
 
 typedef struct
@@ -12,8 +13,12 @@ typedef struct
     char *pvMemTempEnd;
     bool bMemIsInitialized;
     // pincfgcsv
-    LOOPRE_IF_T *psLoopablesFirst;
-    LOOPRE_IF_T *psPresentablesFirst;
+    LOOPRE_T *psLoopablesFirst;
+    LOOPRE_T *psPresentablesFirst;
+    LOOPRE_VTAB_T sSwitchVTab;
+    LOOPRE_VTAB_T sInPinVTab;
+    LOOPRE_VTAB_T sExtCfgReceiverVTab;
+    PINSUBSCRIBER_VTAB_T sTriggerVTab;
     // InPin
     uint32_t u32InPinDebounceMs;
     uint32_t u32InPinMulticlickMaxDelayMs;

@@ -1,3 +1,4 @@
+#include "Globals.h"
 #include "Trigger.h"
 
 TRIGGER_RESULT_T Trigger_eInit(
@@ -13,8 +14,8 @@ TRIGGER_RESULT_T Trigger_eInit(
     if (u8SwActCount > PINCFG_TRIGGER_MAX_SWITCHES_D)
         return TRIGGER_MAX_SWITCH_ERROR_E;
 
-    // pin subscriberIF
-    psHandle->sPinSubscriber.ePinCfgType = PINCFG_TRIGGER_E;
+    // vtab init
+    psHandle->sPinSubscriber.psVtab = &psGlobals->sTriggerVTab;
 
     // parameters init
     psHandle->pasSwAct = pasSwAct;
@@ -25,8 +26,10 @@ TRIGGER_RESULT_T Trigger_eInit(
     return TRIGGER_OK_E;
 }
 
-void Trigger_vEventHandle(TRIGGER_HANDLE_T *psHandle, uint8_t u8EventType, uint32_t u32Data)
+void Trigger_vEventHandle(PINSUBSCRIBER_IF_T *psBaseHandle, uint8_t u8EventType, uint32_t u32Data)
 {
+    TRIGGER_HANDLE_T *psHandle = (TRIGGER_HANDLE_T *)psBaseHandle;
+
     if ((TRIGGER_EVENTTYPE_T)u8EventType != psHandle->eEventType || u32Data != psHandle->u8EventCount)
         return;
 

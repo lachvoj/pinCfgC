@@ -1,7 +1,7 @@
 #ifndef INPIN_H
 #define INPIN_H
 
-#include "LooPreIf.h"
+#include "LooPre.h"
 #include "MySensorsPresent.h"
 #include "PinSubscriberIf.h"
 #include "Types.h"
@@ -49,6 +49,6 @@ INPIN_RESULT_T InPin_eAddSubscriber(INPIN_HANDLE_T *psHandle, PINSUBSCRIBER_IF_T
 void InPin_vSendEvent(INPIN_HANDLE_T *psHandle, uint8_t u8EventType, uint32_t u32Data);
 
 // loopable IF
-void InPin_vLoop(INPIN_HANDLE_T *psHandle, uint32_t u32ms);
+void InPin_vLoop(LOOPRE_T *psBaseHandle, uint32_t u32ms);
 
 #endif // INPIN_H

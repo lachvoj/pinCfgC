@@ -1,7 +1,7 @@
 #ifndef EXTCFGRECEIVER_H
 #define EXTCFGRECEIVER_H
 
-#include "LooPreIf.h"
+#include "LooPre.h"
 #include "PinCfgStr.h"
 #include "Types.h"
 
@@ -18,7 +18,7 @@ typedef enum
 
 typedef struct
 {
-    LOOPRE_IF_T sLooPreIf;
+    LOOPRE_T sLooPre;
     char acState[PINCFG_TXTSTATE_MAX_SZ_D];
     uint16_t u16CfgNext;
     EXTCFGRECEIVER_STATE_T eState;

@@ -22,12 +22,14 @@ EXTCFGRECEIVER_RESULT_T ExtCfgReceiver_eInit(EXTCFGRECEIVER_HANDLE_T *psHandle, 
         return EXTCFGRECEIVER_NULLPTR_ERROR_E;
     }
 
+    // vtab init
+    psHandle->sLooPre.psVtab = &psGlobals->sExtCfgReceiverVTab;
+
     // LOOPRE init
-    psHandle->sLooPreIf.ePinCfgType = PINCFG_EXTCFGRECEIVER_E;
-    psHandle->sLooPreIf.pcName = "cfgReceviver";
-    psHandle->sLooPreIf.u8Id = u8Id;
+    psHandle->sLooPre.pcName = "cfgReceviver";
+    psHandle->sLooPre.u8Id = u8Id;
 #ifdef MY_CONTROLLER_HA
-    psHandle->sLooPreIf.bStatePresented = false;
+    psHandle->sLooPre.bStatePresented = false;
 #endif
 
     // Initialize handle items
@@ -63,14 +65,14 @@ void ExtCfgReceiver_vSetState(
     }
 
     if (bSendState)
-        bSendText(psHandle->sLooPreIf.u8Id, psHandle->acState);
+        bSendText(psHandle->sLooPre.u8Id, psHandle->acState);
 }
 
 // presentable IF
 void ExtCfgReceiver_vRcvMessage(EXTCFGRECEIVER_HANDLE_T *psHandle, const char *pcMessage)
 {
 #ifdef MY_CONTROLLER_HA
-    psHandle->sLooPreIf.bStatePresented = true;
+    psHandle->sLooPre.bStatePresented = true;
 #endif
     // EXTCFGRECEIVER_STATE_T eOldState = psHandle->eState;
 
@@ -105,13 +107,13 @@ void ExtCfgReceiver_vRcvMessage(EXTCFGRECEIVER_HANDLE_T *psHandle, const char *p
 
 void ExtCfgReceiver_vPresent(EXTCFGRECEIVER_HANDLE_T *psHandle)
 {
-    bPresentInfo(psHandle->sLooPreIf.u8Id, psHandle->sLooPreIf.pcName);
+    bPresentInfo(psHandle->sLooPre.u8Id, psHandle->sLooPre.pcName);
 }
 
 void ExtCfgReceiver_vPresentState(EXTCFGRECEIVER_HANDLE_T *psHandle)
 {
-    bSendText(psHandle->sLooPreIf.u8Id, psHandle->acState);
-    bRequestText(psHandle->sLooPreIf.u8Id);
+    bSendText(psHandle->sLooPre.u8Id, psHandle->acState);
+    bRequestText(psHandle->sLooPre.u8Id);
 }
 
 // private

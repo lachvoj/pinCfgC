@@ -19,20 +19,18 @@ void InPin_SetMulticlickMaxDelayMs(uint32_t u32MultikMaxDelay)
     psGlobals->u32InPinMulticlickMaxDelayMs = u32MultikMaxDelay;
 }
 
-INPIN_RESULT_T InPin_eInit(
-    INPIN_HANDLE_T *psHandle,
-    STRING_POINT_T *sName,
-    uint8_t u8Id,
-    uint8_t u8InPin)
+INPIN_RESULT_T InPin_eInit(INPIN_HANDLE_T *psHandle, STRING_POINT_T *sName, uint8_t u8Id, uint8_t u8InPin)
 {
     if (psHandle == NULL)
         return INPIN_NULLPTR_ERROR_E;
 
-    if (MySensorsPresent_eInit(&psHandle->sMySenPresent, sName, u8Id, PINCFG_INPIN_E) !=
-        MYSENSORSPRESENT_OK_E)
+    if (MySensorsPresent_eInit(&psHandle->sMySenPresent, sName, u8Id) != MYSENSORSPRESENT_OK_E)
     {
         return INPIN_SUBINIT_ERROR_E;
     }
+
+    // vtab init
+    psHandle->sMySenPresent.sLooPre.psVtab = &psGlobals->sInPinVTab;
 
     psHandle->u8InPin = u8InPin;
     psHandle->u32TimerDebounceStarted--;
@@ -71,7 +69,7 @@ void InPin_vSendEvent(INPIN_HANDLE_T *psHandle, uint8_t u8EventType, uint32_t u3
     PINSUBSCRIBER_IF_T *psCurrent = psHandle->psFirstSubscriber;
     while (psCurrent != NULL)
     {
-        PinSubscriberIf_vEventHandle(psCurrent, u8EventType, u32Data);
+        psCurrent->psVtab->vEventHandle(psCurrent, u8EventType, u32Data);
         psCurrent = psCurrent->psNext;
     }
 }
@@ -84,9 +82,10 @@ typedef enum
     INPIN_CHANGE_DOWN_E
 } INPIN_CHANGE_T;
 
-void InPin_vLoop(INPIN_HANDLE_T *psHandle, uint32_t u32ms)
+void InPin_vLoop(LOOPRE_T *psBaseHandle, uint32_t u32ms)
 {
-    MYSENSORSPRESENT_HANDLE_T *psMySensorsPresentHnd = (MYSENSORSPRESENT_HANDLE_T *)psHandle;
+    MYSENSORSPRESENT_HANDLE_T *psMySensorsPresentHnd = (MYSENSORSPRESENT_HANDLE_T *)psBaseHandle;
+    INPIN_HANDLE_T *psHandle = (INPIN_HANDLE_T *)psBaseHandle;
 
     INPIN_CHANGE_T eChange = INPIN_CHANGE_NOCHANGE_E;
     if (psHandle->ePinState != INPIN_DEBOUNCEDOWN_E && psHandle->ePinState != INPIN_DEBOUNCEUP_E)

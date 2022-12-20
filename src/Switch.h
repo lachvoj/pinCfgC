@@ -1,7 +1,7 @@
 #ifndef SWITCH_H
 #define SWITCH_H
 
-#include "LooPreIf.h"
+#include "LooPre.h"
 #include "MySensorsPresent.h"
 #include "Types.h"
 
@@ -38,6 +38,6 @@ SWITCH_RESULT_T Switch_eInit(
     uint8_t u8OutPin,
     uint8_t u8FbPin);
 
-void Switch_vLoop(SWITCH_HANDLE_T *psHandle, uint32_t u32ms);
+void Switch_vLoop(LOOPRE_T *psBaseHandle, uint32_t u32ms);
 
 #endif // SWITCH_H

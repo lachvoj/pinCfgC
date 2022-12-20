@@ -49,6 +49,6 @@ TRIGGER_RESULT_T Trigger_eInit(
     TRIGGER_EVENTTYPE_T eEventType,
     uint8_t u8EventCount);
 
-void Trigger_vEventHandle(TRIGGER_HANDLE_T *psHandle, uint8_t u8EventType, uint32_t u32Data);
+void Trigger_vEventHandle(PINSUBSCRIBER_IF_T *psBaseHandle, uint8_t u8EventType, uint32_t u32Data);
 
 #endif // TRIGGER_H
