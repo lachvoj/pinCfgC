@@ -10,11 +10,7 @@ typedef struct
     // loopable
     void (*vLoop)(struct LOOPRE_T *psHandle, uint32_t u32ms);
     // presentable
-    union
-    {
-        void (*vRcvStatus)(struct LOOPRE_T *psHandle, uint8_t u8Status);
-        void (*vRcvText)(struct LOOPRE_T *psHandle, const char *pcMessage);
-    };
+    void (*vReceive)(struct LOOPRE_T *psHandle, const void *pvMessage);
     void (*vPresent)(struct LOOPRE_T *psHandle);
     void (*vPresentState)(struct LOOPRE_T *psHandle);
 } LOOPRE_VTAB_T;

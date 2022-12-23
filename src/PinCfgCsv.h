@@ -35,7 +35,6 @@ void PinCfgCsv_vLoop(uint32_t u32ms);
 
 void PinCfgCsv_vPresentation(void);
 
-void PinCfgCfg_vReceiveStatus(const uint8_t u8Id, uint8_t u8Status);
-void PinCfgCfg_vReceiveText(const uint8_t u8Id, const char *pvMsgData);
+void PinCfgCfg_vReceive(const uint8_t u8Id, const void *pvMsgData);
 
 #endif // PINCFGCSV_H

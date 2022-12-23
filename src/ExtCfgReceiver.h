@@ -41,7 +41,7 @@ void ExtCfgReceiver_vSetState(
     bool bSendState);
 
 // presentable IF
-void ExtCfgReceiver_vRcvMessage(LOOPRE_T *psBaseHandle, const char *pcMessage);
+void ExtCfgReceiver_vRcvMessage(LOOPRE_T *psBaseHandle, const void *pvMessage);
 void ExtCfgReceiver_vPresent(LOOPRE_T *psBaseHandle);
 void ExtCfgReceiver_vPresentState(LOOPRE_T *psBaseHandle);
 

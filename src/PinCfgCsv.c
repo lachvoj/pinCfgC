@@ -51,17 +51,17 @@ PINCFG_RESULT_T PinCfgCsv_eInit(uint8_t *pu8Memory, size_t szMemorySize, PINCFG_
     // V tabs init
     // switch
     psGlobals->sSwitchVTab.vLoop = Switch_vLoop;
-    psGlobals->sSwitchVTab.vRcvStatus = MySensorsPresent_vRcvMessage;
+    psGlobals->sSwitchVTab.vReceive = MySensorsPresent_vRcvMessage;
     psGlobals->sSwitchVTab.vPresent = MySensorsPresent_vPresent;
     psGlobals->sSwitchVTab.vPresentState = MySensorsPresent_vPresentState;
     // inpin
     psGlobals->sInPinVTab.vLoop = InPin_vLoop;
-    psGlobals->sInPinVTab.vRcvStatus = MySensorsPresent_vRcvMessage;
-    psGlobals->sInPinVTab.vPresent = MySensorsPresent_vPresent;
-    psGlobals->sInPinVTab.vPresentState = MySensorsPresent_vPresentState;
-    // inpin
+    psGlobals->sInPinVTab.vReceive = InPin_vRcvMessage;
+    psGlobals->sInPinVTab.vPresent = InPin_vPresent;
+    psGlobals->sInPinVTab.vPresentState = InPin_vPresentState;
+    // extcfgreceiver
     psGlobals->sExtCfgReceiverVTab.vLoop = NULL;
-    psGlobals->sExtCfgReceiverVTab.vRcvText = ExtCfgReceiver_vRcvMessage;
+    psGlobals->sExtCfgReceiverVTab.vReceive = ExtCfgReceiver_vRcvMessage;
     psGlobals->sExtCfgReceiverVTab.vPresent = ExtCfgReceiver_vPresent;
     psGlobals->sExtCfgReceiverVTab.vPresentState = ExtCfgReceiver_vPresentState;
 
@@ -569,7 +569,7 @@ void PinCfgCsv_vPresentation(void)
     }
 }
 
-void PinCfgCfg_vReceiveStatus(const uint8_t u8Id, uint8_t u8Status)
+void PinCfgCfg_vReceive(const uint8_t u8Id, const void *pvMessage)
 {
     if (psGlobals == NULL)
         return;
@@ -577,19 +577,7 @@ void PinCfgCfg_vReceiveStatus(const uint8_t u8Id, uint8_t u8Status)
     LOOPRE_T *psReceiver = PinCfgCsv_psFindInPresentablesById(u8Id);
     if (psReceiver != NULL)
     {
-        psReceiver->psVtab->vRcvStatus(psReceiver, u8Status);
-    }
-}
-
-void PinCfgCfg_vReceiveText(const uint8_t u8Id, const char *pvMsgData)
-{
-    if (psGlobals == NULL)
-        return;
-
-    LOOPRE_T *psReceiver = PinCfgCsv_psFindInPresentablesById(u8Id);
-    if (psReceiver != NULL)
-    {
-        psReceiver->psVtab->vRcvText(psReceiver, pvMsgData);
+        psReceiver->psVtab->vReceive(psReceiver, pvMessage);
     }
 }
 

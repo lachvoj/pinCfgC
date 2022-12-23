@@ -168,3 +168,24 @@ void InPin_vLoop(LOOPRE_T *psBaseHandle, uint32_t u32ms)
     default: break;
     }
 }
+
+// presentable IF
+void InPin_vRcvMessage(LOOPRE_T *psBaseHandle, const void *pvMessage)
+{
+    (void)pvMessage;
+#ifdef MY_CONTROLLER_HA
+    psBaseHandle->bStatePresented = true;
+#endif
+}
+
+void InPin_vPresent(LOOPRE_T *psBaseHandle)
+{
+    psGlobals->sPincfgIf.bPresent(psBaseHandle->u8Id, S_DOOR, psBaseHandle->pcName);
+}
+
+void InPin_vPresentState(LOOPRE_T *psBaseHandle)
+{
+    psGlobals->sPincfgIf.bSend(
+        psBaseHandle->u8Id, V_TRIPPED, (const void *)(&((MYSENSORSPRESENT_HANDLE_T *)psBaseHandle)->u8State));
+    psGlobals->sPincfgIf.bRequest(psBaseHandle->u8Id, V_TRIPPED, GATEWAY_ADDRESS);
+}

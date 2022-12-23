@@ -69,9 +69,11 @@ void ExtCfgReceiver_vSetState(
 }
 
 // presentable IF
-void ExtCfgReceiver_vRcvMessage(LOOPRE_T *psBaseHandle, const char *pcMessage)
+void ExtCfgReceiver_vRcvMessage(LOOPRE_T *psBaseHandle, const void *pvMessage)
 {
     EXTCFGRECEIVER_HANDLE_T *psHandle = (EXTCFGRECEIVER_HANDLE_T *)psBaseHandle;
+    const char *pcMessage = (const char *)pvMessage;
+
 #ifdef MY_CONTROLLER_HA
     psHandle->sLooPre.bStatePresented = true;
 #endif

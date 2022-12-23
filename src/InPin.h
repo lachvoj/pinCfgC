@@ -40,15 +40,16 @@ typedef struct
 void InPin_SetDebounceMs(uint32_t debounce);
 void InPin_SetMulticlickMaxDelayMs(uint32_t multikMaxDelay);
 
-INPIN_RESULT_T InPin_eInit(
-    INPIN_HANDLE_T *psHandle,
-    STRING_POINT_T *sName,
-    uint8_t u8Id,
-    uint8_t u8InPin);
+INPIN_RESULT_T InPin_eInit(INPIN_HANDLE_T *psHandle, STRING_POINT_T *sName, uint8_t u8Id, uint8_t u8InPin);
 INPIN_RESULT_T InPin_eAddSubscriber(INPIN_HANDLE_T *psHandle, PINSUBSCRIBER_IF_T *psSubscriber);
 void InPin_vSendEvent(INPIN_HANDLE_T *psHandle, uint8_t u8EventType, uint32_t u32Data);
 
 // loopable IF
 void InPin_vLoop(LOOPRE_T *psBaseHandle, uint32_t u32ms);
+
+// presentable IF
+void InPin_vRcvMessage(LOOPRE_T *psBaseHandle, const void *pvMessage);
+void InPin_vPresent(LOOPRE_T *psBaseHandle);
+void InPin_vPresentState(LOOPRE_T *psBaseHandle);
 
 #endif // INPIN_H

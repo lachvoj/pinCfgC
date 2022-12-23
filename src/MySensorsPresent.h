@@ -31,7 +31,7 @@ void MySensorsPresent_vSetState(MYSENSORSPRESENT_HANDLE_T *psHandle, uint8_t u8S
 void MySensorsPresent_vToggle(MYSENSORSPRESENT_HANDLE_T *psHandle);
 
 // presentable IF
-void MySensorsPresent_vRcvMessage(LOOPRE_T *psBaseHandle, uint8_t u8State);
+void MySensorsPresent_vRcvMessage(LOOPRE_T *psBaseHandle, const void *pvMessage);
 void MySensorsPresent_vPresent(LOOPRE_T *psBaseHandle);
 void MySensorsPresent_vPresentState(LOOPRE_T *psBaseHandle);
 

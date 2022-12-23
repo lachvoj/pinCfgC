@@ -36,4 +36,32 @@
 #define PINCFG_VALUE_SEPARATOR_D ','
 #endif
 
+#ifndef GATEWAY_ADDRESS
+#define GATEWAY_ADDRESS 0
+#endif
+
+#ifndef S_DOOR
+#define S_DOOR 0
+#endif
+
+#ifndef S_BINARY
+#define S_BINARY 3
+#endif
+
+#ifndef S_INFO
+#define S_INFO 36
+#endif
+
+#ifndef V_STATUS
+#define V_STATUS 2
+#endif
+
+#ifndef V_TRIPPED
+#define V_TRIPPED 16
+#endif
+
+#ifndef V_TEXT
+#define V_TEXT 47
+#endif
+
 #endif // TYPES_H
