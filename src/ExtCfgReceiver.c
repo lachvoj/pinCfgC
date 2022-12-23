@@ -65,12 +65,13 @@ void ExtCfgReceiver_vSetState(
     }
 
     if (bSendState)
-        bSendText(psHandle->sLooPre.u8Id, psHandle->acState);
+        psGlobals->sPincfgIf.bSend(psHandle->sLooPre.u8Id, 47, psHandle->acState); // 47-V_TEXT
 }
 
 // presentable IF
-void ExtCfgReceiver_vRcvMessage(EXTCFGRECEIVER_HANDLE_T *psHandle, const char *pcMessage)
+void ExtCfgReceiver_vRcvMessage(LOOPRE_T *psBaseHandle, const char *pcMessage)
 {
+    EXTCFGRECEIVER_HANDLE_T *psHandle = (EXTCFGRECEIVER_HANDLE_T *)psBaseHandle;
 #ifdef MY_CONTROLLER_HA
     psHandle->sLooPre.bStatePresented = true;
 #endif
@@ -105,15 +106,15 @@ void ExtCfgReceiver_vRcvMessage(EXTCFGRECEIVER_HANDLE_T *psHandle, const char *p
     }
 }
 
-void ExtCfgReceiver_vPresent(EXTCFGRECEIVER_HANDLE_T *psHandle)
+void ExtCfgReceiver_vPresent(LOOPRE_T *psBaseHandle)
 {
-    bPresentInfo(psHandle->sLooPre.u8Id, psHandle->sLooPre.pcName);
+    psGlobals->sPincfgIf.bPresent(psBaseHandle->u8Id, 36, psBaseHandle->pcName); // 36-S_INFO
 }
 
-void ExtCfgReceiver_vPresentState(EXTCFGRECEIVER_HANDLE_T *psHandle)
+void ExtCfgReceiver_vPresentState(LOOPRE_T *psBaseHandle)
 {
-    bSendText(psHandle->sLooPre.u8Id, psHandle->acState);
-    bRequestText(psHandle->sLooPre.u8Id);
+    psGlobals->sPincfgIf.bSend(psBaseHandle->u8Id, 47, ((EXTCFGRECEIVER_HANDLE_T *)psBaseHandle)->acState); // 47-V_TEXT
+    psGlobals->sPincfgIf.bRequest(psBaseHandle->u8Id, 36, 0); // 36-S_INFO, 0-GATEWAY_ADDRESS
 }
 
 // private
@@ -125,7 +126,7 @@ static void ExtCfgReceiver_vConfigurationReceived(EXTCFGRECEIVER_HANDLE_T *psHan
     if (eValidationResult == PINCFG_OK_E)
     {
         ExtCfgReceiver_vSetState(psHandle, EXTCFGRECEIVER_VALIDATION_OK_E, NULL, true);
-        if (u8SaveCfg(psGlobals->acCfgBuf) == 0U)
+        if (psGlobals->sPincfgIf.u8SaveCfg(psGlobals->acCfgBuf) == 0U)
         {
 #ifdef ARDUINO_ARCH_STM32F1
             asm("b Reset_Handler");

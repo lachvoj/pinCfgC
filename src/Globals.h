@@ -19,6 +19,8 @@ typedef struct
     LOOPRE_VTAB_T sInPinVTab;
     LOOPRE_VTAB_T sExtCfgReceiverVTab;
     PINSUBSCRIBER_VTAB_T sTriggerVTab;
+    // pincfgif
+    PINCFG_IF_T sPincfgIf;
     // InPin
     uint32_t u32InPinDebounceMs;
     uint32_t u32InPinMulticlickMaxDelayMs;

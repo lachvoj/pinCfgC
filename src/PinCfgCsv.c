@@ -27,17 +27,26 @@ static void PinCfgCsv_vAddToString(
     int16_t i16Line);
 static inline size_t szGetAllocatedSize(size_t szToAllocate);
 
-PINCFG_RESULT_T PinCfgCsv_eInit(uint8_t *pu8Memory, size_t szMemorySize)
+PINCFG_RESULT_T PinCfgCsv_eInit(uint8_t *pu8Memory, size_t szMemorySize, PINCFG_IF_T *psPincfgIf)
 {
     // Memory init
     if (pu8Memory == NULL)
     {
         return PINCFG_NULLPTR_ERROR_E;
     }
+
     if (Memory_eInit(pu8Memory, szMemorySize) != MEMORY_OK_E)
     {
         return PINCFG_MEMORYINIT_ERROR_E;
     }
+
+    // pincfg if init
+    if (psPincfgIf == NULL || psPincfgIf->bRequest == NULL || psPincfgIf->bPresent == NULL ||
+        psPincfgIf->bSend == NULL || psPincfgIf->u8SaveCfg == NULL)
+    {
+        return PINCFG_IF_NULLPTR_ERROR_E;
+    }
+    psGlobals->sPincfgIf = *psPincfgIf;
 
     // V tabs init
     // switch

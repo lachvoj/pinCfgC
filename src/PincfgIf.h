@@ -3,17 +3,12 @@
 
 #include "Types.h"
 
-// !!! implement those !!!
-
-bool bRequestStatus(const uint8_t u8Id);
-bool bRequestText(const uint8_t u8Id);
-
-bool bPresentBinary(const uint8_t u8Id, const char *pcName);
-bool bPresentInfo(const uint8_t u8Id, const char *pcName);
-
-bool bSendStatus(const uint8_t u8Id, uint8_t u8Status);
-bool bSendText(const uint8_t u8Id, const char *pcMessage);
-
-uint8_t u8SaveCfg(const char *pcCfg);
+typedef struct
+{
+    bool (*bRequest)(const uint8_t u8Id, const uint8_t variableType, const uint8_t u8Destination);
+    bool (*bPresent)(const uint8_t u8Id, const uint8_t sensorType, const char *pcName);
+    bool (*bSend)(const uint8_t u8Id, const uint8_t variableType, const void *pvMessage);
+    uint8_t (*u8SaveCfg)(const char *pcCfg);
+} PINCFG_IF_T;
 
 #endif // PINCFGIF_H
