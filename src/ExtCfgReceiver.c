@@ -115,8 +115,8 @@ void ExtCfgReceiver_vPresent(LOOPRE_T *psBaseHandle)
 
 void ExtCfgReceiver_vPresentState(LOOPRE_T *psBaseHandle)
 {
-    psGlobals->sPincfgIf.bSend(psBaseHandle->u8Id, 47, ((EXTCFGRECEIVER_HANDLE_T *)psBaseHandle)->acState); // 47-V_TEXT
-    psGlobals->sPincfgIf.bRequest(psBaseHandle->u8Id, 36, 0); // 36-S_INFO, 0-GATEWAY_ADDRESS
+    psGlobals->sPincfgIf.bSend(psBaseHandle->u8Id, V_TEXT, ((EXTCFGRECEIVER_HANDLE_T *)psBaseHandle)->acState);
+    psGlobals->sPincfgIf.bRequest(psBaseHandle->u8Id, V_TEXT, GATEWAY_ADDRESS);
 }
 
 // private

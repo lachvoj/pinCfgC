@@ -32,7 +32,7 @@ MYSENSORSPRESENT_RESULT_T MySensorsPresent_eInit(
 
 void MySensorsPresent_vSendMySensorsStatus(MYSENSORSPRESENT_HANDLE_T *psHandle)
 {
-    psGlobals->sPincfgIf.bSend(psHandle->sLooPre.u8Id, V_STATUS, (const void *)(&psHandle->u8State));
+    psGlobals->sPincfgIf.bSend(psHandle->sLooPre.u8Id, V_STATUS, (const void *)&(psHandle->u8State));
 }
 
 void MySensorsPresent_vSetState(MYSENSORSPRESENT_HANDLE_T *psHandle, uint8_t u8State, bool bSendStatus)

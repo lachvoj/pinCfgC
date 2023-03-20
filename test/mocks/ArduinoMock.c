@@ -75,3 +75,18 @@ void vArduinoMock_setup(void)
     mock_digigtalRead_szReturnSeqSize = 0;
     mock_pwait_u32Called = 0;
 }
+
+void nanosleep(struct timespec *time, void *something)
+{
+    (void)time;
+    (void)something;
+}
+
+void _delay_milliseconds(unsigned int millis)
+{
+    struct timespec sleeper;
+
+    sleeper.tv_sec = (time_t)(millis / 1000);
+    sleeper.tv_nsec = (long)(millis % 1000) * 1000000;
+    nanosleep(&sleeper, NULL);
+}

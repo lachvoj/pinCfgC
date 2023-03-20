@@ -175,6 +175,8 @@ void InPin_vRcvMessage(LOOPRE_T *psBaseHandle, const void *pvMessage)
     (void)pvMessage;
 #ifdef MY_CONTROLLER_HA
     psBaseHandle->bStatePresented = true;
+#else
+    (void)psBaseHandle;
 #endif
 }
 

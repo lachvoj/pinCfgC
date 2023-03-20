@@ -20,7 +20,7 @@ typedef struct LOOPRE_T
     LOOPRE_VTAB_T *psVtab;
     struct LOOPRE_T *psNextLoopable;
     struct LOOPRE_T *psNextPresentable;
-    char *pcName;
+    const char *pcName;
     uint8_t u8Id;
 #ifdef MY_CONTROLLER_HA
     bool bStatePresented;

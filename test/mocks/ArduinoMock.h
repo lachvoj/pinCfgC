@@ -11,6 +11,12 @@
 #define LOW 0
 #define INPUT_PULLUP 0x2
 
+void _delay_milliseconds(unsigned int millis);
+
+#ifndef delay
+#define delay _delay_milliseconds
+#endif
+
 void pinMode(uint8_t u8Pin, uint8_t u8Mode);
 
 uint8_t digitalRead(uint8_t u8Pin);

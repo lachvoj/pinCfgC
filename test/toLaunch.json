@@ -22,7 +22,7 @@
     "name": "(gdb) pincfgC_test",
     "type": "cppdbg",
     "request": "launch",
-    "program": "${workspaceFolder}/lib/pinCfg/c/Test/build/test",
+    "program": "${workspaceFolder}/lib/pinCfgC/test/build/test",
     "args": [],
     "stopAtEntry": false,
     "cwd": ".",

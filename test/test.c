@@ -12,6 +12,7 @@
 #include "PinCfgCsv.h"
 #include "PinCfgIfMock.h"
 #include "PinCfgStr.h"
+#include "PincfgIf.h"
 #include "Switch.h"
 #include "Trigger.h"
 
@@ -35,7 +36,13 @@ static uint8_t testMemory[MEMORY_SZ];
 
 void setUp(void)
 {
-    Memory_eInit(testMemory, MEMORY_SZ);
+    PINCFG_IF_T sPincfgIf;
+    sPincfgIf.bRequest = bRequest;
+    sPincfgIf.bPresent = bPresent;
+    sPincfgIf.bSend = bSend;
+    sPincfgIf.u8SaveCfg = u8SaveCfg;
+    PinCfgCsv_eInit(testMemory, MEMORY_SZ, &sPincfgIf);
+
     vPinCfgIfMock_setup();
 
 #ifndef ARDUINO
@@ -184,64 +191,55 @@ void test_vMySenosrsPresent(void)
 
     // init test
     MYSENSORSPRESENT_RESULT_T eResult;
-    eResult = MySensorsPresent_eInit(NULL, &sName, 1, PINCFG_INPIN_E, true);
+    eResult = MySensorsPresent_eInit(NULL, &sName, 1);
     TEST_ASSERT_EQUAL(MYSENSORSPRESENT_NULLPTR_ERROR_E, eResult);
-    eResult = MySensorsPresent_eInit(psPresentHandle, NULL, 1, PINCFG_INPIN_E, true);
+    eResult = MySensorsPresent_eInit(psPresentHandle, NULL, 1);
     TEST_ASSERT_EQUAL(MYSENSORSPRESENT_NULLPTR_ERROR_E, eResult);
-    eResult = MySensorsPresent_eInit(NULL, NULL, 1, PINCFG_INPIN_E, true);
+    eResult = MySensorsPresent_eInit(NULL, NULL, 1);
     TEST_ASSERT_EQUAL(MYSENSORSPRESENT_NULLPTR_ERROR_E, eResult);
     Memory_vpTempAlloc((size_t)(psGlobals->pvMemTempEnd - psGlobals->pvMemNext - sizeof(char *)));
-    eResult = MySensorsPresent_eInit(psPresentHandle, &sName, 1, PINCFG_INPIN_E, true);
+    eResult = MySensorsPresent_eInit(psPresentHandle, &sName, 1);
     Memory_vTempFree();
     TEST_ASSERT_EQUAL(MYSENSORSPRESENT_ALLOCATION_ERROR_E, eResult);
-    eResult = MySensorsPresent_eInit(psPresentHandle, &sName, 1, PINCFG_INPIN_E, true);
-    TEST_ASSERT_EQUAL_STRING(acName, psPresentHandle->pcName);
-    TEST_ASSERT_EQUAL_UINT8(1, psPresentHandle->u8Id);
-    TEST_ASSERT_EQUAL(PINCFG_INPIN_E, psPresentHandle->sLooPreIf.ePinCfgType);
-    TEST_ASSERT_TRUE(psPresentHandle->bPresent);
+    eResult = MySensorsPresent_eInit(psPresentHandle, &sName, 1);
+    TEST_ASSERT_EQUAL_STRING(acName, psPresentHandle->sLooPre.pcName);
+    TEST_ASSERT_EQUAL_UINT8(1, psPresentHandle->sLooPre.u8Id);
 
     MySensorsPresent_vSendMySensorsStatus(psPresentHandle);
     TEST_ASSERT_EQUAL_UINT8(1, mock_bSend_u8Id);
-    TEST_ASSERT_EQUAL(PINCFG_INPIN_E, mock_bSend_eType);
     TEST_ASSERT_EQUAL_UINT8(0, *((uint8_t *)mock_bSend_pvMessage));
     TEST_ASSERT_EQUAL(1, mock_bSend_u32Called);
 
-    MySensorsPresent_vSetState(psPresentHandle, 1);
+    MySensorsPresent_vSetState(psPresentHandle, 1, true);
     TEST_ASSERT_EQUAL_UINT8(1, mock_bSend_u8Id);
-    TEST_ASSERT_EQUAL(PINCFG_INPIN_E, mock_bSend_eType);
     TEST_ASSERT_EQUAL(1, *((uint8_t *)mock_bSend_pvMessage));
     TEST_ASSERT_EQUAL(2, mock_bSend_u32Called);
 
     MySensorsPresent_vToggle(psPresentHandle);
     TEST_ASSERT_EQUAL_UINT8(1, mock_bSend_u8Id);
-    TEST_ASSERT_EQUAL(PINCFG_INPIN_E, mock_bSend_eType);
     TEST_ASSERT_EQUAL_UINT8(0, *((uint8_t *)mock_bSend_pvMessage));
     TEST_ASSERT_EQUAL(3, mock_bSend_u32Called);
 
-    TEST_ASSERT_EQUAL_UINT8(1U, MySensorsPresent_u8GetId(psPresentHandle));
+    TEST_ASSERT_EQUAL_UINT8(1U, LooPre_u8GetId((LOOPRE_T *)psPresentHandle));
 
-    TEST_ASSERT_EQUAL_STRING(acName, MySensorsPresent_pcGetName(psPresentHandle));
+    TEST_ASSERT_EQUAL_STRING(acName, LooPre_pcGetName((LOOPRE_T *)psPresentHandle));
 
     uint8_t u8Msg = 0x55U;
-    MySensorsPresent_vRcvMessage(psPresentHandle, (const void *)&u8Msg);
+    MySensorsPresent_vRcvMessage((LOOPRE_T *)psPresentHandle, (const void *)&u8Msg);
     TEST_ASSERT_EQUAL_UINT8(1, mock_bSend_u8Id);
-    TEST_ASSERT_EQUAL(PINCFG_INPIN_E, mock_bSend_eType);
     TEST_ASSERT_EQUAL_UINT8(u8Msg, *((uint8_t *)mock_bSend_pvMessage));
-    TEST_ASSERT_EQUAL(4, mock_bSend_u32Called);
+    TEST_ASSERT_EQUAL(3, mock_bSend_u32Called);
 
-    MySensorsPresent_vPresent(psPresentHandle);
+    MySensorsPresent_vPresent((LOOPRE_T *)psPresentHandle);
     TEST_ASSERT_EQUAL(1, mock_bPresent_u8Id);
-    TEST_ASSERT_EQUAL(PINCFG_INPIN_E, mock_bPresent_eType);
     TEST_ASSERT_EQUAL_STRING(acName, mock_bPresent_pcName);
     TEST_ASSERT_EQUAL(1, mock_bPresent_u32Called);
 
-    MySensorsPresent_vPresentState(psPresentHandle);
+    MySensorsPresent_vPresentState((LOOPRE_T *)psPresentHandle);
     TEST_ASSERT_EQUAL_UINT8(1, mock_bSend_u8Id);
-    TEST_ASSERT_EQUAL(PINCFG_INPIN_E, mock_bSend_eType);
     TEST_ASSERT_EQUAL_UINT8(u8Msg, *((uint8_t *)mock_bSend_pvMessage));
-    TEST_ASSERT_EQUAL(5, mock_bSend_u32Called);
+    TEST_ASSERT_EQUAL(4, mock_bSend_u32Called);
     TEST_ASSERT_EQUAL_UINT8(1, mock_bRequest_u8Id);
-    TEST_ASSERT_EQUAL(PINCFG_INPIN_E, mock_bRequest_eType);
     TEST_ASSERT_EQUAL(1, mock_bRequest_u32Called);
 }
 
@@ -254,11 +252,11 @@ void test_vInPin(void)
     INPIN_RESULT_T eResult;
 
     // init
-    eResult = InPin_eInit(NULL, &sName, 2, false, 16);
+    eResult = InPin_eInit(NULL, &sName, 2, 16);
     TEST_ASSERT_EQUAL(INPIN_NULLPTR_ERROR_E, eResult);
-    eResult = InPin_eInit(psInPinHandle, NULL, 2, false, 16);
+    eResult = InPin_eInit(psInPinHandle, NULL, 2, 16);
     TEST_ASSERT_EQUAL(INPIN_SUBINIT_ERROR_E, eResult);
-    eResult = InPin_eInit(psInPinHandle, &sName, 2, false, 16);
+    eResult = InPin_eInit(psInPinHandle, &sName, 2, 16);
     TEST_ASSERT_EQUAL(INPIN_OK_E, eResult);
 #ifndef ARDUINO
     TEST_ASSERT_EQUAL(16, mock_pinMode_u8Pin);
@@ -309,28 +307,28 @@ void test_vPinCfgCsv(void)
     strncpy(PinCfgCsv_pcGetCfgBuf(), "S", PINCFG_CONFIG_MAX_SZ_D);
     eParseResult = PinCfgCsv_eParse(&szMemoryRequired, acOutStr, (uint16_t)OUT_STR_MAX_LEN_D, false, true);
     TEST_ASSERT_EQUAL(sizeof(EXTCFGRECEIVER_HANDLE_T), szMemoryRequired);
-    TEST_ASSERT_EQUAL(PINCFG_OK_E, eParseResult);
+    TEST_ASSERT_EQUAL(PINCFG_WARNINGS_E, eParseResult);
     TEST_ASSERT_EQUAL_STRING("W:L:0:Not defined or invalid format.\nI: Configuration parsed.\n", acOutStr);
     Memory_eReset();
 
     strncpy(PinCfgCsv_pcGetCfgBuf(), "S,o1", PINCFG_CONFIG_MAX_SZ_D);
     eParseResult = PinCfgCsv_eParse(&szMemoryRequired, acOutStr, (uint16_t)OUT_STR_MAX_LEN_D, false, true);
     TEST_ASSERT_EQUAL(sizeof(EXTCFGRECEIVER_HANDLE_T), szMemoryRequired);
-    TEST_ASSERT_EQUAL(PINCFG_OK_E, eParseResult);
+    TEST_ASSERT_EQUAL(PINCFG_WARNINGS_E, eParseResult);
     TEST_ASSERT_EQUAL_STRING("W:L:0:Switch: Invalid number of arguments.\nI: Configuration parsed.\n", acOutStr);
     Memory_eReset();
 
     strncpy(PinCfgCsv_pcGetCfgBuf(), "S,o1,afsd", PINCFG_CONFIG_MAX_SZ_D);
     eParseResult = PinCfgCsv_eParse(&szMemoryRequired, acOutStr, (uint16_t)OUT_STR_MAX_LEN_D, false, true);
     TEST_ASSERT_EQUAL(sizeof(EXTCFGRECEIVER_HANDLE_T), szMemoryRequired);
-    TEST_ASSERT_EQUAL(PINCFG_OK_E, eParseResult);
+    TEST_ASSERT_EQUAL(PINCFG_WARNINGS_E, eParseResult);
     TEST_ASSERT_EQUAL_STRING("W:L:0:Switch: Invalid pin number.\nI: Configuration parsed.\n", acOutStr);
     Memory_eReset();
 
     strncpy(PinCfgCsv_pcGetCfgBuf(), "S,o1,afsd,o2", PINCFG_CONFIG_MAX_SZ_D);
     eParseResult = PinCfgCsv_eParse(&szMemoryRequired, acOutStr, (uint16_t)OUT_STR_MAX_LEN_D, false, true);
     TEST_ASSERT_EQUAL(sizeof(EXTCFGRECEIVER_HANDLE_T), szMemoryRequired);
-    TEST_ASSERT_EQUAL(PINCFG_OK_E, eParseResult);
+    TEST_ASSERT_EQUAL(PINCFG_WARNINGS_E, eParseResult);
     TEST_ASSERT_EQUAL_STRING(
         "W:L:0:Switch: Invalid number of items defining names and pins.\nI: Configuration parsed.\n", acOutStr);
     Memory_eReset();
@@ -344,14 +342,19 @@ void test_vPinCfgCsv(void)
     TEST_ASSERT_EQUAL_STRING("E:L:0:Switch: Out of memory.\n", acOutStr);
     Memory_eReset();
 
+    TEST_ASSERT_EQUAL(
+        (MEMORY_SZ - sizeof(GLOBALS_HANDLE_T) - (MEMORY_SZ - sizeof(GLOBALS_HANDLE_T)) % sizeof(char *)),
+        Memory_szGetFree());
+
+    // pins o3,11,o4,10 removed due to emulator uses them for serial output
     strncpy(
         PinCfgCsv_pcGetCfgBuf(),
-        "# (bluePill)\n"
-        "S,o1,13,o2,12,o5,9,o6,8,o7,7,o8,6,o9,5,o10,4,o11,3,o12,2\n"
-        "I,i1,16,i2,15,i3,14,i4,31,i5,30,i6,201,i7,195,i8,194,i9,193,i10,192,i11,19,i12,18\n"
-        "#triggers\n"
-        "T,vtl11,i1,3,1,o2,2\n"
-        "T,vtl12,i1,3,1,o2,2,o3,2",
+        "# (bluePill)/"
+        "S,o1,13,o2,12,o5,9,o6,8,o7,7,o8,6,o9,5,o10,4,o11,3,o12,2/"
+        "I,i1,16,i2,15,i3,14,i4,31,i5,30,i6,201,i7,195,i8,194,i9,193,i10,192,i11,19,i12,18/"
+        "#triggers/"
+        "T,vtl11,i1,0,1,o2,2/"
+        "T,vtl12,i1,0,1,o2,2,o5,2",
         PINCFG_CONFIG_MAX_SZ_D);
     eParseResult = PinCfgCsv_eParse(&szMemoryRequired, acOutStr, (uint16_t)OUT_STR_MAX_LEN_D, false, true);
     TEST_ASSERT_EQUAL(
@@ -366,22 +369,25 @@ void test_vPinCfgCsv(void)
 void test_vExtCfgReceiver(void)
 {
     EXTCFGRECEIVER_HANDLE_T *psExtReceiver = (EXTCFGRECEIVER_HANDLE_T *)Memory_vpAlloc(sizeof(EXTCFGRECEIVER_HANDLE_T));
-    ExtCfgReceiver_eInit(psExtReceiver, 0, true);
+    ExtCfgReceiver_eInit(psExtReceiver, 0);
 
-    ExtCfgReceiver_vRcvMessage(psExtReceiver, "#{#S,o1,13\n");
+    ExtCfgReceiver_vRcvMessage((LOOPRE_T *)psExtReceiver, "#[#S,o1,13/");
     TEST_ASSERT_EQUAL(1, mock_bSend_u32Called);
     TEST_ASSERT_EQUAL_STRING("RECEIVING", mock_bSend_pvMessage);
-    TEST_ASSERT_EQUAL_STRING("S,o1,13\n", psGlobals->acCfgBuf);
-    ExtCfgReceiver_vRcvMessage(psExtReceiver, "I,i1,16\n");
-    TEST_ASSERT_EQUAL_STRING("S,o1,13\nI,i1,16\n", psGlobals->acCfgBuf);
-    ExtCfgReceiver_vRcvMessage(psExtReceiver, "T,vtl11,i1,3,1,o2,2\n#}#");
-    TEST_ASSERT_EQUAL_STRING("S,o1,13\nI,i1,16\nT,vtl11,i1,3,1,o2,2\n", psGlobals->acCfgBuf);
+    TEST_ASSERT_EQUAL_STRING("S,o1,13/", psGlobals->acCfgBuf);
+    ExtCfgReceiver_vRcvMessage((LOOPRE_T *)psExtReceiver, "I,i1,16/");
+    TEST_ASSERT_EQUAL_STRING("S,o1,13/I,i1,16/", psGlobals->acCfgBuf);
+    ExtCfgReceiver_vRcvMessage((LOOPRE_T *)psExtReceiver, "T,vtl11,i1,0,1,o2,2/#]#");
+    TEST_ASSERT_EQUAL_STRING("S,o1,13/I,i1,16/T,vtl11,i1,0,1,o2,2/", psGlobals->acCfgBuf);
     TEST_ASSERT_EQUAL(2, mock_bSend_u32Called);
     TEST_ASSERT_EQUAL_STRING("VALIDATION OK", mock_bSend_pvMessage);
     TEST_ASSERT_EQUAL(1, mock_u8SaveCfg_u32Called);
 }
-
+#ifndef ARDUINO
 int main(void)
+#else
+int test_main(void)
+#endif
 {
     // sizes
     printf("sizeof(GLOBALS_HANDLE_T): %ld\n", sizeof(GLOBALS_HANDLE_T));
