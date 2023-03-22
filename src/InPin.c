@@ -191,3 +191,9 @@ void InPin_vPresentState(LOOPRE_T *psBaseHandle)
         psBaseHandle->u8Id, V_TRIPPED, (const void *)(&((MYSENSORSPRESENT_HANDLE_T *)psBaseHandle)->u8State));
     psGlobals->sPincfgIf.bRequest(psBaseHandle->u8Id, V_TRIPPED, GATEWAY_ADDRESS);
 }
+
+void InPin_vSendState(LOOPRE_T *psBaseHandle)
+{
+    psGlobals->sPincfgIf.bSend(
+        psBaseHandle->u8Id, V_TRIPPED, (const void *)&(((MYSENSORSPRESENT_HANDLE_T *)psBaseHandle)->u8State));
+}

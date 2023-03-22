@@ -26,7 +26,6 @@ MYSENSORSPRESENT_RESULT_T MySensorsPresent_eInit(
     MYSENSORSPRESENT_HANDLE_T *psHandle,
     STRING_POINT_T *psName,
     uint8_t u8Id);
-void MySensorsPresent_vSendMySensorsStatus(MYSENSORSPRESENT_HANDLE_T *psHandle);
 void MySensorsPresent_vSetState(MYSENSORSPRESENT_HANDLE_T *psHandle, uint8_t u8State, bool bSendStatus);
 void MySensorsPresent_vToggle(MYSENSORSPRESENT_HANDLE_T *psHandle);
 
@@ -34,5 +33,6 @@ void MySensorsPresent_vToggle(MYSENSORSPRESENT_HANDLE_T *psHandle);
 void MySensorsPresent_vRcvMessage(LOOPRE_T *psBaseHandle, const void *pvMessage);
 void MySensorsPresent_vPresent(LOOPRE_T *psBaseHandle);
 void MySensorsPresent_vPresentState(LOOPRE_T *psBaseHandle);
+void MySensorsPresent_vSendState(LOOPRE_T *psBaseHandle);
 
 #endif // MYSENSORSPRESENT_H

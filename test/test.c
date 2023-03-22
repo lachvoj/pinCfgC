@@ -205,7 +205,7 @@ void test_vMySenosrsPresent(void)
     TEST_ASSERT_EQUAL_STRING(acName, psPresentHandle->sLooPre.pcName);
     TEST_ASSERT_EQUAL_UINT8(1, psPresentHandle->sLooPre.u8Id);
 
-    MySensorsPresent_vSendMySensorsStatus(psPresentHandle);
+    MySensorsPresent_vSendState((LOOPRE_T *)psPresentHandle);
     TEST_ASSERT_EQUAL_UINT8(1, mock_bSend_u8Id);
     TEST_ASSERT_EQUAL_UINT8(0, *((uint8_t *)mock_bSend_pvMessage));
     TEST_ASSERT_EQUAL(1, mock_bSend_u32Called);

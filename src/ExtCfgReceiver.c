@@ -65,7 +65,7 @@ void ExtCfgReceiver_vSetState(
     }
 
     if (bSendState)
-        psGlobals->sPincfgIf.bSend(psHandle->sLooPre.u8Id, 47, psHandle->acState); // 47-V_TEXT
+        psGlobals->sPincfgIf.bSend(psHandle->sLooPre.u8Id, V_TEXT, psHandle->acState);
 }
 
 // presentable IF
@@ -110,7 +110,7 @@ void ExtCfgReceiver_vRcvMessage(LOOPRE_T *psBaseHandle, const void *pvMessage)
 
 void ExtCfgReceiver_vPresent(LOOPRE_T *psBaseHandle)
 {
-    psGlobals->sPincfgIf.bPresent(psBaseHandle->u8Id, 36, psBaseHandle->pcName); // 36-S_INFO
+    psGlobals->sPincfgIf.bPresent(psBaseHandle->u8Id, S_INFO, psBaseHandle->pcName);
 }
 
 void ExtCfgReceiver_vPresentState(LOOPRE_T *psBaseHandle)

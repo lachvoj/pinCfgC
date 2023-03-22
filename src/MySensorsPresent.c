@@ -30,17 +30,12 @@ MYSENSORSPRESENT_RESULT_T MySensorsPresent_eInit(
     return MYSENSORSPRESENT_OK_E;
 }
 
-void MySensorsPresent_vSendMySensorsStatus(MYSENSORSPRESENT_HANDLE_T *psHandle)
-{
-    psGlobals->sPincfgIf.bSend(psHandle->sLooPre.u8Id, V_STATUS, (const void *)&(psHandle->u8State));
-}
-
 void MySensorsPresent_vSetState(MYSENSORSPRESENT_HANDLE_T *psHandle, uint8_t u8State, bool bSendStatus)
 {
     psHandle->bStateChanged = (psHandle->u8State != u8State);
     psHandle->u8State = u8State;
     if (psHandle->bStateChanged && bSendStatus)
-        MySensorsPresent_vSendMySensorsStatus(psHandle);
+        ((LOOPRE_T *)psHandle)->psVtab->vSendState((LOOPRE_T *)psHandle);
 }
 
 void MySensorsPresent_vToggle(MYSENSORSPRESENT_HANDLE_T *psHandle)
@@ -51,7 +46,7 @@ void MySensorsPresent_vToggle(MYSENSORSPRESENT_HANDLE_T *psHandle)
         psHandle->u8State = (uint8_t) false;
 
     psHandle->bStateChanged = true;
-    MySensorsPresent_vSendMySensorsStatus(psHandle);
+    ((LOOPRE_T *)psHandle)->psVtab->vSendState((LOOPRE_T *)psHandle);
 }
 
 // IMySensorsPresentable
@@ -70,6 +65,12 @@ void MySensorsPresent_vPresent(LOOPRE_T *psBaseHandle)
 
 void MySensorsPresent_vPresentState(LOOPRE_T *psBaseHandle)
 {
-    MySensorsPresent_vSendMySensorsStatus((MYSENSORSPRESENT_HANDLE_T *)psBaseHandle);
+    psBaseHandle->psVtab->vSendState(psBaseHandle);
     psGlobals->sPincfgIf.bRequest(psBaseHandle->u8Id, V_STATUS, GATEWAY_ADDRESS);
+}
+
+void MySensorsPresent_vSendState(LOOPRE_T *psBaseHandle)
+{
+    psGlobals->sPincfgIf.bSend(
+        psBaseHandle->u8Id, V_STATUS, (const void *)&(((MYSENSORSPRESENT_HANDLE_T *)psBaseHandle)->u8State));
 }

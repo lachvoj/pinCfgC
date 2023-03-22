@@ -13,6 +13,7 @@ typedef struct
     void (*vReceive)(struct LOOPRE_T *psHandle, const void *pvMessage);
     void (*vPresent)(struct LOOPRE_T *psHandle);
     void (*vPresentState)(struct LOOPRE_T *psHandle);
+    void (*vSendState)(struct LOOPRE_T *psHandle);
 } LOOPRE_VTAB_T;
 
 typedef struct LOOPRE_T

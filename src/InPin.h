@@ -51,5 +51,6 @@ void InPin_vLoop(LOOPRE_T *psBaseHandle, uint32_t u32ms);
 void InPin_vRcvMessage(LOOPRE_T *psBaseHandle, const void *pvMessage);
 void InPin_vPresent(LOOPRE_T *psBaseHandle);
 void InPin_vPresentState(LOOPRE_T *psBaseHandle);
+void InPin_vSendState(LOOPRE_T *psBaseHandle);
 
 #endif // INPIN_H

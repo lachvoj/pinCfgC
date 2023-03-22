@@ -54,16 +54,19 @@ PINCFG_RESULT_T PinCfgCsv_eInit(uint8_t *pu8Memory, size_t szMemorySize, PINCFG_
     psGlobals->sExtCfgReceiverVTab.vReceive = ExtCfgReceiver_vRcvMessage;
     psGlobals->sExtCfgReceiverVTab.vPresent = ExtCfgReceiver_vPresent;
     psGlobals->sExtCfgReceiverVTab.vPresentState = ExtCfgReceiver_vPresentState;
+    psGlobals->sExtCfgReceiverVTab.vSendState = NULL;
     // switch
     psGlobals->sSwitchVTab.vLoop = Switch_vLoop;
     psGlobals->sSwitchVTab.vReceive = MySensorsPresent_vRcvMessage;
     psGlobals->sSwitchVTab.vPresent = MySensorsPresent_vPresent;
     psGlobals->sSwitchVTab.vPresentState = MySensorsPresent_vPresentState;
+    psGlobals->sSwitchVTab.vSendState = MySensorsPresent_vSendState;
     // inpin
     psGlobals->sInPinVTab.vLoop = InPin_vLoop;
     psGlobals->sInPinVTab.vReceive = InPin_vRcvMessage;
     psGlobals->sInPinVTab.vPresent = InPin_vPresent;
     psGlobals->sInPinVTab.vPresentState = InPin_vPresentState;
+    psGlobals->sInPinVTab.vSendState = InPin_vSendState;
     // trigger
     psGlobals->sTriggerVTab.vEventHandle = Trigger_vEventHandle;
 
