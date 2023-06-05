@@ -48,6 +48,7 @@ SWITCH_RESULT_T Switch_eInit(
         digitalWrite(u8FbPin, HIGH); // enabling pullup
     }
     pinMode(u8OutPin, OUTPUT);
+    digitalWrite(u8OutPin, LOW);
 
     return SWITCH_OK_E;
 }
