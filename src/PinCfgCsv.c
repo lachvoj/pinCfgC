@@ -70,6 +70,9 @@ PINCFG_RESULT_T PinCfgCsv_eInit(uint8_t *pu8Memory, size_t szMemorySize, PINCFG_
     // trigger
     psGlobals->sTriggerVTab.vEventHandle = Trigger_vEventHandle;
 
+    InPin_SetDebounceMs(PINCFG_DEBOUNCE_MS_D);
+    InPin_SetMulticlickMaxDelayMs(PINCFG_MULTICLICK_MAX_DELAY_MS_D);
+
     return PINCFG_OK_E;
 }
 
@@ -109,11 +112,10 @@ PINCFG_RESULT_T PinCfgCsv_eParse(
 
     uint8_t u8DrivenAction;
     uint8_t u8DrivesCountReal;
-    size_t szNumberOfWarnings = 0;
 
-    // TODO: put this into configuration
-    InPin_SetDebounceMs(PINCFG_DEBOUNCE_MS_D);
-    InPin_SetMulticlickMaxDelayMs(PINCFG_MULTICLICK_MAX_DELAY_MS_D);
+    uint32_t u32Temp;
+
+    size_t szNumberOfWarnings = 0;
 
     if (pszMemoryRequired != NULL)
         *pszMemoryRequired = 0;
@@ -503,6 +505,58 @@ PINCFG_RESULT_T PinCfgCsv_eParse(
             }
             if (pszMemoryRequired != NULL)
                 *pszMemoryRequired += szGetAllocatedSize(sizeof(TRIGGER_HANDLE_T));
+        }
+        else if (sTempStrPt.szLen == 1 && sTempStrPt.pcStrStart[0] == 'D')
+        {
+            if (u8LineItemsLen < 2)
+            {
+                PinCfgCsv_vAddToString(
+                    pcOutString,
+                    u16OutStrMaxLen,
+                    "W:L:%d:InPinDebounceMs: Invalid number of arguments.\n",
+                    (int16_t)u8LinesProcessed);
+                szNumberOfWarnings++;
+                continue;
+            }
+
+            if (PinCfgStr_eAtoU32(&sTempStrPt, &u32Temp) != PINCFG_STR_OK_E)
+            {
+                PinCfgCsv_vAddToString(
+                    pcOutString,
+                    u16OutStrMaxLen,
+                    "W:L:%d:InPinDebounceMs: Invalid number.\n",
+                    (int16_t)u8LinesProcessed);
+                szNumberOfWarnings++;
+                continue;
+            }
+
+            InPin_SetDebounceMs(u32Temp);
+        }
+        else if (sTempStrPt.szLen == 1 && sTempStrPt.pcStrStart[0] == 'M')
+        {
+            if (u8LineItemsLen < 2)
+            {
+                PinCfgCsv_vAddToString(
+                    pcOutString,
+                    u16OutStrMaxLen,
+                    "W:L:%d:InPinMulticlickMaxDelayMs: Invalid number of arguments.\n",
+                    (int16_t)u8LinesProcessed);
+                szNumberOfWarnings++;
+                continue;
+            }
+
+            if (PinCfgStr_eAtoU32(&sTempStrPt, &u32Temp) != PINCFG_STR_OK_E)
+            {
+                PinCfgCsv_vAddToString(
+                    pcOutString,
+                    u16OutStrMaxLen,
+                    "W:L:%d:InPinMulticlickMaxDelayMs: Invalid number.\n",
+                    (int16_t)u8LinesProcessed);
+                szNumberOfWarnings++;
+                continue;
+            }
+
+            InPin_SetMulticlickMaxDelayMs(u32Temp);
         }
         else
         {

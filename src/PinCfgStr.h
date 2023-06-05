@@ -29,6 +29,8 @@ void PinCfgStr_vGetSplitElemByIndex(STRING_POINT_T *psStrPt, const char cDelimit
 
 PINCFG_STR_RESULT_T PinCfgStr_eAtoU8(const STRING_POINT_T *psStrPt, uint8_t *pu8Out);
 
+PINCFG_STR_RESULT_T PinCfgStr_eAtoU32(const STRING_POINT_T *psStrPt, uint32_t *pu32Out);
+
 PINCFG_STR_RESULT_T PinCfgStr_eSplitStrPt(
     const STRING_POINT_T *psInStrPt,
     const char cDelimiter,
