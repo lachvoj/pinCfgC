@@ -385,6 +385,13 @@ void test_vExtCfgReceiver(void)
     TEST_ASSERT_EQUAL(2, mock_bSend_u32Called);
     TEST_ASSERT_EQUAL_STRING("VALIDATION OK", mock_bSend_pvMessage);
     TEST_ASSERT_EQUAL(1, mock_u8SaveCfg_u32Called);
+
+    mock_bSend_acMessage[0] = '\0';
+    ExtCfgReceiver_eInit(psExtReceiver, 0);
+    ExtCfgReceiver_vRcvMessage((LOOPRE_T *)psExtReceiver, "#[#T,o1,13/#]#");
+    TEST_ASSERT_EQUAL_STRING(
+        "RECEIVINGW:L:0:Trigger:Invalid number of arguments.\nI: Configuration parsed.\nVALIDATION ERROR",
+        mock_bSend_acMessage);
 }
 #ifndef ARDUINO
 int main(void)

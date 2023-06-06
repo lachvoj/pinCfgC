@@ -52,7 +52,7 @@ void *Memory_vpAlloc(size_t szSize)
     size_t szToAlloc = (szSize + sizeof(char *) - 1) / sizeof(char *);
 
     char *pvNextAfterAllocation = (char *)((char **)psGlobals->pvMemNext + szToAlloc);
-    if (pvNextAfterAllocation >= psGlobals->pvMemTempEnd)
+    if (pvNextAfterAllocation > psGlobals->pvMemTempEnd)
     {
         errno = ENOMEM;
         return pvResult;
@@ -75,7 +75,7 @@ void *Memory_vpTempAlloc(size_t szSize)
     size_t szToAlloc = (szSize + sizeof(char *) - 1) / sizeof(char *);
 
     char *pvTempEndAfterAllocation = (char *)((char **)psGlobals->pvMemTempEnd - szToAlloc);
-    if (pvTempEndAfterAllocation <= psGlobals->pvMemNext)
+    if (pvTempEndAfterAllocation < psGlobals->pvMemNext)
     {
         errno = ENOMEM;
         return NULL;
@@ -95,6 +95,19 @@ void Memory_vTempFree(void)
             memset(psGlobals->pvMemTempEnd, 0x00U, (size_t)(psGlobals->pvMemEnd - psGlobals->pvMemTempEnd));
         }
         psGlobals->pvMemTempEnd = psGlobals->pvMemEnd;
+    }
+}
+
+void Memory_vTempFreeSize(size_t szSize)
+{
+    if (psGlobals->bMemIsInitialized)
+    {
+        size_t szToFree = (szSize + sizeof(char *) - 1) / sizeof(char *);
+        char *pvTempEndAfterFree = (char *)((char **)psGlobals->pvMemTempEnd + szToFree);
+        if (pvTempEndAfterFree > psGlobals->pvMemEnd)
+            psGlobals->pvMemTempEnd = psGlobals->pvMemEnd;
+        else
+            psGlobals->pvMemTempEnd = pvTempEndAfterFree;
     }
 }
 

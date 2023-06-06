@@ -1,3 +1,5 @@
+#include <string.h>
+
 #include "PinCfgIfMock.h"
 
 void vPinCfgIfMock_setup(void)
@@ -13,6 +15,7 @@ void vPinCfgIfMock_setup(void)
 
     mock_u8SaveCfg_u32Called = 0;
     mock_u8SaveCfg_u8Return = false;
+    mock_bSend_acMessage[0] = '\0';
 }
 
 uint8_t mock_bRequest_u8Id;
@@ -29,7 +32,6 @@ bool bRequest(const uint8_t u8Id, const uint8_t u8VariableType, const uint8_t u8
     return mock_bRequest_bReturn;
 }
 
-
 uint8_t mock_bPresent_u8Id;
 uint8_t mock_bPresent_sensorType;
 const char *mock_bPresent_pcName;
@@ -44,16 +46,18 @@ bool bPresent(const uint8_t u8Id, const uint8_t sensorType, const char *pcName)
     return mock_bPresent_bReturn;
 }
 
-
 uint8_t mock_bSend_u8Id;
 uint8_t mock_bSend_variableType;
 const void *mock_bSend_pvMessage;
+char mock_bSend_acMessage[3000];
 bool mock_bSend_bReturn;
 uint32_t mock_bSend_u32Called;
 bool bSend(const uint8_t u8Id, const uint8_t variableType, const void *pvMessage)
 {
     mock_bSend_u8Id = u8Id;
     mock_bSend_variableType = variableType;
+    if (variableType == V_TEXT)
+        strcat(mock_bSend_acMessage, (char *)pvMessage);
     mock_bSend_pvMessage = pvMessage;
     mock_bSend_u32Called++;
     return mock_bSend_bReturn;

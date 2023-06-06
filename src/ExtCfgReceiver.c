@@ -55,9 +55,7 @@ void ExtCfgReceiver_vSetState(
     case EXTCFGRECEIVER_VALIDATION_ERROR_E: strcpy(psHandle->acState, "VALIDATION ERROR"); break;
     case EXTCFGRECEIVER_CUSTOM_E:
     {
-        if (psState == NULL)
-            psHandle->acState[0] = '\0';
-        else
+        if (psState != NULL)
             strcpy(psHandle->acState, psState);
     }
     break;
@@ -73,6 +71,7 @@ void ExtCfgReceiver_vRcvMessage(LOOPRE_T *psBaseHandle, const void *pvMessage)
 {
     EXTCFGRECEIVER_HANDLE_T *psHandle = (EXTCFGRECEIVER_HANDLE_T *)psBaseHandle;
     const char *pcMessage = (const char *)pvMessage;
+    bool bCopied = false;
 
 #ifdef MY_CONTROLLER_HA
     psHandle->sLooPre.bStatePresented = true;
@@ -86,10 +85,11 @@ void ExtCfgReceiver_vRcvMessage(LOOPRE_T *psBaseHandle, const void *pvMessage)
         {
             strcpy(psGlobals->acCfgBuf, pcStartString + strlen("#[#"));
             psHandle->u16CfgNext = strlen(pcMessage) - strlen("#[#");
+            bCopied = true;
             ExtCfgReceiver_vSetState(psHandle, EXTCFGRECEIVER_RECEIVNG_E, NULL, true);
         }
     }
-    else if (psHandle->eState == EXTCFGRECEIVER_RECEIVNG_E)
+    if (psHandle->eState == EXTCFGRECEIVER_RECEIVNG_E)
     {
         char *pcEndString = strstr(pcMessage, "#]#");
         if (pcEndString != NULL)
@@ -100,7 +100,7 @@ void ExtCfgReceiver_vRcvMessage(LOOPRE_T *psBaseHandle, const void *pvMessage)
             psGlobals->acCfgBuf[psHandle->u16CfgNext + szLen] = '\0';
             ExtCfgReceiver_vConfigurationReceived(psHandle);
         }
-        else
+        else if (!bCopied)
         {
             strcpy(psGlobals->acCfgBuf + psHandle->u16CfgNext, pcMessage);
             psHandle->u16CfgNext += strlen(pcMessage);
@@ -111,9 +111,20 @@ void ExtCfgReceiver_vRcvMessage(LOOPRE_T *psBaseHandle, const void *pvMessage)
 // private
 static void ExtCfgReceiver_vConfigurationReceived(EXTCFGRECEIVER_HANDLE_T *psHandle)
 {
+    PINCFG_RESULT_T eValidationResult;
     size_t szMemoryRequired;
-    // size_t szFreeMemory = Memory_szGetFree() - 30U;
-    PINCFG_RESULT_T eValidationResult = PinCfgCsv_eValidate(&szMemoryRequired, NULL, 0);
+    const size_t szFreeMemory = Memory_szGetFree() - (10 * sizeof(char *)); // leave some space for 
+    char *acOut = (char *)Memory_vpTempAlloc(szFreeMemory);
+    if (acOut != NULL)
+    {
+        acOut[0] = '\0';
+        eValidationResult = PinCfgCsv_eValidate(&szMemoryRequired, acOut, szFreeMemory);
+    }
+    else
+    {
+        eValidationResult = PinCfgCsv_eValidate(&szMemoryRequired, NULL, 0);
+    }
+
     if (eValidationResult == PINCFG_OK_E)
     {
         ExtCfgReceiver_vSetState(psHandle, EXTCFGRECEIVER_VALIDATION_OK_E, NULL, true);
@@ -128,8 +139,33 @@ static void ExtCfgReceiver_vConfigurationReceived(EXTCFGRECEIVER_HANDLE_T *psHan
     }
     else
     {
-        psHandle->eState = EXTCFGRECEIVER_VALIDATION_ERROR_E;
+        size_t szOutSize = strlen(acOut);
+        if (szOutSize > 0)
+        {
+            // psHandle->eState = EXTCFGRECEIVER_CUSTOM_E;
+            uint8_t u8i;
+            uint8_t u8MyMsgsCount = szOutSize / (PINCFG_TXTSTATE_MAX_SZ_D - 1);
+
+            psHandle->acState[PINCFG_TXTSTATE_MAX_SZ_D - 1] = '\0';
+            for (u8i = 0; u8i < u8MyMsgsCount; u8i++)
+            {
+                memcpy(
+                    psHandle->acState,
+                    (acOut + (u8i * (PINCFG_TXTSTATE_MAX_SZ_D - 1))),
+                    (PINCFG_TXTSTATE_MAX_SZ_D - 1));
+                ExtCfgReceiver_vSetState(psHandle, EXTCFGRECEIVER_CUSTOM_E, NULL, true);
+            }
+            if ((szOutSize % (PINCFG_TXTSTATE_MAX_SZ_D - 1)) > 0)
+            {
+                strcpy(psHandle->acState, (acOut + (u8i * (PINCFG_TXTSTATE_MAX_SZ_D - 1))));
+                ExtCfgReceiver_vSetState(psHandle, EXTCFGRECEIVER_CUSTOM_E, NULL, true);
+            }
+        }
+
         ExtCfgReceiver_vSetState(psHandle, EXTCFGRECEIVER_VALIDATION_ERROR_E, NULL, true);
     }
+
+    if (acOut != NULL)
+        Memory_vTempFreeSize(szFreeMemory);
     psHandle->eState = EXTCFGRECEIVER_LISTENING_E;
 }

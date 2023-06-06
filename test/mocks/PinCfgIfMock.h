@@ -25,6 +25,7 @@ extern uint32_t mock_bPresentInfo_u32Called;
 
 extern uint8_t mock_bSend_u8Id;
 extern const void *mock_bSend_pvMessage;
+extern char mock_bSend_acMessage[3000];
 extern bool mock_bSend_bReturn;
 extern uint32_t mock_bSend_u32Called;
 

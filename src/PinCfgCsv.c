@@ -994,7 +994,7 @@ static LOOPRE_T *PinCfgCsv_psFindInLoopablesByName(const STRING_POINT_T *psName)
             psReturn = psReturn->psNextLoopable;
         }
     }
-    Memory_vTempFree();
+    Memory_vTempFreeSize(psName->szLen + 1);
 
     return psReturn;
 }

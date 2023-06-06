@@ -196,7 +196,7 @@ const char *PinCfgCsv_pcStrstrpt(const char *pcHaystack, const STRING_POINT_T *p
         pcTempStr[psNeedle->szLen + 2] = '\0';
         pcTempStr = strstr(pcHaystack, pcTempStr);
     }
-    Memory_vTempFree();
+    Memory_vTempFreeSize(psNeedle->szLen + 3);
 
     return pcTempStr;
 }
