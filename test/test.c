@@ -188,6 +188,9 @@ void test_vMySenosrsPresent(void)
     PinCfgStr_vInitStrPoint(&sName, acName, sizeof(acName) - 1);
     MYSENSORSPRESENT_HANDLE_T *psPresentHandle =
         (MYSENSORSPRESENT_HANDLE_T *)Memory_vpAlloc(sizeof(MYSENSORSPRESENT_HANDLE_T));
+    LOOPRE_VTAB_T sLooPreVTab;
+    sLooPreVTab.vSendState = MySensorsPresent_vSendState;
+    psPresentHandle->sLooPre.psVtab = &sLooPreVTab;
 
     // init test
     MYSENSORSPRESENT_RESULT_T eResult;
@@ -295,7 +298,7 @@ void test_vPinCfgCsv(void)
     eParseResult = PinCfgCsv_eParse(&szMemoryRequired, acOutStr, (uint16_t)OUT_STR_MAX_LEN_D, false, true);
     TEST_ASSERT_EQUAL(0, szMemoryRequired);
     TEST_ASSERT_EQUAL(PINCFG_OUTOFMEMORY_ERROR_E, eParseResult);
-    TEST_ASSERT_EQUAL_STRING("E:ExtCfgReceiver: Out of memory.\n", acOutStr);
+    TEST_ASSERT_EQUAL_STRING("E:ExtCfgReceiver:Out of memory.\n", acOutStr);
     Memory_eReset();
 
     eParseResult = PinCfgCsv_eParse(&szMemoryRequired, acOutStr, (uint16_t)OUT_STR_MAX_LEN_D, false, true);
@@ -315,14 +318,14 @@ void test_vPinCfgCsv(void)
     eParseResult = PinCfgCsv_eParse(&szMemoryRequired, acOutStr, (uint16_t)OUT_STR_MAX_LEN_D, false, true);
     TEST_ASSERT_EQUAL(sizeof(EXTCFGRECEIVER_HANDLE_T), szMemoryRequired);
     TEST_ASSERT_EQUAL(PINCFG_WARNINGS_E, eParseResult);
-    TEST_ASSERT_EQUAL_STRING("W:L:0:Switch: Invalid number of arguments.\nI: Configuration parsed.\n", acOutStr);
+    TEST_ASSERT_EQUAL_STRING("W:L:0:Switch:Invalid number of arguments.\nI: Configuration parsed.\n", acOutStr);
     Memory_eReset();
 
     strncpy(PinCfgCsv_pcGetCfgBuf(), "S,o1,afsd", PINCFG_CONFIG_MAX_SZ_D);
     eParseResult = PinCfgCsv_eParse(&szMemoryRequired, acOutStr, (uint16_t)OUT_STR_MAX_LEN_D, false, true);
     TEST_ASSERT_EQUAL(sizeof(EXTCFGRECEIVER_HANDLE_T), szMemoryRequired);
     TEST_ASSERT_EQUAL(PINCFG_WARNINGS_E, eParseResult);
-    TEST_ASSERT_EQUAL_STRING("W:L:0:Switch: Invalid pin number.\nI: Configuration parsed.\n", acOutStr);
+    TEST_ASSERT_EQUAL_STRING("W:L:0:Switch:Invalid pin number.\nI: Configuration parsed.\n", acOutStr);
     Memory_eReset();
 
     strncpy(PinCfgCsv_pcGetCfgBuf(), "S,o1,afsd,o2", PINCFG_CONFIG_MAX_SZ_D);
@@ -330,7 +333,7 @@ void test_vPinCfgCsv(void)
     TEST_ASSERT_EQUAL(sizeof(EXTCFGRECEIVER_HANDLE_T), szMemoryRequired);
     TEST_ASSERT_EQUAL(PINCFG_WARNINGS_E, eParseResult);
     TEST_ASSERT_EQUAL_STRING(
-        "W:L:0:Switch: Invalid number of items defining names and pins.\nI: Configuration parsed.\n", acOutStr);
+        "W:L:0:Switch:Invalid number of items defining names and pins.\nI: Configuration parsed.\n", acOutStr);
     Memory_eReset();
 
     Memory_vpAlloc(
@@ -339,7 +342,7 @@ void test_vPinCfgCsv(void)
     eParseResult = PinCfgCsv_eParse(&szMemoryRequired, acOutStr, (uint16_t)OUT_STR_MAX_LEN_D, false, true);
     TEST_ASSERT_EQUAL(sizeof(EXTCFGRECEIVER_HANDLE_T), szMemoryRequired);
     TEST_ASSERT_EQUAL(PINCFG_OUTOFMEMORY_ERROR_E, eParseResult);
-    TEST_ASSERT_EQUAL_STRING("E:L:0:Switch: Out of memory.\n", acOutStr);
+    TEST_ASSERT_EQUAL_STRING("E:L:0:Switch:Out of memory.\n", acOutStr);
     Memory_eReset();
 
     TEST_ASSERT_EQUAL(

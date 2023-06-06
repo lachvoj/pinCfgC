@@ -108,17 +108,6 @@ void ExtCfgReceiver_vRcvMessage(LOOPRE_T *psBaseHandle, const void *pvMessage)
     }
 }
 
-void ExtCfgReceiver_vPresent(LOOPRE_T *psBaseHandle)
-{
-    psGlobals->sPincfgIf.bPresent(psBaseHandle->u8Id, S_INFO, psBaseHandle->pcName);
-}
-
-void ExtCfgReceiver_vPresentState(LOOPRE_T *psBaseHandle)
-{
-    psGlobals->sPincfgIf.bSend(psBaseHandle->u8Id, V_TEXT, ((EXTCFGRECEIVER_HANDLE_T *)psBaseHandle)->acState);
-    psGlobals->sPincfgIf.bRequest(psBaseHandle->u8Id, V_TEXT, GATEWAY_ADDRESS);
-}
-
 // private
 static void ExtCfgReceiver_vConfigurationReceived(EXTCFGRECEIVER_HANDLE_T *psHandle)
 {

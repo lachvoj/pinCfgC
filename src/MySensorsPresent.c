@@ -60,17 +60,19 @@ void MySensorsPresent_vRcvMessage(LOOPRE_T *psBaseHandle, const void *pvMessage)
 
 void MySensorsPresent_vPresent(LOOPRE_T *psBaseHandle)
 {
-    psGlobals->sPincfgIf.bPresent(psBaseHandle->u8Id, S_BINARY, psBaseHandle->pcName);
+    psGlobals->sPincfgIf.bPresent(psBaseHandle->u8Id, psBaseHandle->psVtab->u8SType, psBaseHandle->pcName);
 }
 
 void MySensorsPresent_vPresentState(LOOPRE_T *psBaseHandle)
 {
     psBaseHandle->psVtab->vSendState(psBaseHandle);
-    psGlobals->sPincfgIf.bRequest(psBaseHandle->u8Id, V_STATUS, GATEWAY_ADDRESS);
+    psGlobals->sPincfgIf.bRequest(psBaseHandle->u8Id, psBaseHandle->psVtab->u8VType, GATEWAY_ADDRESS);
 }
 
 void MySensorsPresent_vSendState(LOOPRE_T *psBaseHandle)
 {
     psGlobals->sPincfgIf.bSend(
-        psBaseHandle->u8Id, V_STATUS, (const void *)&(((MYSENSORSPRESENT_HANDLE_T *)psBaseHandle)->u8State));
+        psBaseHandle->u8Id,
+        psBaseHandle->psVtab->u8VType,
+        (const void *)&(((MYSENSORSPRESENT_HANDLE_T *)psBaseHandle)->u8State));
 }

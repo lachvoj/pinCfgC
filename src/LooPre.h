@@ -14,6 +14,8 @@ typedef struct
     void (*vPresent)(struct LOOPRE_T *psHandle);
     void (*vPresentState)(struct LOOPRE_T *psHandle);
     void (*vSendState)(struct LOOPRE_T *psHandle);
+    uint8_t u8VType;
+    uint8_t u8SType;
 } LOOPRE_VTAB_T;
 
 typedef struct LOOPRE_T
