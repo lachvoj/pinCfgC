@@ -9,6 +9,7 @@ typedef struct
     bool (*bPresent)(const uint8_t u8Id, const uint8_t sensorType, const char *pcName);
     bool (*bSend)(const uint8_t u8Id, const uint8_t variableType, const void *pvMessage);
     uint8_t (*u8SaveCfg)(const char *pcCfg);
+    void (*vWait)(const uint32_t u32WaitMS);
 } PINCFG_IF_T;
 
 #endif // PINCFGIF_H

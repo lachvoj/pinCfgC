@@ -129,7 +129,7 @@ PINCFG_RESULT_T PinCfgCsv_eInit(uint8_t *pu8Memory, size_t szMemorySize, PINCFG_
     psGlobals->sExtCfgReceiverVTab.vReceive = ExtCfgReceiver_vRcvMessage;
     psGlobals->sExtCfgReceiverVTab.vPresent = MySensorsPresent_vPresent;
     psGlobals->sExtCfgReceiverVTab.vPresentState = MySensorsPresent_vPresentState;
-    psGlobals->sExtCfgReceiverVTab.vSendState = NULL;
+    psGlobals->sExtCfgReceiverVTab.vSendState = MySensorsPresent_vSendState;
     // switch
     psGlobals->sSwitchVTab.u8VType = V_STATUS;
     psGlobals->sSwitchVTab.u8SType = S_BINARY;
@@ -308,7 +308,7 @@ void PinCfgCsv_vLoop(uint32_t u32ms)
             if (!psCurrent->bStatePresented)
             {
                 psCurrent->psVtab->vPresentState(psCurrent);
-                delay(100);
+                psGlobals->sPincfgIf.vWait(50);
                 bAllPresented = false;
             }
             psCurrent = psCurrent->psNextPresentable;
@@ -336,7 +336,7 @@ void PinCfgCsv_vPresentation(void)
     {
         psCurrent->psVtab->vPresent(psCurrent);
         psCurrent = psCurrent->psNextPresentable;
-        delay(100);
+        psGlobals->sPincfgIf.vWait(50);
     }
 }
 
