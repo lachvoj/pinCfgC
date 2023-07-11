@@ -29,6 +29,8 @@ typedef struct
     uint8_t u8FbPin;
 } SWITCH_HANDLE_T;
 
+void Switch_SetImpulseDurationMs(uint32_t u32ImpulseDuration);
+
 SWITCH_RESULT_T Switch_eInit(
     SWITCH_HANDLE_T *psHandle,
     STRING_POINT_T *sName,
@@ -38,6 +40,7 @@ SWITCH_RESULT_T Switch_eInit(
     uint8_t u8OutPin,
     uint8_t u8FbPin);
 
+// loopable IF
 void Switch_vLoop(LOOPRE_T *psBaseHandle, uint32_t u32ms);
 
 #endif // SWITCH_H

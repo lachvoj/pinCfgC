@@ -47,7 +47,8 @@ static const char *_s[] = {
     "InPin:",                             // IP_E
     "Trigger:",                           // TRG_E
     "InPinDebounceMs:",                   // IPDMS_E
-    "InPinMulticlickMaxDelayMs",          // IPMCDMS_E
+    "InPinMulticlickMaxDelayMs:",         // IPMCDMS_E
+    "SwitchImpulseDurationMs:",           // SWIDMS_E
     "Out of memory.",                     // OOM_E
     "Init failed!",                       // INITF_E
     "Invalid pin number.",                // IPN_E
@@ -75,6 +76,7 @@ typedef enum
     TRG_E,
     IPDMS_E,
     IPMCDMS_E,
+    SWIDMS_E,
     OOM_E,
     INITF_E,
     IPN_E,
@@ -92,6 +94,7 @@ static inline PINCFG_RESULT_T PinCfgCsv_ParseInpins(PINCFG_PARSE_SUBFN_PARAMS_T 
 static inline PINCFG_RESULT_T PinCfgCsv_ParseTriggers(PINCFG_PARSE_SUBFN_PARAMS_T *psPrms);
 static inline PINCFG_RESULT_T PinCfgCsv_ParseInPinDebounceMs(PINCFG_PARSE_SUBFN_PARAMS_T *psPrms);
 static inline PINCFG_RESULT_T PinCfgCsv_ParseInPinMulticlickMaxDelayMs(PINCFG_PARSE_SUBFN_PARAMS_T *psPrms);
+static inline PINCFG_RESULT_T PinCfgCsv_ParseSwitchImpulseDurationMs(PINCFG_PARSE_SUBFN_PARAMS_T *psPrms);
 
 static inline LOOPRE_T *PinCfgCsv_psFindInPresentablesById(uint8_t u8Id);
 static inline void PinCfgCsv_vAddToLoopables(LOOPRE_T *psLoopable);
@@ -112,6 +115,8 @@ PINCFG_RESULT_T PinCfgCsv_eInit(uint8_t *pu8Memory, size_t szMemorySize, PINCFG_
     {
         return PINCFG_MEMORYINIT_ERROR_E;
     }
+
+    memset((void *)psGlobals->acCfgBuf, 0, PINCFG_CONFIG_MAX_SZ_D);
 
     // pincfg if init
     if (psPincfgIf == NULL || psPincfgIf->bRequest == NULL || psPincfgIf->bPresent == NULL ||
@@ -151,6 +156,7 @@ PINCFG_RESULT_T PinCfgCsv_eInit(uint8_t *pu8Memory, size_t szMemorySize, PINCFG_
 
     InPin_SetDebounceMs(PINCFG_DEBOUNCE_MS_D);
     InPin_SetMulticlickMaxDelayMs(PINCFG_MULTICLICK_MAX_DELAY_MS_D);
+    Switch_SetImpulseDurationMs(PINCFG_SWITCH_IMPULSE_DURATIN_MS_D);
 
     return PINCFG_OK_E;
 }
@@ -229,7 +235,7 @@ PINCFG_RESULT_T PinCfgCsv_eParse(
         sPrms.sTempStrPt = sPrms.sLine;
         PinCfgStr_vGetSplitElemByIndex(&(sPrms.sTempStrPt), PINCFG_VALUE_SEPARATOR_D, 0);
         // switches
-        if (sPrms.sTempStrPt.szLen == 1 && sPrms.sTempStrPt.pcStrStart[0] == 'S')
+        if ((sPrms.sTempStrPt.szLen == 1 || sPrms.sTempStrPt.szLen == 2) && sPrms.sTempStrPt.pcStrStart[0] == 'S')
         {
             eResult = PinCfgCsv_ParseSwitch(&sPrms);
             if (eResult != PINCFG_OK_E)
@@ -249,15 +255,24 @@ PINCFG_RESULT_T PinCfgCsv_eParse(
             if (eResult != PINCFG_OK_E)
                 return eResult;
         }
+        // inpin debounce interval
         else if (sPrms.sTempStrPt.szLen == 1 && sPrms.sTempStrPt.pcStrStart[0] == 'D')
         {
             eResult = PinCfgCsv_ParseInPinDebounceMs(&sPrms);
             if (eResult != PINCFG_OK_E)
                 return eResult;
         }
+        // inpin multiclick delay
         else if (sPrms.sTempStrPt.szLen == 1 && sPrms.sTempStrPt.pcStrStart[0] == 'M')
         {
             eResult = PinCfgCsv_ParseInPinMulticlickMaxDelayMs(&sPrms);
+            if (eResult != PINCFG_OK_E)
+                return eResult;
+        }
+        // switch impulse duration
+        else if (sPrms.sTempStrPt.szLen == 1 && sPrms.sTempStrPt.pcStrStart[0] == 'R')
+        {
+            eResult = PinCfgCsv_ParseSwitchImpulseDurationMs(&sPrms);
             if (eResult != PINCFG_OK_E)
                 return eResult;
         }
@@ -404,13 +419,13 @@ static inline PINCFG_RESULT_T PinCfgCsv_CreateExternalCfgReceiver(
 static inline PINCFG_RESULT_T PinCfgCsv_ParseSwitch(PINCFG_PARSE_SUBFN_PARAMS_T *psPrms)
 {
     uint8_t u8Pin, u8Count, u8Offset, i;
+    SWITCH_MODE_T eMode = SWITCH_CLASSIC_E;
 
     if (psPrms == NULL)
         return PINCFG_NULLPTR_ERROR_E;
 
     if (psPrms->u8LineItemsLen < 3)
     {
-
         psPrms->pcOutStringLast += snprintf(
             (char *)(psPrms->pcOutString + psPrms->pcOutStringLast),
             szGetSize(psPrms->u16OutStrMaxLen, psPrms->pcOutStringLast),
@@ -439,6 +454,9 @@ static inline PINCFG_RESULT_T PinCfgCsv_ParseSwitch(PINCFG_PARSE_SUBFN_PARAMS_T 
         psPrms->szNumberOfWarnings++;
         return PINCFG_OK_E;
     }
+
+    if (psPrms->sTempStrPt.pcStrStart[1] == 'I')
+        eMode = SWITCH_IMPULSE_E;
 
     u8Count = (uint8_t)((psPrms->u8LineItemsLen - 1) / 2);
     for (i = 0; i < u8Count; i++)
@@ -483,13 +501,8 @@ static inline PINCFG_RESULT_T PinCfgCsv_ParseSwitch(PINCFG_PARSE_SUBFN_PARAMS_T 
             }
 
             if (Switch_eInit(
-                    psSwitchHnd,
-                    &(psPrms->sTempStrPt),
-                    psPrms->u8PresentablesCount,
-                    0U,
-                    SWITCH_CLASSIC_E,
-                    (uint8_t)u8Pin,
-                    0U) == SWITCH_OK_E)
+                    psSwitchHnd, &(psPrms->sTempStrPt), psPrms->u8PresentablesCount, 0U, eMode, (uint8_t)u8Pin, 0U) ==
+                SWITCH_OK_E)
             {
                 PinCfgCsv_vAddToPresentables((LOOPRE_T *)psSwitchHnd);
                 psPrms->u8PresentablesCount++;
@@ -892,6 +905,8 @@ static inline PINCFG_RESULT_T PinCfgCsv_ParseInPinDebounceMs(PINCFG_PARSE_SUBFN_
         return PINCFG_OK_E;
     }
 
+    psPrms->sTempStrPt = psPrms->sLine;
+    PinCfgStr_vGetSplitElemByIndex(&(psPrms->sTempStrPt), PINCFG_VALUE_SEPARATOR_D, 1);
     if (PinCfgStr_eAtoU32(&(psPrms->sTempStrPt), &u32InPinDebounceMs) != PINCFG_STR_OK_E)
     {
         psPrms->pcOutStringLast += snprintf(
@@ -915,7 +930,7 @@ static inline PINCFG_RESULT_T PinCfgCsv_ParseInPinDebounceMs(PINCFG_PARSE_SUBFN_
 
 static inline PINCFG_RESULT_T PinCfgCsv_ParseInPinMulticlickMaxDelayMs(PINCFG_PARSE_SUBFN_PARAMS_T *psPrms)
 {
-    uint32_t InPinMulticlickMaxDelayMs;
+    uint32_t u32InPinMulticlickMaxDelayMs;
 
     if (psPrms->u8LineItemsLen < 2)
     {
@@ -933,7 +948,9 @@ static inline PINCFG_RESULT_T PinCfgCsv_ParseInPinMulticlickMaxDelayMs(PINCFG_PA
         return PINCFG_OK_E;
     }
 
-    if (PinCfgStr_eAtoU32(&(psPrms->sTempStrPt), &InPinMulticlickMaxDelayMs) != PINCFG_STR_OK_E)
+    psPrms->sTempStrPt = psPrms->sLine;
+    PinCfgStr_vGetSplitElemByIndex(&(psPrms->sTempStrPt), PINCFG_VALUE_SEPARATOR_D, 1);
+    if (PinCfgStr_eAtoU32(&(psPrms->sTempStrPt), &u32InPinMulticlickMaxDelayMs) != PINCFG_STR_OK_E)
     {
         psPrms->pcOutStringLast += snprintf(
             (char *)(psPrms->pcOutString + psPrms->pcOutStringLast),
@@ -949,7 +966,51 @@ static inline PINCFG_RESULT_T PinCfgCsv_ParseInPinMulticlickMaxDelayMs(PINCFG_PA
         return PINCFG_OK_E;
     }
 
-    InPin_SetMulticlickMaxDelayMs(InPinMulticlickMaxDelayMs);
+    InPin_SetMulticlickMaxDelayMs(u32InPinMulticlickMaxDelayMs);
+
+    return PINCFG_OK_E;
+}
+
+static inline PINCFG_RESULT_T PinCfgCsv_ParseSwitchImpulseDurationMs(PINCFG_PARSE_SUBFN_PARAMS_T *psPrms)
+{
+    uint32_t u32SwitchImpulseDurationMs = 0;
+
+    if (psPrms->u8LineItemsLen < 2)
+    {
+        psPrms->pcOutStringLast += snprintf(
+            (char *)(psPrms->pcOutString + psPrms->pcOutStringLast),
+            szGetSize(psPrms->u16OutStrMaxLen, psPrms->pcOutStringLast),
+            _s[FSDSSS_E],
+            _s[WL_E],
+            psPrms->u16LinesProcessed,
+            _s[SWIDMS_E],
+            _s[IN_E],
+            _s[OARGS_E]);
+        psPrms->szNumberOfWarnings++;
+
+        return PINCFG_OK_E;
+    }
+
+    psPrms->sTempStrPt = psPrms->sLine;
+    PinCfgStr_vGetSplitElemByIndex(&(psPrms->sTempStrPt), PINCFG_VALUE_SEPARATOR_D, 1);
+    if (PinCfgStr_eAtoU32(&(psPrms->sTempStrPt), &u32SwitchImpulseDurationMs) != PINCFG_STR_OK_E ||
+        u32SwitchImpulseDurationMs < 50)
+    {
+        psPrms->pcOutStringLast += snprintf(
+            (char *)(psPrms->pcOutString + psPrms->pcOutStringLast),
+            szGetSize(psPrms->u16OutStrMaxLen, psPrms->pcOutStringLast),
+            _s[FSDSSS_E],
+            _s[WL_E],
+            psPrms->u16LinesProcessed,
+            _s[SWIDMS_E],
+            _s[IN_E],
+            ".");
+        psPrms->szNumberOfWarnings++;
+
+        return PINCFG_OK_E;
+    }
+
+    Switch_SetImpulseDurationMs(u32SwitchImpulseDurationMs);
 
     return PINCFG_OK_E;
 }

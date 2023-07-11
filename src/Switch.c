@@ -9,9 +9,10 @@
 
 static inline void Switch_vWritePin(SWITCH_HANDLE_T *psHandle, uint8_t u8Value);
 
-// loopable IF
-void Switch_vLoop_withFb(LOOPRE_T *psHandle, uint32_t u32ms);
-void Switch_vLoop_noFb(LOOPRE_T *psHandle, uint32_t u32ms);
+void Switch_SetImpulseDurationMs(uint32_t u32ImpulseDuration)
+{
+    psGlobals->u32SwitchImpulseDurationMs = u32ImpulseDuration;
+}
 
 SWITCH_RESULT_T Switch_eInit(
     SWITCH_HANDLE_T *psHandle,
@@ -38,7 +39,7 @@ SWITCH_RESULT_T Switch_eInit(
     psHandle->u8OutPin = u8OutPin;
     psHandle->u8FbPin = u8FbPin;
     psHandle->u32ImpulseStarted = 0U;
-    psHandle->u32ImpulseDuration = 300U;
+    psHandle->u32ImpulseDuration = psGlobals->u32SwitchImpulseDurationMs;
     if (u32ImpulseDuration != 0U)
         psHandle->u32ImpulseDuration = u32ImpulseDuration;
 

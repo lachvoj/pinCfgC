@@ -288,6 +288,46 @@ void test_vInPin(void)
     TEST_ASSERT_EQUAL(psPinSubscriber1->psNext, psPinSubscriber2);
 }
 
+void test_vSwitch(void)
+{
+    PINCFG_RESULT_T eParseResult;
+    char acOutStr[OUT_STR_MAX_LEN_D];
+    size_t szMemoryRequired;
+    GLOBALS_HANDLE_T *psGlobals = (GLOBALS_HANDLE_T *)testMemory;
+
+    strncpy(
+        PinCfgCsv_pcGetCfgBuf(),
+        "S,o1,13/"
+        "R,120/"
+        "SI,o2,12/"
+        "R,350/"
+        "SI,o5,9/",
+        PINCFG_CONFIG_MAX_SZ_D);
+
+    eParseResult = PinCfgCsv_eParse(&szMemoryRequired, acOutStr, (uint16_t)OUT_STR_MAX_LEN_D, false, true);
+
+    TEST_ASSERT_EQUAL(PINCFG_OK_E, eParseResult);
+
+    SWITCH_HANDLE_T *psSwitchHnd = (SWITCH_HANDLE_T *)psGlobals->psLoopablesFirst;
+    TEST_ASSERT_EQUAL_STRING("o1", psSwitchHnd->sMySenPresent.sLooPre.pcName);
+    TEST_ASSERT_EQUAL(SWITCH_CLASSIC_E, psSwitchHnd->eMode);
+    TEST_ASSERT_EQUAL(13, psSwitchHnd->u8OutPin);
+
+    psSwitchHnd = (SWITCH_HANDLE_T *)psGlobals->psLoopablesFirst->psNextLoopable;
+    TEST_ASSERT_EQUAL_STRING("o2", psSwitchHnd->sMySenPresent.sLooPre.pcName);
+    TEST_ASSERT_EQUAL(SWITCH_IMPULSE_E, psSwitchHnd->eMode);
+    TEST_ASSERT_EQUAL(12, psSwitchHnd->u8OutPin);
+    TEST_ASSERT_EQUAL(120, psSwitchHnd->u32ImpulseDuration);
+
+    psSwitchHnd = (SWITCH_HANDLE_T *)psGlobals->psLoopablesFirst->psNextLoopable->psNextLoopable;
+    TEST_ASSERT_EQUAL_STRING("o5", psSwitchHnd->sMySenPresent.sLooPre.pcName);
+    TEST_ASSERT_EQUAL(SWITCH_IMPULSE_E, psSwitchHnd->eMode);
+    TEST_ASSERT_EQUAL(9, psSwitchHnd->u8OutPin);
+    TEST_ASSERT_EQUAL(350, psSwitchHnd->u32ImpulseDuration);
+
+    TEST_ASSERT_EQUAL(350, psGlobals->u32SwitchImpulseDurationMs);
+}
+
 void test_vPinCfgCsv(void)
 {
     PINCFG_RESULT_T eParseResult;
@@ -393,6 +433,75 @@ void test_vExtCfgReceiver(void)
         "RECEIVINGW:L:0:Trigger:Invalid number of arguments.\nI: Configuration parsed.\nVALIDATION ERROR",
         mock_bSend_acMessage);
 }
+
+void test_vGlobalConstants(void)
+{
+    PINCFG_RESULT_T eParseResult;
+    char acOutStr[OUT_STR_MAX_LEN_D];
+    size_t szMemoryRequired;
+
+    strncpy(
+        PinCfgCsv_pcGetCfgBuf(),
+        "D,330/"
+        "M,620/"
+        "R,150",
+        PINCFG_CONFIG_MAX_SZ_D);
+
+    eParseResult = PinCfgCsv_eParse(&szMemoryRequired, acOutStr, (uint16_t)OUT_STR_MAX_LEN_D, false, true);
+
+    TEST_ASSERT_EQUAL(PINCFG_OK_E, eParseResult);
+
+    GLOBALS_HANDLE_T *psGlobals = (GLOBALS_HANDLE_T *)testMemory;
+    TEST_ASSERT_EQUAL(330, psGlobals->u32InPinDebounceMs);
+    TEST_ASSERT_EQUAL(620, psGlobals->u32InPinMulticlickMaxDelayMs);
+    TEST_ASSERT_EQUAL(150, psGlobals->u32SwitchImpulseDurationMs);
+
+    // InPin debounce
+    memset(acOutStr, 0, OUT_STR_MAX_LEN_D);
+    strncpy(PinCfgCsv_pcGetCfgBuf(), "D", PINCFG_CONFIG_MAX_SZ_D);
+
+    eParseResult = PinCfgCsv_eParse(&szMemoryRequired, acOutStr, (uint16_t)OUT_STR_MAX_LEN_D, false, true);
+
+    TEST_ASSERT_EQUAL_STRING("W:L:0:Not defined or invalid format.\nI: Configuration parsed.\n", acOutStr);
+
+    memset(acOutStr, 0, OUT_STR_MAX_LEN_D);
+    strncpy(PinCfgCsv_pcGetCfgBuf(), "D,abc", PINCFG_CONFIG_MAX_SZ_D);
+
+    eParseResult = PinCfgCsv_eParse(&szMemoryRequired, acOutStr, (uint16_t)OUT_STR_MAX_LEN_D, false, true);
+
+    TEST_ASSERT_EQUAL_STRING("W:L:0:InPinDebounceMs:Invalid number.\nI: Configuration parsed.\n", acOutStr);
+
+    // InPin multiclick
+    memset(acOutStr, 0, OUT_STR_MAX_LEN_D);
+    strncpy(PinCfgCsv_pcGetCfgBuf(), "M", PINCFG_CONFIG_MAX_SZ_D);
+
+    eParseResult = PinCfgCsv_eParse(&szMemoryRequired, acOutStr, (uint16_t)OUT_STR_MAX_LEN_D, false, true);
+
+    TEST_ASSERT_EQUAL_STRING("W:L:0:Not defined or invalid format.\nI: Configuration parsed.\n", acOutStr);
+
+    memset(acOutStr, 0, OUT_STR_MAX_LEN_D);
+    strncpy(PinCfgCsv_pcGetCfgBuf(), "M,abc", PINCFG_CONFIG_MAX_SZ_D);
+
+    eParseResult = PinCfgCsv_eParse(&szMemoryRequired, acOutStr, (uint16_t)OUT_STR_MAX_LEN_D, false, true);
+
+    TEST_ASSERT_EQUAL_STRING("W:L:0:InPinMulticlickMaxDelayMs:Invalid number.\nI: Configuration parsed.\n", acOutStr);
+
+    // Switch impulse duration
+    memset(acOutStr, 0, OUT_STR_MAX_LEN_D);
+    strncpy(PinCfgCsv_pcGetCfgBuf(), "R", PINCFG_CONFIG_MAX_SZ_D);
+
+    eParseResult = PinCfgCsv_eParse(&szMemoryRequired, acOutStr, (uint16_t)OUT_STR_MAX_LEN_D, false, true);
+
+    TEST_ASSERT_EQUAL_STRING("W:L:0:Not defined or invalid format.\nI: Configuration parsed.\n", acOutStr);
+
+    memset(acOutStr, 0, OUT_STR_MAX_LEN_D);
+    strncpy(PinCfgCsv_pcGetCfgBuf(), "R,abc", PINCFG_CONFIG_MAX_SZ_D);
+
+    eParseResult = PinCfgCsv_eParse(&szMemoryRequired, acOutStr, (uint16_t)OUT_STR_MAX_LEN_D, false, true);
+
+    TEST_ASSERT_EQUAL_STRING("W:L:0:SwitchImpulseDurationMs:Invalid number.\nI: Configuration parsed.\n", acOutStr);
+}
+
 #ifndef ARDUINO
 int main(void)
 #else
@@ -414,8 +523,10 @@ int test_main(void)
     RUN_TEST(test_vPinCfgStr);
     RUN_TEST(test_vMySenosrsPresent);
     RUN_TEST(test_vInPin);
+    RUN_TEST(test_vSwitch);
     RUN_TEST(test_vPinCfgCsv);
     RUN_TEST(test_vExtCfgReceiver);
+    RUN_TEST(test_vGlobalConstants);
 
     return UNITY_END();
 }

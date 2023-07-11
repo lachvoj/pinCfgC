@@ -24,6 +24,8 @@ typedef struct
     // InPin
     uint32_t u32InPinDebounceMs;
     uint32_t u32InPinMulticlickMaxDelayMs;
+    // Switch
+    uint32_t u32SwitchImpulseDurationMs;
     // cfg buf
     char acCfgBuf[PINCFG_CONFIG_MAX_SZ_D];
 } GLOBALS_HANDLE_T;
