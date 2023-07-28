@@ -22,20 +22,21 @@ typedef enum
 typedef struct
 {
     MYSENSORSPRESENT_HANDLE_T sMySenPresent;
-    SWITCH_MODE_T eMode;
     uint32_t u32ImpulseDuration;
     uint32_t u32ImpulseStarted;
     uint8_t u8OutPin;
     uint8_t u8FbPin;
+    SWITCH_MODE_T eMode;
 } SWITCH_HANDLE_T;
 
+// static
 void Switch_SetImpulseDurationMs(uint32_t u32ImpulseDuration);
+
 
 SWITCH_RESULT_T Switch_eInit(
     SWITCH_HANDLE_T *psHandle,
     STRING_POINT_T *sName,
     uint8_t u8Id,
-    uint32_t u32ImpulseDuration,
     SWITCH_MODE_T eMode,
     uint8_t u8OutPin,
     uint8_t u8FbPin);

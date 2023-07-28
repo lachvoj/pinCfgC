@@ -235,7 +235,7 @@ PINCFG_RESULT_T PinCfgCsv_eParse(
         sPrms.sTempStrPt = sPrms.sLine;
         PinCfgStr_vGetSplitElemByIndex(&(sPrms.sTempStrPt), PINCFG_VALUE_SEPARATOR_D, 0);
         // switches
-        if ((sPrms.sTempStrPt.szLen == 1 || sPrms.sTempStrPt.szLen == 2) && sPrms.sTempStrPt.pcStrStart[0] == 'S')
+        if (sPrms.sTempStrPt.szLen >= 1 && sPrms.sTempStrPt.pcStrStart[0] == 'S')
         {
             eResult = PinCfgCsv_ParseSwitch(&sPrms);
             if (eResult != PINCFG_OK_E)
@@ -418,8 +418,12 @@ static inline PINCFG_RESULT_T PinCfgCsv_CreateExternalCfgReceiver(
 
 static inline PINCFG_RESULT_T PinCfgCsv_ParseSwitch(PINCFG_PARSE_SUBFN_PARAMS_T *psPrms)
 {
-    uint8_t u8Pin, u8Count, u8Offset, i;
+    uint8_t u8Pin, u8FbPin, u8Count, u8Offset, u8SwItems, i;
     SWITCH_MODE_T eMode = SWITCH_CLASSIC_E;
+    bool bIsDefinitionValid = true;
+
+    u8SwItems = 2;
+    u8FbPin = 0U;
 
     if (psPrms == NULL)
         return PINCFG_NULLPTR_ERROR_E;
@@ -439,7 +443,39 @@ static inline PINCFG_RESULT_T PinCfgCsv_ParseSwitch(PINCFG_PARSE_SUBFN_PARAMS_T 
         return PINCFG_OK_E;
     }
 
-    u8Count = (uint8_t)((psPrms->u8LineItemsLen - 1) % 2);
+    if (psPrms->sTempStrPt.szLen >= 2)
+    {
+        if (psPrms->sTempStrPt.pcStrStart[1] == 'I')
+            eMode = SWITCH_IMPULSE_E;
+        else if ((psPrms->sTempStrPt.pcStrStart[1] == 'F'))
+            u8SwItems = 3;
+        else
+            bIsDefinitionValid = false;
+
+        if (psPrms->sTempStrPt.szLen >= 3)
+        {
+            if (psPrms->sTempStrPt.pcStrStart[2] == 'F')
+                u8SwItems = 3;
+            else
+                bIsDefinitionValid = false;
+        }
+
+        if (!bIsDefinitionValid)
+        {
+            psPrms->pcOutStringLast += snprintf(
+                (char *)(psPrms->pcOutString + psPrms->pcOutStringLast),
+                szGetSize(psPrms->u16OutStrMaxLen, psPrms->pcOutStringLast),
+                _s[FSDSS_E],
+                _s[WL_E],
+                psPrms->u16LinesProcessed,
+                _s[SW_E],
+                "Invalid definition.");
+            psPrms->szNumberOfWarnings++;
+            return PINCFG_OK_E;
+        }
+    }
+
+    u8Count = (uint8_t)((psPrms->u8LineItemsLen - 1) % u8SwItems);
     if (u8Count != 0)
     {
         psPrms->pcOutStringLast += snprintf(
@@ -455,17 +491,14 @@ static inline PINCFG_RESULT_T PinCfgCsv_ParseSwitch(PINCFG_PARSE_SUBFN_PARAMS_T 
         return PINCFG_OK_E;
     }
 
-    if (psPrms->sTempStrPt.pcStrStart[1] == 'I')
-        eMode = SWITCH_IMPULSE_E;
-
-    u8Count = (uint8_t)((psPrms->u8LineItemsLen - 1) / 2);
+    u8Count = (uint8_t)((psPrms->u8LineItemsLen - 1) / u8SwItems);
     for (i = 0; i < u8Count; i++)
     {
-        u8Offset = 1 + i * 2;
+        u8Offset = 1 + i * u8SwItems;
 
         psPrms->sTempStrPt = psPrms->sLine;
         PinCfgStr_vGetSplitElemByIndex(&(psPrms->sTempStrPt), PINCFG_VALUE_SEPARATOR_D, (u8Offset + 1));
-        if (PinCfgStr_eAtoU8(&(psPrms->sTempStrPt), &u8Pin) != PINCFG_STR_OK_E || u8Pin < 1)
+        if (PinCfgStr_eAtoU8(&(psPrms->sTempStrPt), &u8Pin) != PINCFG_STR_OK_E)
         {
             psPrms->pcOutStringLast += snprintf(
                 (char *)(psPrms->pcOutString + psPrms->pcOutStringLast),
@@ -477,6 +510,25 @@ static inline PINCFG_RESULT_T PinCfgCsv_ParseSwitch(PINCFG_PARSE_SUBFN_PARAMS_T 
                 _s[IPN_E]);
             psPrms->szNumberOfWarnings++;
             continue;
+        }
+
+        if (u8SwItems == 3)
+        {
+            psPrms->sTempStrPt = psPrms->sLine;
+            PinCfgStr_vGetSplitElemByIndex(&(psPrms->sTempStrPt), PINCFG_VALUE_SEPARATOR_D, (u8Offset + 2));
+            if (PinCfgStr_eAtoU8(&(psPrms->sTempStrPt), &u8FbPin) != PINCFG_STR_OK_E)
+            {
+                psPrms->pcOutStringLast += snprintf(
+                    (char *)(psPrms->pcOutString + psPrms->pcOutStringLast),
+                    szGetSize(psPrms->u16OutStrMaxLen, psPrms->pcOutStringLast),
+                    _s[FSDSS_E],
+                    _s[WL_E],
+                    psPrms->u16LinesProcessed,
+                    _s[SW_E],
+                    _s[IPN_E]);
+                psPrms->szNumberOfWarnings++;
+                continue;
+            }
         }
 
         psPrms->sTempStrPt = psPrms->sLine;
@@ -501,7 +553,7 @@ static inline PINCFG_RESULT_T PinCfgCsv_ParseSwitch(PINCFG_PARSE_SUBFN_PARAMS_T 
             }
 
             if (Switch_eInit(
-                    psSwitchHnd, &(psPrms->sTempStrPt), psPrms->u8PresentablesCount, 0U, eMode, (uint8_t)u8Pin, 0U) ==
+                    psSwitchHnd, &(psPrms->sTempStrPt), psPrms->u8PresentablesCount, eMode, u8Pin, u8FbPin) ==
                 SWITCH_OK_E)
             {
                 PinCfgCsv_vAddToPresentables((LOOPRE_T *)psSwitchHnd);

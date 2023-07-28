@@ -301,7 +301,9 @@ void test_vSwitch(void)
         "R,120/"
         "SI,o2,12/"
         "R,350/"
-        "SI,o5,9/",
+        "SI,o5,9/"
+        "SF,o6,10,2/"
+        "SIF,o7,11,3/",
         PINCFG_CONFIG_MAX_SZ_D);
 
     eParseResult = PinCfgCsv_eParse(&szMemoryRequired, acOutStr, (uint16_t)OUT_STR_MAX_LEN_D, false, true);
@@ -324,6 +326,19 @@ void test_vSwitch(void)
     TEST_ASSERT_EQUAL(SWITCH_IMPULSE_E, psSwitchHnd->eMode);
     TEST_ASSERT_EQUAL(9, psSwitchHnd->u8OutPin);
     TEST_ASSERT_EQUAL(350, psSwitchHnd->u32ImpulseDuration);
+
+    psSwitchHnd = (SWITCH_HANDLE_T *)psGlobals->psLoopablesFirst->psNextLoopable->psNextLoopable->psNextLoopable;
+    TEST_ASSERT_EQUAL_STRING("o6", psSwitchHnd->sMySenPresent.sLooPre.pcName);
+    TEST_ASSERT_EQUAL(SWITCH_CLASSIC_E, psSwitchHnd->eMode);
+    TEST_ASSERT_EQUAL(10, psSwitchHnd->u8OutPin);
+    TEST_ASSERT_EQUAL(2, psSwitchHnd->u8FbPin);
+
+    psSwitchHnd =
+        (SWITCH_HANDLE_T *)psGlobals->psLoopablesFirst->psNextLoopable->psNextLoopable->psNextLoopable->psNextLoopable;
+    TEST_ASSERT_EQUAL_STRING("o7", psSwitchHnd->sMySenPresent.sLooPre.pcName);
+    TEST_ASSERT_EQUAL(SWITCH_IMPULSE_E, psSwitchHnd->eMode);
+    TEST_ASSERT_EQUAL(11, psSwitchHnd->u8OutPin);
+    TEST_ASSERT_EQUAL(3, psSwitchHnd->u8FbPin);
 
     TEST_ASSERT_EQUAL(350, psGlobals->u32SwitchImpulseDurationMs);
 }

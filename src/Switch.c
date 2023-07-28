@@ -7,7 +7,10 @@
 #include "Switch.h"
 #include "Globals.h"
 
-static inline void Switch_vWritePin(SWITCH_HANDLE_T *psHandle, uint8_t u8Value);
+static inline void Switch_vWritePin(SWITCH_HANDLE_T *psHandle, uint8_t u8Value)
+{
+    digitalWrite(psHandle->u8OutPin, u8Value);
+}
 
 void Switch_SetImpulseDurationMs(uint32_t u32ImpulseDuration)
 {
@@ -18,7 +21,6 @@ SWITCH_RESULT_T Switch_eInit(
     SWITCH_HANDLE_T *psHandle,
     STRING_POINT_T *sName,
     uint8_t u8Id,
-    uint32_t u32ImpulseDuration,
     SWITCH_MODE_T eMode,
     uint8_t u8OutPin,
     uint8_t u8FbPin)
@@ -40,8 +42,6 @@ SWITCH_RESULT_T Switch_eInit(
     psHandle->u8FbPin = u8FbPin;
     psHandle->u32ImpulseStarted = 0U;
     psHandle->u32ImpulseDuration = psGlobals->u32SwitchImpulseDurationMs;
-    if (u32ImpulseDuration != 0U)
-        psHandle->u32ImpulseDuration = u32ImpulseDuration;
 
     if (u8FbPin > 0)
     {
@@ -59,7 +59,7 @@ void Switch_vLoop(LOOPRE_T *psBaseHandle, uint32_t u32ms)
     MYSENSORSPRESENT_HANDLE_T *psPresentHnd = (MYSENSORSPRESENT_HANDLE_T *)psBaseHandle;
     SWITCH_HANDLE_T *psHandle = (SWITCH_HANDLE_T *)psBaseHandle;
 
-    if (psHandle->u8FbPin > 0)
+    if (psHandle->u8FbPin != 0)
     {
         uint8_t u8ActualPinState = (uint8_t)digitalRead(psHandle->u8FbPin);
         if (psPresentHnd->u8State != u8ActualPinState)
@@ -91,10 +91,4 @@ void Switch_vLoop(LOOPRE_T *psBaseHandle, uint32_t u32ms)
             Switch_vWritePin(psHandle, (uint8_t) false);
         }
     }
-}
-
-// private
-static inline void Switch_vWritePin(SWITCH_HANDLE_T *psHandle, uint8_t u8Value)
-{
-    digitalWrite(psHandle->u8OutPin, u8Value);
 }
