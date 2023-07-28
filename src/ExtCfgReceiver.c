@@ -7,6 +7,9 @@
 #include "PincfgIf.h"
 
 static void ExtCfgReceiver_vConfigurationReceived(EXTCFGRECEIVER_HANDLE_T *psHandle);
+static void ExtCfgReceiver_vCommandFunction(EXTCFGRECEIVER_HANDLE_T *psHandle, char *cmd);
+static void ExtCfgReceiver_vSendBigMessage(EXTCFGRECEIVER_HANDLE_T *psHandle, char *pcBigMsg, size_t szMsgSize);
+
 #if defined(ARDUINO) && !defined(TEST)
 void (*resetFunc)(void) = 0; // declare reset fuction at address 0
 #else
@@ -88,6 +91,12 @@ void ExtCfgReceiver_vRcvMessage(LOOPRE_T *psBaseHandle, const void *pvMessage)
             bCopied = true;
             ExtCfgReceiver_vSetState(psHandle, EXTCFGRECEIVER_RECEIVNG_E, NULL, true);
         }
+        else
+        {
+            pcStartString = strstr(pcMessage, "#C:");
+            if (pcStartString != NULL)
+                ExtCfgReceiver_vCommandFunction(psHandle, pcStartString + strlen("#C:"));
+        }
     }
     if (psHandle->eState == EXTCFGRECEIVER_RECEIVNG_E)
     {
@@ -113,12 +122,12 @@ static void ExtCfgReceiver_vConfigurationReceived(EXTCFGRECEIVER_HANDLE_T *psHan
 {
     PINCFG_RESULT_T eValidationResult;
     size_t szMemoryRequired;
-    const size_t szFreeMemory = Memory_szGetFree() - (10 * sizeof(char *)); // leave some space for 
-    char *acOut = (char *)Memory_vpTempAlloc(szFreeMemory);
-    if (acOut != NULL)
+    const size_t szFreeMemory = Memory_szGetFree() - (10 * sizeof(char *)); // leave some space for
+    char *pcOut = (char *)Memory_vpTempAlloc(szFreeMemory);
+    if (pcOut != NULL)
     {
-        acOut[0] = '\0';
-        eValidationResult = PinCfgCsv_eValidate(&szMemoryRequired, acOut, szFreeMemory);
+        pcOut[0] = '\0';
+        eValidationResult = PinCfgCsv_eValidate(&szMemoryRequired, pcOut, szFreeMemory);
     }
     else
     {
@@ -139,33 +148,43 @@ static void ExtCfgReceiver_vConfigurationReceived(EXTCFGRECEIVER_HANDLE_T *psHan
     }
     else
     {
-        size_t szOutSize = strlen(acOut);
+        size_t szOutSize = strlen(pcOut);
         if (szOutSize > 0)
         {
-            // psHandle->eState = EXTCFGRECEIVER_CUSTOM_E;
-            uint8_t u8i;
-            uint8_t u8MyMsgsCount = szOutSize / (PINCFG_TXTSTATE_MAX_SZ_D - 1);
-
-            psHandle->acState[PINCFG_TXTSTATE_MAX_SZ_D - 1] = '\0';
-            for (u8i = 0; u8i < u8MyMsgsCount; u8i++)
-            {
-                memcpy(
-                    psHandle->acState,
-                    (acOut + (u8i * (PINCFG_TXTSTATE_MAX_SZ_D - 1))),
-                    (PINCFG_TXTSTATE_MAX_SZ_D - 1));
-                ExtCfgReceiver_vSetState(psHandle, EXTCFGRECEIVER_CUSTOM_E, NULL, true);
-            }
-            if ((szOutSize % (PINCFG_TXTSTATE_MAX_SZ_D - 1)) > 0)
-            {
-                strcpy(psHandle->acState, (acOut + (u8i * (PINCFG_TXTSTATE_MAX_SZ_D - 1))));
-                ExtCfgReceiver_vSetState(psHandle, EXTCFGRECEIVER_CUSTOM_E, NULL, true);
-            }
+            ExtCfgReceiver_vSendBigMessage(psHandle, pcOut, strlen(pcOut));
         }
 
         ExtCfgReceiver_vSetState(psHandle, EXTCFGRECEIVER_VALIDATION_ERROR_E, NULL, true);
     }
 
-    if (acOut != NULL)
+    if (pcOut != NULL)
         Memory_vTempFreeSize(szFreeMemory);
     psHandle->eState = EXTCFGRECEIVER_LISTENING_E;
+}
+
+static void ExtCfgReceiver_vCommandFunction(EXTCFGRECEIVER_HANDLE_T *psHandle, char *cmd)
+{
+    if (strcmp("GET_CFG", cmd) == 0)
+    {
+        ExtCfgReceiver_vSendBigMessage(psHandle, psGlobals->acCfgBuf, strlen(psGlobals->acCfgBuf));
+        ExtCfgReceiver_vSetState(psHandle, EXTCFGRECEIVER_LISTENING_E, NULL, true);
+    }
+}
+
+static void ExtCfgReceiver_vSendBigMessage(EXTCFGRECEIVER_HANDLE_T *psHandle, char *pcBigMsg, size_t szMsgSize)
+{
+    uint8_t u8i;
+    uint8_t u8MyMsgsCount = szMsgSize / (PINCFG_TXTSTATE_MAX_SZ_D - 1);
+
+    psHandle->acState[PINCFG_TXTSTATE_MAX_SZ_D - 1] = '\0';
+    for (u8i = 0; u8i < u8MyMsgsCount; u8i++)
+    {
+        memcpy(psHandle->acState, (pcBigMsg + (u8i * (PINCFG_TXTSTATE_MAX_SZ_D - 1))), (PINCFG_TXTSTATE_MAX_SZ_D - 1));
+        ExtCfgReceiver_vSetState(psHandle, EXTCFGRECEIVER_CUSTOM_E, NULL, true);
+    }
+    if ((szMsgSize % (PINCFG_TXTSTATE_MAX_SZ_D - 1)) > 0)
+    {
+        strcpy(psHandle->acState, (pcBigMsg + (u8i * (PINCFG_TXTSTATE_MAX_SZ_D - 1))));
+        ExtCfgReceiver_vSetState(psHandle, EXTCFGRECEIVER_CUSTOM_E, NULL, true);
+    }
 }

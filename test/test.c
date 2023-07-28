@@ -441,11 +441,19 @@ void test_vExtCfgReceiver(void)
     TEST_ASSERT_EQUAL_STRING("VALIDATION OK", mock_bSend_pvMessage);
     TEST_ASSERT_EQUAL(1, mock_u8SaveCfg_u32Called);
 
-    mock_bSend_acMessage[0] = '\0';
+    memset(mock_bSend_acMessage, 0, SEND_MESSAGE_MAX_LENGTH_D);
     ExtCfgReceiver_eInit(psExtReceiver, 0);
     ExtCfgReceiver_vRcvMessage((LOOPRE_T *)psExtReceiver, "#[#T,o1,13/#]#");
     TEST_ASSERT_EQUAL_STRING(
         "RECEIVINGW:L:0:Trigger:Invalid number of arguments.\nI: Configuration parsed.\nVALIDATION ERROR",
+        mock_bSend_acMessage);
+
+    memset(mock_bSend_acMessage, 0, SEND_MESSAGE_MAX_LENGTH_D);
+    strcpy(psGlobals->acCfgBuf, "This is test message which should be longer than max one-shot message.");
+    ExtCfgReceiver_eInit(psExtReceiver, 0);
+    ExtCfgReceiver_vRcvMessage((LOOPRE_T *)psExtReceiver, "#C:GET_CFG");
+    TEST_ASSERT_EQUAL_STRING(
+        "This is test message which should be longer than max one-shot message.LISTENING",
         mock_bSend_acMessage);
 }
 

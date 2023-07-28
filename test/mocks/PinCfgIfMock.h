@@ -4,6 +4,8 @@
 #include <PincfgIf.h>
 #include <Types.h>
 
+#define SEND_MESSAGE_MAX_LENGTH_D 3000
+
 extern uint8_t mock_bRequest_u8Id;
 extern bool mock_bRequest_bReturn;
 extern uint32_t mock_bRequest_u32Called;
@@ -25,7 +27,7 @@ extern uint32_t mock_bPresentInfo_u32Called;
 
 extern uint8_t mock_bSend_u8Id;
 extern const void *mock_bSend_pvMessage;
-extern char mock_bSend_acMessage[3000];
+extern char mock_bSend_acMessage[SEND_MESSAGE_MAX_LENGTH_D];
 extern bool mock_bSend_bReturn;
 extern uint32_t mock_bSend_u32Called;
 

@@ -15,7 +15,7 @@ void vPinCfgIfMock_setup(void)
 
     mock_u8SaveCfg_u32Called = 0;
     mock_u8SaveCfg_u8Return = false;
-    mock_bSend_acMessage[0] = '\0';
+    memset(mock_bSend_acMessage, 0, SEND_MESSAGE_MAX_LENGTH_D);
 }
 
 uint8_t mock_bRequest_u8Id;
