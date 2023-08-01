@@ -16,6 +16,8 @@ void vPinCfgIfMock_setup(void)
     mock_u8SaveCfg_u32Called = 0;
     mock_u8SaveCfg_u8Return = false;
     memset(mock_bSend_acMessage, 0, SEND_MESSAGE_MAX_LENGTH_D);
+
+    mock_vWait_u32Called = 0;
 }
 
 uint8_t mock_bRequest_u8Id;
@@ -57,7 +59,19 @@ bool bSend(const uint8_t u8Id, const uint8_t variableType, const void *pvMessage
     mock_bSend_u8Id = u8Id;
     mock_bSend_variableType = variableType;
     if (variableType == V_TEXT)
-        strcat(mock_bSend_acMessage, (char *)pvMessage);
+    {
+        size_t szMsgLength = strlen(pvMessage);
+        char acBuf[PINCFG_TXTSTATE_MAX_SZ_D + 1];
+        acBuf[PINCFG_TXTSTATE_MAX_SZ_D] = '\0';
+
+        if (szMsgLength > PINCFG_TXTSTATE_MAX_SZ_D)
+        {
+            size_t szDestMsg = strlen(mock_bSend_acMessage);
+            memcpy(mock_bSend_acMessage + szDestMsg, pvMessage, PINCFG_TXTSTATE_MAX_SZ_D);
+        }
+        else
+            strcat(mock_bSend_acMessage, (char *)pvMessage);
+    }
     mock_bSend_pvMessage = pvMessage;
     mock_bSend_u32Called++;
     return mock_bSend_bReturn;
@@ -71,4 +85,11 @@ uint8_t u8SaveCfg(const char *pcCfg)
     mock_u8SaveCfg_pcCfg = pcCfg;
     mock_u8SaveCfg_u32Called++;
     return mock_u8SaveCfg_u8Return;
+}
+
+uint32_t mock_vWait_u32WaitMS;
+uint32_t mock_vWait_u32Called;
+void vWait(const uint32_t u32WaitMS)
+{
+    mock_vWait_u32WaitMS = u32WaitMS;
 }

@@ -24,6 +24,7 @@ typedef struct
     MYSENSORSPRESENT_HANDLE_T sMySenPresent;
     uint32_t u32ImpulseDuration;
     uint32_t u32ImpulseStarted;
+    uint32_t u32FbReadStarted;
     uint8_t u8OutPin;
     uint8_t u8FbPin;
     SWITCH_MODE_T eMode;
@@ -31,7 +32,8 @@ typedef struct
 
 // static
 void Switch_SetImpulseDurationMs(uint32_t u32ImpulseDuration);
-
+void Switch_SetFbOnDelayMs(uint32_t u32FbOnDelayMs);
+void Switch_SetFbOffDelayMs(uint32_t u32FbOffDelayMs);
 
 SWITCH_RESULT_T Switch_eInit(
     SWITCH_HANDLE_T *psHandle,

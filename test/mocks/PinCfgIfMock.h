@@ -40,11 +40,14 @@ extern const char *mock_u8SaveCfg_pcCfg;
 extern int8_t mock_u8SaveCfg_u8Return;
 extern uint32_t mock_u8SaveCfg_u32Called;
 
+extern uint32_t mock_vWait_u32Called;
+
 void vPinCfgIfMock_setup(void);
 
 bool bRequest(const uint8_t u8Id, const uint8_t u8VariableType, const uint8_t u8Destination);
 bool bPresent(const uint8_t u8Id, const uint8_t sensorType, const char *pcName);
 bool bSend(const uint8_t u8Id, const uint8_t variableType, const void *pvMessage);
 uint8_t u8SaveCfg(const char *pcCfg);
+void vWait(const uint32_t u32WaitMS);
 
 #endif // PINCFGIFMOCK_H

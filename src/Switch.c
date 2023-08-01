@@ -17,6 +17,16 @@ void Switch_SetImpulseDurationMs(uint32_t u32ImpulseDuration)
     psGlobals->u32SwitchImpulseDurationMs = u32ImpulseDuration;
 }
 
+void Switch_SetFbOnDelayMs(uint32_t u32FbOnDelayMs)
+{
+    psGlobals->u32SwitchFbOnDelayMs = u32FbOnDelayMs;
+}
+
+void Switch_SetFbOffDelayMs(uint32_t u32FbOffDelayMs)
+{
+    psGlobals->u32SwitchFbOffDelayMs = u32FbOffDelayMs;
+}
+
 SWITCH_RESULT_T Switch_eInit(
     SWITCH_HANDLE_T *psHandle,
     STRING_POINT_T *sName,
@@ -42,6 +52,7 @@ SWITCH_RESULT_T Switch_eInit(
     psHandle->u8FbPin = u8FbPin;
     psHandle->u32ImpulseStarted = 0U;
     psHandle->u32ImpulseDuration = psGlobals->u32SwitchImpulseDurationMs;
+    psHandle->u32FbReadStarted = 0U;
 
     if (u8FbPin > 0)
     {
@@ -61,12 +72,26 @@ void Switch_vLoop(LOOPRE_T *psBaseHandle, uint32_t u32ms)
 
     if (psHandle->u8FbPin != 0)
     {
-        uint8_t u8ActualPinState = (uint8_t)digitalRead(psHandle->u8FbPin);
+        uint8_t u8ActualPinState = (uint8_t)!digitalRead(psHandle->u8FbPin);
         if (psPresentHnd->u8State != u8ActualPinState)
         {
-            psPresentHnd->u8State = u8ActualPinState;
-            psPresentHnd->bStateChanged = true;
+            if (psHandle->u32FbReadStarted == 0U)
+            {
+                psHandle->u32FbReadStarted = u32ms;
+            }
+            else if (
+                (psPresentHnd->u8State == 1 &&
+                 (u32ms - psHandle->u32FbReadStarted) > psGlobals->u32SwitchFbOnDelayMs) ||
+                (psPresentHnd->u8State == 0 && (u32ms - psHandle->u32FbReadStarted) > psGlobals->u32SwitchFbOffDelayMs))
+            {
+                psHandle->u32FbReadStarted = 0U;
+                psPresentHnd->u8State = u8ActualPinState;
+                psPresentHnd->bStateChanged = false;
+                psBaseHandle->psVtab->vSendState(psBaseHandle);
+            }
         }
+        else if (psHandle->u32FbReadStarted != 0)
+            psHandle->u32FbReadStarted = 0U;
     }
 
     if (psPresentHnd->bStateChanged != true)

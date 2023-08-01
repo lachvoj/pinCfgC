@@ -173,18 +173,13 @@ static void ExtCfgReceiver_vCommandFunction(EXTCFGRECEIVER_HANDLE_T *psHandle, c
 
 static void ExtCfgReceiver_vSendBigMessage(EXTCFGRECEIVER_HANDLE_T *psHandle, char *pcBigMsg, size_t szMsgSize)
 {
-    uint8_t u8i;
-    uint8_t u8MyMsgsCount = szMsgSize / (PINCFG_TXTSTATE_MAX_SZ_D - 1);
+    uint8_t u8MyMsgsCount = szMsgSize / PINCFG_TXTSTATE_MAX_SZ_D;
+    if ((szMsgSize % PINCFG_TXTSTATE_MAX_SZ_D) > 0)
+        u8MyMsgsCount++;
 
-    psHandle->acState[PINCFG_TXTSTATE_MAX_SZ_D - 1] = '\0';
-    for (u8i = 0; u8i < u8MyMsgsCount; u8i++)
+    for (uint8_t u8i = 0; u8i < u8MyMsgsCount; u8i++)
     {
-        memcpy(psHandle->acState, (pcBigMsg + (u8i * (PINCFG_TXTSTATE_MAX_SZ_D - 1))), (PINCFG_TXTSTATE_MAX_SZ_D - 1));
-        ExtCfgReceiver_vSetState(psHandle, EXTCFGRECEIVER_CUSTOM_E, NULL, true);
-    }
-    if ((szMsgSize % (PINCFG_TXTSTATE_MAX_SZ_D - 1)) > 0)
-    {
-        strcpy(psHandle->acState, (pcBigMsg + (u8i * (PINCFG_TXTSTATE_MAX_SZ_D - 1))));
-        ExtCfgReceiver_vSetState(psHandle, EXTCFGRECEIVER_CUSTOM_E, NULL, true);
+        psGlobals->sPincfgIf.bSend(psHandle->sLooPre.u8Id, V_TEXT, pcBigMsg + (u8i * PINCFG_TXTSTATE_MAX_SZ_D));
+        psGlobals->sPincfgIf.vWait(PINCFG_LONG_MESSAGE_DELAY_MS_D);
     }
 }
