@@ -24,7 +24,8 @@ typedef enum
 {
     TRIGGER_A_TOGGLE_E = 0,
     TRIGGER_A_UP_E,
-    TRIGGER_A_DOWN_E
+    TRIGGER_A_DOWN_E,
+    TRIGGER_A_TIMED,
 } TRIGGER_ACTION_T;
 
 typedef struct

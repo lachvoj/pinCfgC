@@ -51,6 +51,7 @@ static const char *_s[] = {
     "SwitchImpulseDurationMs:",           // SWIDMS_E
     "SwitchFbOnDelayMs:",                 // SWFNDMS_E
     "SwitchFbOffDelayMs:",                // SWFFDMS_E
+    "SwitchTimedActionAdditionMs:",       // SWTAAMS_E
     "Out of memory.",                     // OOM_E
     "Init failed!",                       // INITF_E
     "Invalid pin number.",                // IPN_E
@@ -81,6 +82,7 @@ typedef enum
     SWIDMS_E,
     SWFNDMS_E,
     SWFFDMS_E,
+    SWTAAMS_E,
     OOM_E,
     INITF_E,
     IPN_E,
@@ -162,6 +164,7 @@ PINCFG_RESULT_T PinCfgCsv_eInit(uint8_t *pu8Memory, size_t szMemorySize, PINCFG_
     Switch_SetImpulseDurationMs(PINCFG_SWITCH_IMPULSE_DURATIN_MS_D);
     Switch_SetFbOnDelayMs(PINCFG_SWITCH_FB_ON_DELAY_MS_D);
     Switch_SetFbOffDelayMs(PINCFG_SWITCH_FB_OFF_DELAY_MS_D);
+    Switch_vSetTimedActionAdditionMs(PINCFG_TIMED_ACTION_ADDITION_MS_D);
 
     return PINCFG_OK_E;
 }
@@ -945,6 +948,7 @@ static inline PINCFG_RESULT_T PinCfgCsv_ParseGlobalConfigItems(PINCFG_PARSE_SUBF
     break;
     case 'N': eItem = SWFNDMS_E; break;
     case 'F': eItem = SWFFDMS_E; break;
+    case 'A': eItem = SWTAAMS_E; break;
     default:
     {
         psPrms->pcOutStringLast += snprintf(
@@ -1002,7 +1006,7 @@ static inline PINCFG_RESULT_T PinCfgCsv_ParseGlobalConfigItems(PINCFG_PARSE_SUBF
     case SWIDMS_E: Switch_SetImpulseDurationMs(u32ParsedNumber); break;
     case SWFNDMS_E: Switch_SetFbOnDelayMs(u32ParsedNumber); break;
     case SWFFDMS_E: Switch_SetFbOffDelayMs(u32ParsedNumber); break;
-
+    case SWTAAMS_E: Switch_vSetTimedActionAdditionMs(u32ParsedNumber); break;
     default: break;
     }
 

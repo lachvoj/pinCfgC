@@ -1,4 +1,5 @@
 #include "Globals.h"
+#include "Switch.h"
 #include "Trigger.h"
 
 TRIGGER_RESULT_T Trigger_eInit(
@@ -35,19 +36,14 @@ void Trigger_vEventHandle(PINSUBSCRIBER_IF_T *psBaseHandle, uint8_t u8EventType,
 
     for (uint8_t i = 0; i < psHandle->u8SwActCount; i++)
     {
-        if (psHandle->pasSwAct[i].eAction == TRIGGER_A_TOGGLE_E)
+        MYSENSORSPRESENT_HANDLE_T *psMyPresentHnd = (MYSENSORSPRESENT_HANDLE_T *)psHandle->pasSwAct[i].psSwitchHnd;
+        switch (psHandle->pasSwAct[i].eAction)
         {
-            MySensorsPresent_vToggle((MYSENSORSPRESENT_HANDLE_T *)(psHandle->pasSwAct[i].psSwitchHnd));
-        }
-        else if (psHandle->pasSwAct[i].eAction == TRIGGER_A_UP_E)
-        {
-            MySensorsPresent_vSetState(
-                (MYSENSORSPRESENT_HANDLE_T *)(psHandle->pasSwAct[i].psSwitchHnd), (uint8_t) true, true);
-        }
-        else if (psHandle->pasSwAct[i].eAction == TRIGGER_A_DOWN_E)
-        {
-            MySensorsPresent_vSetState(
-                (MYSENSORSPRESENT_HANDLE_T *)(psHandle->pasSwAct[i].psSwitchHnd), (uint8_t) false, true);
+        case TRIGGER_A_TOGGLE_E: MySensorsPresent_vToggle(psMyPresentHnd); break;
+        case TRIGGER_A_UP_E: MySensorsPresent_vSetState(psMyPresentHnd, (uint8_t) true, true); break;
+        case TRIGGER_A_DOWN_E: MySensorsPresent_vSetState(psMyPresentHnd, (uint8_t) false, true); break;
+        case TRIGGER_A_TIMED: Switch_vTimedAction(psHandle->pasSwAct[i].psSwitchHnd); break;
+        default: break;
         }
     }
 }

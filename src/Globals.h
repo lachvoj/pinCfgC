@@ -28,6 +28,7 @@ typedef struct
     uint32_t u32SwitchImpulseDurationMs;
     uint32_t u32SwitchFbOnDelayMs;
     uint32_t u32SwitchFbOffDelayMs;
+    uint32_t u32SwitchTimedActionAdditionMs;
     // cfg buf
     char acCfgBuf[PINCFG_CONFIG_MAX_SZ_D];
 } GLOBALS_HANDLE_T;

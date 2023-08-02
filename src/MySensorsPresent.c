@@ -38,6 +38,11 @@ void MySensorsPresent_vSetState(MYSENSORSPRESENT_HANDLE_T *psHandle, uint8_t u8S
         ((LOOPRE_T *)psHandle)->psVtab->vSendState((LOOPRE_T *)psHandle);
 }
 
+uint8_t MySensorsPresent_u8GetState(MYSENSORSPRESENT_HANDLE_T *psHandle)
+{
+    return psHandle->u8State;
+}
+
 void MySensorsPresent_vToggle(MYSENSORSPRESENT_HANDLE_T *psHandle)
 {
     if (psHandle->u8State == (uint8_t) false)

@@ -469,7 +469,8 @@ void test_vGlobalConfig(void)
         "CM,620/"
         "CR,150/"
         "CN,1000/"
-        "CF,30000",
+        "CF,30000/"
+        "CA,1966080/",
         PINCFG_CONFIG_MAX_SZ_D);
 
     eParseResult = PinCfgCsv_eParse(&szMemoryRequired, acOutStr, (uint16_t)OUT_STR_MAX_LEN_D, false, true);
@@ -555,6 +556,21 @@ void test_vGlobalConfig(void)
     eParseResult = PinCfgCsv_eParse(&szMemoryRequired, acOutStr, (uint16_t)OUT_STR_MAX_LEN_D, false, true);
 
     TEST_ASSERT_EQUAL_STRING("W:L:0:SwitchFbOffDelayMs:Invalid number.\nI: Configuration parsed.\n", acOutStr);
+
+    // Switch timed action time addition
+    memset(acOutStr, 0, OUT_STR_MAX_LEN_D);
+    strncpy(PinCfgCsv_pcGetCfgBuf(), "CA", PINCFG_CONFIG_MAX_SZ_D);
+
+    eParseResult = PinCfgCsv_eParse(&szMemoryRequired, acOutStr, (uint16_t)OUT_STR_MAX_LEN_D, false, true);
+
+    TEST_ASSERT_EQUAL_STRING("W:L:0:Not defined or invalid format.\nI: Configuration parsed.\n", acOutStr);
+
+    memset(acOutStr, 0, OUT_STR_MAX_LEN_D);
+    strncpy(PinCfgCsv_pcGetCfgBuf(), "CA,abc", PINCFG_CONFIG_MAX_SZ_D);
+
+    eParseResult = PinCfgCsv_eParse(&szMemoryRequired, acOutStr, (uint16_t)OUT_STR_MAX_LEN_D, false, true);
+
+    TEST_ASSERT_EQUAL_STRING("W:L:0:SwitchTimedActionAdditionMs:Invalid number.\nI: Configuration parsed.\n", acOutStr);
 }
 
 #ifndef ARDUINO

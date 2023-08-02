@@ -27,6 +27,7 @@ MYSENSORSPRESENT_RESULT_T MySensorsPresent_eInit(
     STRING_POINT_T *psName,
     uint8_t u8Id);
 void MySensorsPresent_vSetState(MYSENSORSPRESENT_HANDLE_T *psHandle, uint8_t u8State, bool bSendStatus);
+uint8_t MySensorsPresent_u8GetState(MYSENSORSPRESENT_HANDLE_T *psHandle);
 void MySensorsPresent_vToggle(MYSENSORSPRESENT_HANDLE_T *psHandle);
 
 // presentable IF

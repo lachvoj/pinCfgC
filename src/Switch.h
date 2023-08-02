@@ -34,6 +34,7 @@ typedef struct
 void Switch_SetImpulseDurationMs(uint32_t u32ImpulseDuration);
 void Switch_SetFbOnDelayMs(uint32_t u32FbOnDelayMs);
 void Switch_SetFbOffDelayMs(uint32_t u32FbOffDelayMs);
+void Switch_vSetTimedActionAdditionMs(uint32_t u32TimedActionAdditionMs);
 
 SWITCH_RESULT_T Switch_eInit(
     SWITCH_HANDLE_T *psHandle,
@@ -45,5 +46,7 @@ SWITCH_RESULT_T Switch_eInit(
 
 // loopable IF
 void Switch_vLoop(LOOPRE_T *psBaseHandle, uint32_t u32ms);
+
+void Switch_vTimedAction(SWITCH_HANDLE_T *psHandle);
 
 #endif // SWITCH_H

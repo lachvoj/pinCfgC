@@ -60,11 +60,7 @@ bool bSend(const uint8_t u8Id, const uint8_t variableType, const void *pvMessage
     mock_bSend_variableType = variableType;
     if (variableType == V_TEXT)
     {
-        size_t szMsgLength = strlen(pvMessage);
-        char acBuf[PINCFG_TXTSTATE_MAX_SZ_D + 1];
-        acBuf[PINCFG_TXTSTATE_MAX_SZ_D] = '\0';
-
-        if (szMsgLength > PINCFG_TXTSTATE_MAX_SZ_D)
+        if (strlen(pvMessage) > PINCFG_TXTSTATE_MAX_SZ_D)
         {
             size_t szDestMsg = strlen(mock_bSend_acMessage);
             memcpy(mock_bSend_acMessage + szDestMsg, pvMessage, PINCFG_TXTSTATE_MAX_SZ_D);

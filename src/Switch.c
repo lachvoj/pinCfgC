@@ -4,8 +4,8 @@
 #include <ArduinoMock.h>
 #endif
 
-#include "Switch.h"
 #include "Globals.h"
+#include "Switch.h"
 
 static inline void Switch_vWritePin(SWITCH_HANDLE_T *psHandle, uint8_t u8Value)
 {
@@ -27,6 +27,11 @@ void Switch_SetFbOffDelayMs(uint32_t u32FbOffDelayMs)
     psGlobals->u32SwitchFbOffDelayMs = u32FbOffDelayMs;
 }
 
+void Switch_vSetTimedActionAdditionMs(uint32_t u32TimedActionAdditionMs)
+{
+    psGlobals->u32SwitchTimedActionAdditionMs = u32TimedActionAdditionMs;
+}
+
 SWITCH_RESULT_T Switch_eInit(
     SWITCH_HANDLE_T *psHandle,
     STRING_POINT_T *sName,
@@ -38,8 +43,7 @@ SWITCH_RESULT_T Switch_eInit(
     if (psHandle == NULL)
         return SWITCH_NULLPTR_ERROR_E;
 
-    if (MySensorsPresent_eInit(&psHandle->sMySenPresent, sName, u8Id) !=
-        MYSENSORSPRESENT_OK_E)
+    if (MySensorsPresent_eInit(&psHandle->sMySenPresent, sName, u8Id) != MYSENSORSPRESENT_OK_E)
     {
         return SWITCH_SUBINIT_ERROR_E;
     }
@@ -116,4 +120,16 @@ void Switch_vLoop(LOOPRE_T *psBaseHandle, uint32_t u32ms)
             Switch_vWritePin(psHandle, (uint8_t) false);
         }
     }
+}
+
+void Switch_vTimedAction(SWITCH_HANDLE_T *psHandle)
+{
+    psHandle->eMode = SWITCH_IMPULSE_E;
+    if (psHandle->u32ImpulseStarted == 0)
+    {
+        psHandle->u32ImpulseDuration = psGlobals->u32SwitchTimedActionAdditionMs;
+        MySensorsPresent_vSetState((MYSENSORSPRESENT_HANDLE_T *)psHandle, 1, true);
+    }
+    else
+        psHandle->u32ImpulseDuration += psGlobals->u32SwitchTimedActionAdditionMs;
 }
