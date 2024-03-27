@@ -1,8 +1,9 @@
 
 SHELL = /bin/sh
 
-# MYSENSORDIR=../../../MySensors
-# ARDUINODIR=$(MYSENSORDIR)/hal/architecture/Linux/drivers/core
+MYSENSORDIR=../../MySensors
+ARDUINODIR=$(MYSENSORDIR)/hal/architecture/Linux/drivers/core
+MYSENSORSINC=-I$(MYSENSORDIR) -I$(MYSENSORDIR)/core -I$(MYSENSORDIR)/hal/architecture/Linux/drivers/core
 BUILDDIR=build
 OBJDIR=$(BUILDDIR)
 SRCDIR=../src
@@ -10,15 +11,23 @@ UNITY_ROOT=Unity
 MOCKDIR=mocks
 
 CC = gcc
-SRC = $(wildcard $(SRCDIR)/*.c)
-OBJ = $(patsubst $(SRCDIR)/%.c, $(OBJDIR)/%.o, $(SRC))
-MOCKS = $(wildcard $(MOCKDIR)/*.c)
-OBJ += $(patsubst $(MOCKDIR)/%.c, $(OBJDIR)/%.o, $(MOCKS))
-OBJ += $(UNITY_ROOT)/src/unity.o
-OBJ += $(OBJDIR)/test.o 
+CPP = g++
+
+SRCC = $(wildcard $(SRCDIR)/*.c)
+OBJC = $(patsubst $(SRCDIR)/%.c, $(OBJDIR)/%.o, $(SRCC))
+MOCKSC = $(wildcard $(MOCKDIR)/*.c)
+OBJC += $(patsubst $(MOCKDIR)/%.c, $(OBJDIR)/%.o, $(MOCKSC))
+OBJC += $(UNITY_ROOT)/src/unity.o
+OBJC += $(OBJDIR)/test.o
+
+SRCCPP = $(wildcard $(SRCDIR)/*.cpp)
+OBJCPP = $(patsubst $(SRCDIR)/%.cpp, $(OBJDIR)/%.o, $(SRCCPP))
+MOCKSCPP = $(wildcard $(MOCKDIR)/*.cpp)
+OBJCPP += $(patsubst $(MOCKDIR)/%.cpp, $(OBJDIR)/%.o, $(MOCKSCPP))
+
 EXE = test
 
-INCLUDES = -I. -I../include -I$(MOCKDIR) -I$(UNITY_ROOT)/src -I$(SRCDIR)#-I$(MYSENSORDIR) -I$(ARDUINODIR)
+INCLUDES = -I. -I../include -I$(MOCKDIR) -I$(UNITY_ROOT)/src -I$(SRCDIR) $(MYSENSORSINC)
 LIBS = -lm
 
 CFLAGS = -g -Wstack-usage=200 #-D'F(x)=((const char*)x)'
@@ -32,10 +41,9 @@ CFLAGS += -Wunreachable-code
 CFLAGS += -Winit-self
 CFLAGS += -Wmissing-field-initializers
 CFLAGS += -Wno-unknown-pragmas
-CFLAGS += -Wstrict-prototypes
-CFLAGS += -Wundef
-CFLAGS += -Wold-style-definition
 CFLAGS += -Wno-misleading-indentation
+CFLAGS += -DUNIT_TEST
+#CFLAGS += -fsanitize=vptr -fsanitize=address -static-libasan
 
 .PHONY: all
 
@@ -58,8 +66,8 @@ $(BUILDDIR):
 	mkdir -p $@
 
 # link
-$(EXE): $(OBJ) | $(BUILDDIR)
-	$(CC) $(CFLAGS) $(INCLUDES) -o $(OBJDIR)/$@ $(OBJ) $(LIBS)
+$(EXE): $(OBJC) $(OBJCPP) | $(BUILDDIR)
+	$(CC) $(CFLAGS) $(INCLUDES) -o $(OBJDIR)/$@ $(OBJC) $(OBJCPP) $(LIBS)
 
 # compile
 $(OBJDIR)/%.o: $(SRCDIR)/%.c | $(BUILDDIR)
@@ -73,3 +81,10 @@ $(OBJDIR)/%.o: $(UNITY_ROOT)/src/%.c | $(BUILDDIR)
 
 $(OBJDIR)/%.o: %.c | $(BUILDDIR)
 	$(CC) $(CFLAGS) $(INCLUDES) -c $^ -o $@
+
+$(OBJDIR)/%.o: $(SRCDIR)/%.cpp | $(BUILDDIR)
+	$(CPP) $(CFLAGS) $(INCLUDES) -c $^ -o $@
+
+$(OBJDIR)/%.o: $(MOCKDIR)/%.cpp | $(BUILDDIR)
+	$(CPP) $(CFLAGS) $(INCLUDES) -c $^ -o $@
+

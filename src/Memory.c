@@ -5,22 +5,37 @@
 #include "Memory.h"
 #include "Types.h"
 
-GLOBALS_HANDLE_T *psGlobals;
+typedef struct MEMORY_TEMP_ITEM_S
+{
+    union
+    {
+        struct
+        {
+            uint16_t u16AlocatedSize;
+            bool bFree;
+        };
+        void *pvAligment;
+    };
+} MEMORY_TEMP_ITEM_T;
+
+GLOBALS_T *psGlobals;
 
 MEMORY_RESULT_T Memory_eInit(uint8_t *pu8Memory, size_t szSize)
 {
     if (pu8Memory == NULL)
         return MEMORY_ERROR_E;
 
-    if (szSize < sizeof(GLOBALS_HANDLE_T))
+    if (szSize < sizeof(GLOBALS_T))
         return MEMORY_INSUFFICIENT_SIZE_ERROR_E;
 
-    psGlobals = (GLOBALS_HANDLE_T *)pu8Memory;
-    psGlobals->pvMemEnd = (char *)(pu8Memory + ((szSize - 1) / sizeof(char *)) * sizeof(char *));
-    psGlobals->pvMemNext = (char *)(pu8Memory + sizeof(GLOBALS_HANDLE_T));
+    psGlobals = (GLOBALS_T *)pu8Memory;
+    psGlobals->pvMemEnd = (char *)(pu8Memory + ((szSize - 1) / sizeof(void *)) * sizeof(void *));
+    psGlobals->pvMemNext = (char *)(pu8Memory + sizeof(GLOBALS_T));
     psGlobals->pvMemTempEnd = psGlobals->pvMemNext;
-    psGlobals->psLoopablesFirst = NULL;
-    psGlobals->psPresentablesFirst = NULL;
+    psGlobals->u8LoopablesCount = 0;
+    psGlobals->u8PresentablesCount = 0;
+    psGlobals->ppsLoopables = NULL;
+    psGlobals->ppsPresentables = NULL;
     psGlobals->bMemIsInitialized = true;
 
     Memory_vTempFree();
@@ -30,10 +45,10 @@ MEMORY_RESULT_T Memory_eInit(uint8_t *pu8Memory, size_t szSize)
 
 MEMORY_RESULT_T Memory_eReset(void)
 {
-    psGlobals->pvMemNext = ((char *)psGlobals) + sizeof(GLOBALS_HANDLE_T);
+    psGlobals->pvMemNext = ((char *)psGlobals) + sizeof(GLOBALS_T);
     psGlobals->pvMemTempEnd = psGlobals->pvMemNext;
-    psGlobals->psLoopablesFirst = NULL;
-    psGlobals->psPresentablesFirst = NULL;
+    psGlobals->ppsLoopables = NULL;
+    psGlobals->ppsPresentables = NULL;
     Memory_vTempFree();
 
     return MEMORY_OK_E;
@@ -49,10 +64,10 @@ void *Memory_vpAlloc(size_t szSize)
         return pvResult;
     }
 
-    size_t szToAlloc = (szSize + sizeof(char *) - 1) / sizeof(char *);
+    size_t szToAlloc = (szSize + sizeof(void *) - 1) / sizeof(void *);
 
     char *pvNextAfterAllocation = (char *)((char **)psGlobals->pvMemNext + szToAlloc);
-    if (pvNextAfterAllocation > psGlobals->pvMemTempEnd)
+    if (pvNextAfterAllocation > psGlobals->pvMemTempEnd || pvNextAfterAllocation < psGlobals->pvMemNext)
     {
         errno = ENOMEM;
         return pvResult;
@@ -72,18 +87,20 @@ void *Memory_vpTempAlloc(size_t szSize)
         return NULL;
     }
 
-    size_t szToAlloc = (szSize + sizeof(char *) - 1) / sizeof(char *);
+    size_t szToAlloc = (szSize + sizeof(MEMORY_TEMP_ITEM_T) + sizeof(void *) - 1) / sizeof(void *);
 
     char *pvTempEndAfterAllocation = (char *)((char **)psGlobals->pvMemTempEnd - szToAlloc);
-    if (pvTempEndAfterAllocation < psGlobals->pvMemNext)
+    if (pvTempEndAfterAllocation < psGlobals->pvMemNext || pvTempEndAfterAllocation >= psGlobals->pvMemTempEnd)
     {
         errno = ENOMEM;
         return NULL;
     }
 
     psGlobals->pvMemTempEnd = pvTempEndAfterAllocation;
+    ((MEMORY_TEMP_ITEM_T *)pvTempEndAfterAllocation)->u16AlocatedSize = szToAlloc * sizeof(void *);
+    ((MEMORY_TEMP_ITEM_T *)pvTempEndAfterAllocation)->bFree = false;
 
-    return (void *)pvTempEndAfterAllocation;
+    return (void *)((char *)pvTempEndAfterAllocation + sizeof(MEMORY_TEMP_ITEM_T));
 }
 
 void Memory_vTempFree(void)
@@ -98,16 +115,28 @@ void Memory_vTempFree(void)
     }
 }
 
-void Memory_vTempFreeSize(size_t szSize)
+void Memory_vTempFreePt(void *pvToFree)
 {
     if (psGlobals->bMemIsInitialized)
     {
-        size_t szToFree = (szSize + sizeof(char *) - 1) / sizeof(char *);
-        char *pvTempEndAfterFree = (char *)((char **)psGlobals->pvMemTempEnd + szToFree);
-        if (pvTempEndAfterFree > psGlobals->pvMemEnd)
-            psGlobals->pvMemTempEnd = psGlobals->pvMemEnd;
-        else
-            psGlobals->pvMemTempEnd = pvTempEndAfterFree;
+        MEMORY_TEMP_ITEM_T *psTempItem = (MEMORY_TEMP_ITEM_T *)((char *)pvToFree - sizeof(MEMORY_TEMP_ITEM_T));
+        // memset(pvToFree, 0x00U, psTempItem->u16AlocatedSize - sizeof(MEMORY_TEMP_ITEM_T));
+        psTempItem->bFree = true;
+        if (psGlobals->pvMemTempEnd == (char *)psTempItem)
+        {
+            while (psTempItem->bFree == true)
+            {
+                size_t szTmp = (size_t)(0x0000FFFFU & psTempItem->u16AlocatedSize);
+                memset(psGlobals->pvMemTempEnd, 0x00U, szTmp);
+                psGlobals->pvMemTempEnd = psGlobals->pvMemTempEnd + szTmp;
+                if (psGlobals->pvMemTempEnd >= psGlobals->pvMemEnd)
+                {
+                    psGlobals->pvMemTempEnd = psGlobals->pvMemEnd;
+                    break;
+                }
+                psTempItem = (MEMORY_TEMP_ITEM_T *)psGlobals->pvMemTempEnd;
+            }
+        }
     }
 }
 

@@ -5,7 +5,7 @@
 
 #include "Types.h"
 
-typedef struct
+typedef struct STRING_POINT_S
 {
     const char *pcStrStart;
     size_t szLen;
@@ -30,6 +30,8 @@ void PinCfgStr_vGetSplitElemByIndex(STRING_POINT_T *psStrPt, const char cDelimit
 PINCFG_STR_RESULT_T PinCfgStr_eAtoU8(const STRING_POINT_T *psStrPt, uint8_t *pu8Out);
 
 PINCFG_STR_RESULT_T PinCfgStr_eAtoU32(const STRING_POINT_T *psStrPt, uint32_t *pu32Out);
+
+PINCFG_STR_RESULT_T PinCfgStr_eAtoFloat(const STRING_POINT_T *psStrPt, float *fOut);
 
 PINCFG_STR_RESULT_T PinCfgStr_eSplitStrPt(
     const STRING_POINT_T *psInStrPt,

@@ -98,6 +98,23 @@ PINCFG_STR_RESULT_T PinCfgStr_eAtoU32(const STRING_POINT_T *psStrPt, uint32_t *p
     return PINCFG_STR_OK_E;
 }
 
+PINCFG_STR_RESULT_T PinCfgStr_eAtoFloat(const STRING_POINT_T *psStrPt, float *fOut)
+{
+    if (psStrPt->szLen > 10)
+        return PINCFG_STR_INSUFFICIENT_BUFFER_E;
+
+    char cTempStr[11];
+    char *endptr = NULL;
+    memcpy(cTempStr, psStrPt->pcStrStart, psStrPt->szLen);
+    cTempStr[psStrPt->szLen] = '\0';
+    errno = 0;
+    *fOut = strtof(cTempStr, &endptr);
+    if (cTempStr == endptr || errno != 0)
+        return PINCFG_STR_UNSUCCESSFULL_CONVERSION_E;
+
+    return PINCFG_STR_OK_E;
+}
+
 PINCFG_STR_RESULT_T PinCfgStr_eSplitStrPt(
     const STRING_POINT_T *psInStrPt,
     const char cDelimiter,
@@ -187,16 +204,15 @@ PINCFG_STR_RESULT_T PinCfgStr_eRemoveStartingWith(STRING_POINT_T *pasStrPts, uin
 
 const char *PinCfgCsv_pcStrstrpt(const char *pcHaystack, const STRING_POINT_T *psNeedle)
 {
-    char *pcTempStr = (char *)Memory_vpTempAlloc(psNeedle->szLen + 3);
-    if (pcTempStr != NULL)
-    {
-        memcpy((void *)(pcTempStr + 1), (void *)psNeedle->pcStrStart, psNeedle->szLen);
-        pcTempStr[0] = PINCFG_VALUE_SEPARATOR_D;
-        pcTempStr[psNeedle->szLen + 1] = PINCFG_VALUE_SEPARATOR_D;
-        pcTempStr[psNeedle->szLen + 2] = '\0';
-        pcTempStr = strstr(pcHaystack, pcTempStr);
+    size_t szHaystackLength = strlen(pcHaystack);
+    for (size_t i = 0; i < szHaystackLength; i++) {
+        if (i + psNeedle->szLen > szHaystackLength) {
+            return NULL;
+        }
+        if (strncmp(&pcHaystack[i], psNeedle->pcStrStart, psNeedle->szLen) == 0) {
+            return &pcHaystack[i];
+        }
     }
-    Memory_vTempFreeSize(psNeedle->szLen + 3);
 
-    return pcTempStr;
+    return NULL;
 }

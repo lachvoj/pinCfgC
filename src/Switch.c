@@ -1,13 +1,8 @@
-#ifdef ARDUINO
-#include <Arduino.h>
-#else
-#include <ArduinoMock.h>
-#endif
-
 #include "Globals.h"
+#include "MySensorsWrapper.h"
 #include "Switch.h"
 
-static inline void Switch_vWritePin(SWITCH_HANDLE_T *psHandle, uint8_t u8Value)
+static inline void Switch_vWritePin(SWITCH_T *psHandle, uint8_t u8Value)
 {
     digitalWrite(psHandle->u8OutPin, u8Value);
 }
@@ -32,8 +27,20 @@ void Switch_vSetTimedActionAdditionMs(uint32_t u32TimedActionAdditionMs)
     psGlobals->u32SwitchTimedActionAdditionMs = u32TimedActionAdditionMs;
 }
 
+void Switch_vInitType(PRESENTABLE_VTAB_T *psVtab)
+{
+    psVtab->eVType = V_STATUS;
+    psVtab->eSType = S_BINARY;
+    psVtab->vReceive = Presentable_vRcvMessage;
+
+    Switch_SetImpulseDurationMs(PINCFG_SWITCH_IMPULSE_DURATIN_MS_D);
+    Switch_SetFbOnDelayMs(PINCFG_SWITCH_FB_ON_DELAY_MS_D);
+    Switch_SetFbOffDelayMs(PINCFG_SWITCH_FB_OFF_DELAY_MS_D);
+    Switch_vSetTimedActionAdditionMs(PINCFG_TIMED_ACTION_ADDITION_MS_D);
+}
+
 SWITCH_RESULT_T Switch_eInit(
-    SWITCH_HANDLE_T *psHandle,
+    SWITCH_T *psHandle,
     STRING_POINT_T *sName,
     uint8_t u8Id,
     SWITCH_MODE_T eMode,
@@ -43,13 +50,16 @@ SWITCH_RESULT_T Switch_eInit(
     if (psHandle == NULL)
         return SWITCH_NULLPTR_ERROR_E;
 
-    if (MySensorsPresent_eInit(&psHandle->sMySenPresent, sName, u8Id) != MYSENSORSPRESENT_OK_E)
+    if (Presentable_eInit(&psHandle->sPresentable, sName, u8Id) != PRESENTABLE_OK_E)
     {
         return SWITCH_SUBINIT_ERROR_E;
     }
 
     // vtab init
-    psHandle->sMySenPresent.sLooPre.psVtab = &psGlobals->sSwitchVTab;
+    psHandle->sPresentable.psVtab = &psGlobals->sSwitchPrVTab;
+
+    // loopable init
+    psHandle->sLoopable.vLoop = Switch_vLoop;
 
     psHandle->eMode = eMode;
     psHandle->u8OutPin = u8OutPin;
@@ -69,42 +79,42 @@ SWITCH_RESULT_T Switch_eInit(
     return SWITCH_OK_E;
 }
 
-void Switch_vLoop(LOOPRE_T *psBaseHandle, uint32_t u32ms)
+void Switch_vLoop(LOOPABLE_T *psLoopableHandle, uint32_t u32ms)
 {
-    MYSENSORSPRESENT_HANDLE_T *psPresentHnd = (MYSENSORSPRESENT_HANDLE_T *)psBaseHandle;
-    SWITCH_HANDLE_T *psHandle = (SWITCH_HANDLE_T *)psBaseHandle;
+    SWITCH_T *psHandle = (SWITCH_T *)(((uint8_t *)psLoopableHandle) - sizeof(PRESENTABLE_T));
 
     if (psHandle->u8FbPin != 0)
     {
         uint8_t u8ActualPinState = (uint8_t)!digitalRead(psHandle->u8FbPin);
-        if (psPresentHnd->u8State != u8ActualPinState)
+        if (psHandle->sPresentable.u8State != u8ActualPinState)
         {
             if (psHandle->u32FbReadStarted == 0U)
             {
                 psHandle->u32FbReadStarted = u32ms;
             }
             else if (
-                (psPresentHnd->u8State == 1 &&
+                (psHandle->sPresentable.u8State == 1 &&
                  (u32ms - psHandle->u32FbReadStarted) > psGlobals->u32SwitchFbOnDelayMs) ||
-                (psPresentHnd->u8State == 0 && (u32ms - psHandle->u32FbReadStarted) > psGlobals->u32SwitchFbOffDelayMs))
+                (psHandle->sPresentable.u8State == 0 &&
+                 (u32ms - psHandle->u32FbReadStarted) > psGlobals->u32SwitchFbOffDelayMs))
             {
                 psHandle->u32FbReadStarted = 0U;
-                psPresentHnd->u8State = u8ActualPinState;
-                psPresentHnd->bStateChanged = false;
-                psBaseHandle->psVtab->vSendState(psBaseHandle);
+                psHandle->sPresentable.u8State = u8ActualPinState;
+                psHandle->sPresentable.bStateChanged = false;
+                Presentable_vSendState((PRESENTABLE_T *)psHandle);
             }
         }
         else if (psHandle->u32FbReadStarted != 0)
             psHandle->u32FbReadStarted = 0U;
     }
 
-    if (psPresentHnd->bStateChanged != true)
+    if (psHandle->sPresentable.bStateChanged != true)
         return;
 
     if (psHandle->eMode == SWITCH_CLASSIC_E)
     {
-        psPresentHnd->bStateChanged = false;
-        Switch_vWritePin(psHandle, psPresentHnd->u8State);
+        psHandle->sPresentable.bStateChanged = false;
+        Switch_vWritePin(psHandle, psHandle->sPresentable.u8State);
     }
     else if (psHandle->eMode == SWITCH_IMPULSE_E)
     {
@@ -116,19 +126,19 @@ void Switch_vLoop(LOOPRE_T *psBaseHandle, uint32_t u32ms)
         else if ((u32ms - psHandle->u32ImpulseStarted) >= psHandle->u32ImpulseDuration)
         {
             psHandle->u32ImpulseStarted = 0U;
-            psPresentHnd->bStateChanged = false;
+            psHandle->sPresentable.bStateChanged = false;
             Switch_vWritePin(psHandle, (uint8_t) false);
         }
     }
 }
 
-void Switch_vTimedAction(SWITCH_HANDLE_T *psHandle)
+void Switch_vTimedAction(SWITCH_T *psHandle)
 {
     psHandle->eMode = SWITCH_IMPULSE_E;
     if (psHandle->u32ImpulseStarted == 0)
     {
         psHandle->u32ImpulseDuration = psGlobals->u32SwitchTimedActionAdditionMs;
-        MySensorsPresent_vSetState((MYSENSORSPRESENT_HANDLE_T *)psHandle, 1, true);
+        Presentable_vSetState((PRESENTABLE_T *)psHandle, 1, true);
     }
     else
         psHandle->u32ImpulseDuration += psGlobals->u32SwitchTimedActionAdditionMs;

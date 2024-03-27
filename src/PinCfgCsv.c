@@ -1,28 +1,24 @@
-#ifdef ARDUINO
-#include <Arduino.h>
-#else
-#include <ArduinoMock.h>
-#endif
 #include <stdarg.h>
 #include <stdio.h>
 #include <string.h>
 
-#include "ExtCfgReceiver.h"
+#include "CPUTemp.h"
+#include "Cli.h"
 #include "Globals.h"
 #include "InPin.h"
+#include "LinkedList.h"
 #include "Memory.h"
+#include "MySensorsWrapper.h"
+#include "PersistentConfigiration.h"
 #include "PinCfgCsv.h"
 #include "PinCfgStr.h"
 #include "Switch.h"
 #include "Trigger.h"
 
-typedef struct
+typedef struct PINCFG_PARSE_SUBFN_PARAMS_S
 {
-    size_t *pszMemoryRequired;
+    PINCFG_PARSE_PARAMS_T *psParsePrms;
     size_t pcOutStringLast;
-    char *pcOutString;
-    const uint16_t u16OutStrMaxLen;
-    const bool bValidate;
     uint16_t u16LinesProcessed;
     uint8_t u8LineItemsLen;
     uint8_t u8PresentablesCount;
@@ -42,10 +38,11 @@ static const char *_s[] = {
     "E:L:",                               // EL_E
     "W:L:",                               // WL_E
     "I:",                                 // I_E
-    "ExtCfgReceiver:",                    // ECR_E
+    "CLI:",                               // ECR_E
     "Switch:",                            // SW_E
     "InPin:",                             // IP_E
     "Trigger:",                           // TRG_E
+    "CPUTemperature",                     // CPUTMP_E
     "InPinDebounceMs:",                   // IPDMS_E
     "InPinMulticlickMaxDelayMs:",         // IPMCDMS_E
     "SwitchImpulseDurationMs:",           // SWIDMS_E
@@ -61,7 +58,7 @@ static const char *_s[] = {
     "Switch name not found."              // SNNF_E
 };
 
-typedef enum
+typedef enum PINCFG_PARSE_STRINGS_E
 {
     FSS_E = 0,
     FSSS_E,
@@ -77,6 +74,7 @@ typedef enum
     SW_E,
     IP_E,
     TRG_E,
+    CPUTMP_E,
     IPDMS_E,
     IPMCDMS_E,
     SWIDMS_E,
@@ -92,23 +90,114 @@ typedef enum
     SNNF_E
 } PINCFG_PARSE_STRINGS_T;
 
-static inline PINCFG_RESULT_T PinCfgCsv_CreateExternalCfgReceiver(
-    PINCFG_PARSE_SUBFN_PARAMS_T *psPrms,
-    bool bRemoteConfigEnabled);
+static inline PINCFG_RESULT_T PinCfgCsv_CreateCli(PINCFG_PARSE_SUBFN_PARAMS_T *psPrms);
 static inline PINCFG_RESULT_T PinCfgCsv_ParseSwitch(PINCFG_PARSE_SUBFN_PARAMS_T *psPrms);
 static inline PINCFG_RESULT_T PinCfgCsv_ParseInpins(PINCFG_PARSE_SUBFN_PARAMS_T *psPrms);
 static inline PINCFG_RESULT_T PinCfgCsv_ParseTriggers(PINCFG_PARSE_SUBFN_PARAMS_T *psPrms);
+static inline PINCFG_RESULT_T PinCfgCsv_ParseTemperatureSensors(PINCFG_PARSE_SUBFN_PARAMS_T *psPrms);
+static inline PINCFG_RESULT_T PinCfgCsv_ParseCPUTemperatureSensor(PINCFG_PARSE_SUBFN_PARAMS_T *psPrms);
 
 static inline PINCFG_RESULT_T PinCfgCsv_ParseGlobalConfigItems(PINCFG_PARSE_SUBFN_PARAMS_T *psPrms);
 
-static inline LOOPRE_T *PinCfgCsv_psFindInPresentablesById(uint8_t u8Id);
-static inline void PinCfgCsv_vAddToLoopables(LOOPRE_T *psLoopable);
-static LOOPRE_T *PinCfgCsv_psFindInLoopablesByName(const STRING_POINT_T *psName);
-static inline void PinCfgCsv_vAddToPresentables(LOOPRE_T *psLoopable);
+static inline PRESENTABLE_T *PinCfgCsv_psFindInPresentablesById(uint8_t u8Id);
+static PRESENTABLE_T *PinCfgCsv_psFindInTempPresentablesByName(const STRING_POINT_T *psName);
 static inline size_t szGetAllocatedSize(size_t szToAllocate);
 static inline size_t szGetSize(size_t a, size_t b);
 
-PINCFG_RESULT_T PinCfgCsv_eInit(uint8_t *pu8Memory, size_t szMemorySize, PINCFG_IF_T *psPincfgIf)
+PINCFG_RESULT_T PinCfgCsv_eAddToTempLoopables(LOOPABLE_T *psLoopable);
+PINCFG_RESULT_T PinCfgCsv_eAddToTempPresentables(PRESENTABLE_T *psPresentable);
+PINCFG_RESULT_T PinCfgCsv_eLinkedListToArray(LINKEDLIST_ITEM_T **ppsFirst, uint8_t *u8Count);
+
+#ifdef MY_CONTROLLER_HA
+static bool bInitialValueSent = false;
+#endif
+
+void PinCfgCsv_vLoop(uint32_t u32ms)
+{
+#ifdef MY_CONTROLLER_HA
+    if (!bInitialValueSent)
+    {
+        bool bAllPresented = true;
+        for (uint8_t i = 0; i < psGlobals->u8PresentablesCount; i++)
+        {
+            PRESENTABLE_T *psCurrent = psGlobals->ppsPresentables[i];
+            if (!psCurrent->bStatePresented)
+            {
+                Presentable_vPresentState(psCurrent);
+                vWait(50);
+                bAllPresented = false;
+            }
+        }
+        if (bAllPresented)
+            bInitialValueSent = true;
+    }
+#endif
+
+    for (uint8_t i = 0; i < psGlobals->u8LoopablesCount; i++)
+    {
+        LOOPABLE_T *psCurrent = psGlobals->ppsLoopables[i];
+        psCurrent->vLoop(psCurrent, u32ms);
+    }
+}
+
+void PinCfgCsv_vPresentation(void)
+{
+    for (uint8_t i = 0; i < psGlobals->u8PresentablesCount; i++)
+    {
+        Presentable_vPresent(psGlobals->ppsPresentables[i]);
+        vWait(50);
+    }
+}
+
+void PinCfgCfg_vReceive(const uint8_t u8Id, const void *pvMessage)
+{
+    if (psGlobals == NULL)
+        return;
+
+    PRESENTABLE_T *psReceiver = PinCfgCsv_psFindInPresentablesById(u8Id);
+    if (psReceiver != NULL)
+        psReceiver->psVtab->vReceive(psReceiver, pvMessage);
+}
+
+PINCFG_RESULT_T PinCfgCsv_eValidate(
+    const char *pcConfig,
+    size_t *pszMemoryRequired,
+    char *pcOutString,
+    const uint16_t u16OutStrMaxLen)
+{
+    PINCFG_PARSE_PARAMS_T sParseParams = {
+        .pcConfig = pcConfig,
+        .eAddToLoopables = NULL,
+        .eAddToPresentables = NULL,
+        .pszMemoryRequired = pszMemoryRequired,
+        .pcOutString = pcOutString,
+        .u16OutStrMaxLen = u16OutStrMaxLen,
+        .bValidate = true};
+
+    return PinCfgCsv_eParse(&sParseParams);
+}
+
+PINCFG_RESULT_T PinCfgCsv_eInitMemoryAndTypes(uint8_t *pu8Memory, size_t szMemorySize)
+{
+    if (Memory_eInit(pu8Memory, szMemorySize) != MEMORY_OK_E)
+    {
+        return PINCFG_MEMORYINIT_ERROR_E;
+    }
+
+    // V tabs init
+    // extcfgreceiver
+    Cli_vInitType(&(psGlobals->sCliPrVTab));
+    // switch
+    Switch_vInitType(&(psGlobals->sSwitchPrVTab));
+    // inpin
+    InPin_vInitType(&(psGlobals->sInPinPrVTab));
+    // CPUTemp
+    CPUTemp_vInitType(&(psGlobals->sCpuTempPrVTab));
+
+    return PINCFG_OK_E;
+}
+
+PINCFG_RESULT_T PinCfgCsv_eInit(uint8_t *pu8Memory, size_t szMemorySize, const char *pcDefaultCfg)
 {
     // Memory init
     if (pu8Memory == NULL)
@@ -116,80 +205,71 @@ PINCFG_RESULT_T PinCfgCsv_eInit(uint8_t *pu8Memory, size_t szMemorySize, PINCFG_
         return PINCFG_NULLPTR_ERROR_E;
     }
 
-    if (Memory_eInit(pu8Memory, szMemorySize) != MEMORY_OK_E)
+    PINCFG_RESULT_T eMemAndTypesInitRes = PinCfgCsv_eInitMemoryAndTypes(pu8Memory, szMemorySize);
+    if (eMemAndTypesInitRes != PINCFG_OK_E)
+        return eMemAndTypesInitRes;
+
+    PINCFG_PARSE_PARAMS_T sParseParams = {
+        .pcConfig = NULL,
+        .eAddToLoopables = PinCfgCsv_eAddToTempLoopables,
+        .eAddToPresentables = PinCfgCsv_eAddToTempPresentables,
+        .pszMemoryRequired = NULL,
+        .pcOutString = NULL,
+        .u16OutStrMaxLen = 0,
+        .bValidate = false};
+
+    PINCFG_RESULT_T ePincfgResult = PINCFG_ERROR_E;
+    size_t szCfg;
+    PERCFG_RESULT_T eLoadResult = PersistentCfg_eGetSize((uint16_t *)&szCfg);
+    if (eLoadResult == PERCFG_OK_E)
     {
-        return PINCFG_MEMORYINIT_ERROR_E;
+        sParseParams.pcConfig = (char *)Memory_vpTempAlloc(szCfg);
+        if (sParseParams.pcConfig == NULL)
+            return ePincfgResult;
+
+        eLoadResult = PersistentCfg_eLoad(sParseParams.pcConfig);
     }
 
-    memset((void *)psGlobals->acCfgBuf, 0, PINCFG_CONFIG_MAX_SZ_D);
+    if (eLoadResult == PERCFG_OK_E)
+        ePincfgResult = PinCfgCsv_eParse(&sParseParams);
 
-    // pincfg if init
-    if (psPincfgIf == NULL || psPincfgIf->bRequest == NULL || psPincfgIf->bPresent == NULL ||
-        psPincfgIf->bSend == NULL || psPincfgIf->u8SaveCfg == NULL)
+    if (pcDefaultCfg != NULL &&
+        (eLoadResult != PERCFG_OK_E || (ePincfgResult != PINCFG_OK_E && ePincfgResult != PINCFG_WARNINGS_E)))
     {
-        return PINCFG_IF_NULLPTR_ERROR_E;
+        eMemAndTypesInitRes = PinCfgCsv_eInitMemoryAndTypes(pu8Memory, szMemorySize);
+        if (eMemAndTypesInitRes != PINCFG_OK_E)
+            return eMemAndTypesInitRes;
+
+        sParseParams.pcConfig = pcDefaultCfg;
+        ePincfgResult = PinCfgCsv_eParse(&sParseParams);
+        // char sOutStr[1000];
+        // ePincfgResult = PinCfgCsv_eParse(NULL, sOutStr, sizeof(sOutStr), false);
     }
-    psGlobals->sPincfgIf = *psPincfgIf;
 
-    // V tabs init
-    // extcfgreceiver
-    psGlobals->sExtCfgReceiverVTab.u8VType = V_TEXT;
-    psGlobals->sExtCfgReceiverVTab.u8SType = S_INFO;
-    psGlobals->sExtCfgReceiverVTab.vLoop = NULL;
-    psGlobals->sExtCfgReceiverVTab.vReceive = ExtCfgReceiver_vRcvMessage;
-    psGlobals->sExtCfgReceiverVTab.vPresent = MySensorsPresent_vPresent;
-    psGlobals->sExtCfgReceiverVTab.vPresentState = MySensorsPresent_vPresentState;
-    psGlobals->sExtCfgReceiverVTab.vSendState = MySensorsPresent_vSendState;
-    // switch
-    psGlobals->sSwitchVTab.u8VType = V_STATUS;
-    psGlobals->sSwitchVTab.u8SType = S_BINARY;
-    psGlobals->sSwitchVTab.vLoop = Switch_vLoop;
-    psGlobals->sSwitchVTab.vReceive = MySensorsPresent_vRcvMessage;
-    psGlobals->sSwitchVTab.vPresent = MySensorsPresent_vPresent;
-    psGlobals->sSwitchVTab.vPresentState = MySensorsPresent_vPresentState;
-    psGlobals->sSwitchVTab.vSendState = MySensorsPresent_vSendState;
-    // inpin
-    psGlobals->sInPinVTab.u8VType = V_TRIPPED;
-    psGlobals->sInPinVTab.u8SType = S_DOOR;
-    psGlobals->sInPinVTab.vLoop = InPin_vLoop;
-    psGlobals->sInPinVTab.vReceive = InPin_vRcvMessage;
-    psGlobals->sInPinVTab.vPresent = MySensorsPresent_vPresent;
-    psGlobals->sInPinVTab.vPresentState = MySensorsPresent_vPresentState;
-    psGlobals->sInPinVTab.vSendState = MySensorsPresent_vSendState;
-    // trigger
-    psGlobals->sTriggerVTab.vEventHandle = Trigger_vEventHandle;
+    if (ePincfgResult == PINCFG_OK_E)
+    {
+        // move loopables and presentables from linked list to array
+        ePincfgResult = PinCfgCsv_eLinkedListToArray(
+            (LINKEDLIST_ITEM_T **)&(psGlobals->ppsLoopables), &(psGlobals->u8LoopablesCount));
+        if (ePincfgResult != PINCFG_OK_E)
+            return ePincfgResult;
 
-    InPin_SetDebounceMs(PINCFG_DEBOUNCE_MS_D);
-    InPin_SetMulticlickMaxDelayMs(PINCFG_MULTICLICK_MAX_DELAY_MS_D);
-    Switch_SetImpulseDurationMs(PINCFG_SWITCH_IMPULSE_DURATIN_MS_D);
-    Switch_SetFbOnDelayMs(PINCFG_SWITCH_FB_ON_DELAY_MS_D);
-    Switch_SetFbOffDelayMs(PINCFG_SWITCH_FB_OFF_DELAY_MS_D);
-    Switch_vSetTimedActionAdditionMs(PINCFG_TIMED_ACTION_ADDITION_MS_D);
+        ePincfgResult = PinCfgCsv_eLinkedListToArray(
+            (LINKEDLIST_ITEM_T **)&(psGlobals->ppsPresentables), &(psGlobals->u8PresentablesCount));
+        if (ePincfgResult != PINCFG_OK_E)
+            return ePincfgResult;
+    }
 
-    return PINCFG_OK_E;
+    Memory_vTempFree();
+
+    return ePincfgResult;
 }
 
-char *PinCfgCsv_pcGetCfgBuf(void)
-{
-    if (psGlobals == NULL)
-        return NULL;
-
-    return psGlobals->acCfgBuf;
-}
-
-PINCFG_RESULT_T PinCfgCsv_eParse(
-    size_t *pszMemoryRequired,
-    char *pcOutString,
-    const uint16_t u16OutStrMaxLen,
-    const bool bValidate,
-    const bool bRemoteConfigEnabled)
+PINCFG_RESULT_T PinCfgCsv_eParse(PINCFG_PARSE_PARAMS_T *psParams)
 {
     PINCFG_PARSE_SUBFN_PARAMS_T sPrms = {
-        .pszMemoryRequired = pszMemoryRequired,
+        .psParsePrms = psParams,
         .pcOutStringLast = 0,
-        .pcOutString = pcOutString,
-        .u16OutStrMaxLen = u16OutStrMaxLen,
-        .bValidate = bValidate,
         .u16LinesProcessed = 0,
         .u8LineItemsLen = 0,
         .u8PresentablesCount = 0,
@@ -198,30 +278,39 @@ PINCFG_RESULT_T PinCfgCsv_eParse(
     uint16_t u16LinesLen;
     PINCFG_RESULT_T eResult = PINCFG_ERROR_E;
 
-    if (sPrms.pszMemoryRequired != NULL)
-        *(sPrms.pszMemoryRequired) = 0;
+    if (sPrms.psParsePrms->pszMemoryRequired != NULL)
+        *(sPrms.psParsePrms->pszMemoryRequired) = 0;
 
-    if (pcOutString != NULL && u16OutStrMaxLen > 0)
-        pcOutString[0] = '\0';
+    if (sPrms.psParsePrms->pcOutString != NULL && sPrms.psParsePrms->u16OutStrMaxLen > 0)
+        sPrms.psParsePrms->pcOutString[0] = '\0';
 
-    eResult = PinCfgCsv_CreateExternalCfgReceiver(&sPrms, bRemoteConfigEnabled);
+    eResult = PinCfgCsv_CreateCli(&sPrms);
     if (eResult != PINCFG_OK_E)
         return eResult;
 
-    PinCfgStr_vInitStrPoint(&(sPrms.sTempStrPt), psGlobals->acCfgBuf, strlen(psGlobals->acCfgBuf));
+    if (psParams->pcConfig == NULL)
+    {
+        sPrms.pcOutStringLast += snprintf(
+            (char *)(sPrms.psParsePrms->pcOutString + sPrms.pcOutStringLast),
+            szGetSize(sPrms.psParsePrms->u16OutStrMaxLen, sPrms.pcOutStringLast),
+            "E:Invalid format. NULL configuration.\n");
+        return PINCFG_NULLPTR_ERROR_E;
+    }
+
+    PinCfgStr_vInitStrPoint(&(sPrms.sTempStrPt), psParams->pcConfig, strlen(psParams->pcConfig));
     u16LinesLen = (uint8_t)PinCfgStr_szGetSplitCount(&(sPrms.sTempStrPt), PINCFG_LINE_SEPARATOR_D);
     if (u16LinesLen == 1 && sPrms.sTempStrPt.szLen == 0)
     {
         sPrms.pcOutStringLast += snprintf(
-            (char *)(pcOutString + sPrms.pcOutStringLast),
-            szGetSize(u16OutStrMaxLen, sPrms.pcOutStringLast),
+            (char *)(sPrms.psParsePrms->pcOutString + sPrms.pcOutStringLast),
+            szGetSize(sPrms.psParsePrms->u16OutStrMaxLen, sPrms.pcOutStringLast),
             "E:Invalid format. Empty configuration.\n");
         return PINCFG_ERROR_E;
     }
 
     for (sPrms.u16LinesProcessed = 0; sPrms.u16LinesProcessed < u16LinesLen; sPrms.u16LinesProcessed++)
     {
-        PinCfgStr_vInitStrPoint(&(sPrms.sLine), psGlobals->acCfgBuf, strlen(psGlobals->acCfgBuf));
+        PinCfgStr_vInitStrPoint(&(sPrms.sLine), psParams->pcConfig, strlen(psParams->pcConfig));
         PinCfgStr_vGetSplitElemByIndex(&(sPrms.sLine), PINCFG_LINE_SEPARATOR_D, sPrms.u16LinesProcessed);
         if (sPrms.sLine.pcStrStart[0] == '#') // comment continue
             continue;
@@ -230,8 +319,8 @@ PINCFG_RESULT_T PinCfgCsv_eParse(
         if (sPrms.u8LineItemsLen < 2)
         {
             sPrms.pcOutStringLast += snprintf(
-                (char *)(pcOutString + sPrms.pcOutStringLast),
-                szGetSize(u16OutStrMaxLen, sPrms.pcOutStringLast),
+                (char *)(sPrms.psParsePrms->pcOutString + sPrms.pcOutStringLast),
+                szGetSize(sPrms.psParsePrms->u16OutStrMaxLen, sPrms.pcOutStringLast),
                 _s[FSDS_E],
                 _s[WL_E],
                 sPrms.u16LinesProcessed,
@@ -263,6 +352,13 @@ PINCFG_RESULT_T PinCfgCsv_eParse(
             if (eResult != PINCFG_OK_E)
                 return eResult;
         }
+        // temperature
+        else if (sPrms.sTempStrPt.szLen == 2 && sPrms.sTempStrPt.pcStrStart[0] == 'T')
+        {
+            eResult = PinCfgCsv_ParseTemperatureSensors(&sPrms);
+            if (eResult != PINCFG_OK_E)
+                return eResult;
+        }
         // global config items
         else if (sPrms.sTempStrPt.szLen == 2 && sPrms.sTempStrPt.pcStrStart[0] == 'C')
         {
@@ -273,8 +369,8 @@ PINCFG_RESULT_T PinCfgCsv_eParse(
         else
         {
             sPrms.pcOutStringLast += snprintf(
-                (char *)(pcOutString + sPrms.pcOutStringLast),
-                szGetSize(u16OutStrMaxLen, sPrms.pcOutStringLast),
+                (char *)(sPrms.psParsePrms->pcOutString + sPrms.pcOutStringLast),
+                szGetSize(sPrms.psParsePrms->u16OutStrMaxLen, sPrms.pcOutStringLast),
                 _s[FSDS_E],
                 _s[EL_E],
                 sPrms.u16LinesProcessed,
@@ -283,8 +379,8 @@ PINCFG_RESULT_T PinCfgCsv_eParse(
         }
     }
     sPrms.pcOutStringLast += snprintf(
-        (char *)(pcOutString + sPrms.pcOutStringLast),
-        szGetSize(u16OutStrMaxLen, sPrms.pcOutStringLast),
+        (char *)(sPrms.psParsePrms->pcOutString + sPrms.pcOutStringLast),
+        szGetSize(sPrms.psParsePrms->u16OutStrMaxLen, sPrms.pcOutStringLast),
         "I: Configuration parsed.\n");
 
     if (sPrms.szNumberOfWarnings > 0)
@@ -293,92 +389,21 @@ PINCFG_RESULT_T PinCfgCsv_eParse(
     return PINCFG_OK_E;
 }
 
-PINCFG_RESULT_T PinCfgCsv_eValidate(size_t *pszMemoryRequired, char *pcOutString, const uint16_t u16OutStrMaxLen)
-{
-    return PinCfgCsv_eParse(pszMemoryRequired, pcOutString, u16OutStrMaxLen, true, false);
-}
-
-#ifdef MY_CONTROLLER_HA
-static bool bInitialValueSent = false;
-#endif
-
-void PinCfgCsv_vLoop(uint32_t u32ms)
-{
-    if (psGlobals == NULL)
-        return;
-
-#ifdef MY_CONTROLLER_HA
-    if (!bInitialValueSent)
-    {
-        LOOPRE_T *psCurrent = psGlobals->psPresentablesFirst;
-        bool bAllPresented = true;
-        while (psCurrent != NULL)
-        {
-            if (!psCurrent->bStatePresented)
-            {
-                psCurrent->psVtab->vPresentState(psCurrent);
-                psGlobals->sPincfgIf.vWait(50);
-                bAllPresented = false;
-            }
-            psCurrent = psCurrent->psNextPresentable;
-        }
-        if (bAllPresented)
-            bInitialValueSent = true;
-    }
-#endif
-
-    LOOPRE_T *psCurrent = psGlobals->psLoopablesFirst;
-    while (psCurrent != NULL)
-    {
-        psCurrent->psVtab->vLoop(psCurrent, u32ms);
-        psCurrent = psCurrent->psNextLoopable;
-    }
-}
-
-void PinCfgCsv_vPresentation(void)
-{
-    if (psGlobals == NULL)
-        return;
-
-    LOOPRE_T *psCurrent = psGlobals->psPresentablesFirst;
-    while (psCurrent != NULL)
-    {
-        psCurrent->psVtab->vPresent(psCurrent);
-        psCurrent = psCurrent->psNextPresentable;
-        psGlobals->sPincfgIf.vWait(50);
-    }
-}
-
-void PinCfgCfg_vReceive(const uint8_t u8Id, const void *pvMessage)
-{
-    if (psGlobals == NULL)
-        return;
-
-    LOOPRE_T *psReceiver = PinCfgCsv_psFindInPresentablesById(u8Id);
-    if (psReceiver != NULL)
-    {
-        psReceiver->psVtab->vReceive(psReceiver, pvMessage);
-    }
-}
-
 // private
-static inline PINCFG_RESULT_T PinCfgCsv_CreateExternalCfgReceiver(
-    PINCFG_PARSE_SUBFN_PARAMS_T *psPrms,
-    bool bRemoteConfigEnabled)
+static inline PINCFG_RESULT_T PinCfgCsv_CreateCli(PINCFG_PARSE_SUBFN_PARAMS_T *psPrms)
 {
     if (psPrms == NULL)
         return PINCFG_NULLPTR_ERROR_E;
 
-    if (!psPrms->bValidate && bRemoteConfigEnabled)
+    if (!psPrms->psParsePrms->bValidate)
     {
-        EXTCFGRECEIVER_HANDLE_T *psCfgRcvrHnd =
-            (EXTCFGRECEIVER_HANDLE_T *)Memory_vpAlloc(sizeof(EXTCFGRECEIVER_HANDLE_T));
+        CLI_T *psCfgRcvrHnd = (CLI_T *)Memory_vpAlloc(sizeof(CLI_T));
         if (psCfgRcvrHnd == NULL)
         {
             Memory_eReset();
             psPrms->pcOutStringLast += snprintf(
-                (char *)(psPrms->pcOutString + psPrms->pcOutStringLast),
-                szGetSize(psPrms->u16OutStrMaxLen, psPrms->pcOutStringLast),
+                (char *)(psPrms->psParsePrms->pcOutString + psPrms->pcOutStringLast),
+                szGetSize(psPrms->psParsePrms->u16OutStrMaxLen, psPrms->pcOutStringLast),
                 _s[FSSS_E],
                 _s[E_E],
                 _s[ECR_E],
@@ -387,16 +412,16 @@ static inline PINCFG_RESULT_T PinCfgCsv_CreateExternalCfgReceiver(
             return PINCFG_OUTOFMEMORY_ERROR_E;
         }
 
-        if (ExtCfgReceiver_eInit(psCfgRcvrHnd, psPrms->u8PresentablesCount) == EXTCFGRECEIVER_OK_E)
+        if (Cli_eInit(psCfgRcvrHnd, psPrms->u8PresentablesCount) == CLI_OK_E)
         {
-            PinCfgCsv_vAddToPresentables((LOOPRE_T *)psCfgRcvrHnd);
+            PinCfgCsv_eAddToTempPresentables((PRESENTABLE_T *)psCfgRcvrHnd);
             psPrms->u8PresentablesCount++;
         }
         else
         {
             psPrms->pcOutStringLast += snprintf(
-                (char *)(psPrms->pcOutString + psPrms->pcOutStringLast),
-                szGetSize(psPrms->u16OutStrMaxLen, psPrms->pcOutStringLast),
+                (char *)(psPrms->psParsePrms->pcOutString + psPrms->pcOutStringLast),
+                szGetSize(psPrms->psParsePrms->u16OutStrMaxLen, psPrms->pcOutStringLast),
                 _s[FSSS_E],
                 _s[W_E],
                 _s[ECR_E],
@@ -404,8 +429,8 @@ static inline PINCFG_RESULT_T PinCfgCsv_CreateExternalCfgReceiver(
             psPrms->szNumberOfWarnings++;
         }
     }
-    if (psPrms->pszMemoryRequired != NULL)
-        *psPrms->pszMemoryRequired += szGetAllocatedSize(sizeof(EXTCFGRECEIVER_HANDLE_T));
+    if (psPrms->psParsePrms->pszMemoryRequired != NULL)
+        *(psPrms->psParsePrms->pszMemoryRequired) += szGetAllocatedSize(sizeof(CLI_T));
 
     return PINCFG_OK_E;
 }
@@ -425,8 +450,8 @@ static inline PINCFG_RESULT_T PinCfgCsv_ParseSwitch(PINCFG_PARSE_SUBFN_PARAMS_T 
     if (psPrms->u8LineItemsLen < 3)
     {
         psPrms->pcOutStringLast += snprintf(
-            (char *)(psPrms->pcOutString + psPrms->pcOutStringLast),
-            szGetSize(psPrms->u16OutStrMaxLen, psPrms->pcOutStringLast),
+            (char *)(psPrms->psParsePrms->pcOutString + psPrms->pcOutStringLast),
+            szGetSize(psPrms->psParsePrms->u16OutStrMaxLen, psPrms->pcOutStringLast),
             _s[FSDSSS_E],
             _s[WL_E],
             psPrms->u16LinesProcessed,
@@ -457,8 +482,8 @@ static inline PINCFG_RESULT_T PinCfgCsv_ParseSwitch(PINCFG_PARSE_SUBFN_PARAMS_T 
         if (!bIsDefinitionValid)
         {
             psPrms->pcOutStringLast += snprintf(
-                (char *)(psPrms->pcOutString + psPrms->pcOutStringLast),
-                szGetSize(psPrms->u16OutStrMaxLen, psPrms->pcOutStringLast),
+                (char *)(psPrms->psParsePrms->pcOutString + psPrms->pcOutStringLast),
+                szGetSize(psPrms->psParsePrms->u16OutStrMaxLen, psPrms->pcOutStringLast),
                 _s[FSDSS_E],
                 _s[WL_E],
                 psPrms->u16LinesProcessed,
@@ -473,8 +498,8 @@ static inline PINCFG_RESULT_T PinCfgCsv_ParseSwitch(PINCFG_PARSE_SUBFN_PARAMS_T 
     if (u8Count != 0)
     {
         psPrms->pcOutStringLast += snprintf(
-            (char *)(psPrms->pcOutString + psPrms->pcOutStringLast),
-            szGetSize(psPrms->u16OutStrMaxLen, psPrms->pcOutStringLast),
+            (char *)(psPrms->psParsePrms->pcOutString + psPrms->pcOutStringLast),
+            szGetSize(psPrms->psParsePrms->u16OutStrMaxLen, psPrms->pcOutStringLast),
             _s[FSDSSS_E],
             _s[WL_E],
             psPrms->u16LinesProcessed,
@@ -495,8 +520,8 @@ static inline PINCFG_RESULT_T PinCfgCsv_ParseSwitch(PINCFG_PARSE_SUBFN_PARAMS_T 
         if (PinCfgStr_eAtoU8(&(psPrms->sTempStrPt), &u8Pin) != PINCFG_STR_OK_E)
         {
             psPrms->pcOutStringLast += snprintf(
-                (char *)(psPrms->pcOutString + psPrms->pcOutStringLast),
-                szGetSize(psPrms->u16OutStrMaxLen, psPrms->pcOutStringLast),
+                (char *)(psPrms->psParsePrms->pcOutString + psPrms->pcOutStringLast),
+                szGetSize(psPrms->psParsePrms->u16OutStrMaxLen, psPrms->pcOutStringLast),
                 _s[FSDSS_E],
                 _s[WL_E],
                 psPrms->u16LinesProcessed,
@@ -513,8 +538,8 @@ static inline PINCFG_RESULT_T PinCfgCsv_ParseSwitch(PINCFG_PARSE_SUBFN_PARAMS_T 
             if (PinCfgStr_eAtoU8(&(psPrms->sTempStrPt), &u8FbPin) != PINCFG_STR_OK_E)
             {
                 psPrms->pcOutStringLast += snprintf(
-                    (char *)(psPrms->pcOutString + psPrms->pcOutStringLast),
-                    szGetSize(psPrms->u16OutStrMaxLen, psPrms->pcOutStringLast),
+                    (char *)(psPrms->psParsePrms->pcOutString + psPrms->pcOutStringLast),
+                    szGetSize(psPrms->psParsePrms->u16OutStrMaxLen, psPrms->pcOutStringLast),
                     _s[FSDSS_E],
                     _s[WL_E],
                     psPrms->u16LinesProcessed,
@@ -527,16 +552,20 @@ static inline PINCFG_RESULT_T PinCfgCsv_ParseSwitch(PINCFG_PARSE_SUBFN_PARAMS_T 
 
         psPrms->sTempStrPt = psPrms->sLine;
         PinCfgStr_vGetSplitElemByIndex(&(psPrms->sTempStrPt), PINCFG_VALUE_SEPARATOR_D, u8Offset);
-        if (!psPrms->bValidate)
+
+        SWITCH_T *psSwitchHnd = NULL;
+        bool bInitOk = true;
+        if (!psPrms->psParsePrms->bValidate)
         {
-            SWITCH_HANDLE_T *psSwitchHnd = (SWITCH_HANDLE_T *)Memory_vpAlloc(sizeof(SWITCH_HANDLE_T));
-            if (psSwitchHnd == NULL)
+            psSwitchHnd = (SWITCH_T *)Memory_vpAlloc(sizeof(SWITCH_T));
+            bInitOk = (psSwitchHnd != NULL);
+            if (!bInitOk)
             {
                 Memory_eReset();
 
                 psPrms->pcOutStringLast += snprintf(
-                    (char *)(psPrms->pcOutString + psPrms->pcOutStringLast),
-                    szGetSize(psPrms->u16OutStrMaxLen, psPrms->pcOutStringLast),
+                    (char *)(psPrms->psParsePrms->pcOutString + psPrms->pcOutStringLast),
+                    szGetSize(psPrms->psParsePrms->u16OutStrMaxLen, psPrms->pcOutStringLast),
                     _s[FSDSS_E],
                     _s[EL_E],
                     psPrms->u16LinesProcessed,
@@ -546,30 +575,39 @@ static inline PINCFG_RESULT_T PinCfgCsv_ParseSwitch(PINCFG_PARSE_SUBFN_PARAMS_T 
                 return PINCFG_OUTOFMEMORY_ERROR_E;
             }
 
-            if (Switch_eInit(psSwitchHnd, &(psPrms->sTempStrPt), psPrms->u8PresentablesCount, eMode, u8Pin, u8FbPin) ==
-                SWITCH_OK_E)
-            {
-                PinCfgCsv_vAddToPresentables((LOOPRE_T *)psSwitchHnd);
-                psPrms->u8PresentablesCount++;
-                PinCfgCsv_vAddToLoopables((LOOPRE_T *)psSwitchHnd);
-            }
-            else
-            {
-                psPrms->pcOutStringLast += snprintf(
-                    (char *)(psPrms->pcOutString + psPrms->pcOutStringLast),
-                    szGetSize(psPrms->u16OutStrMaxLen, psPrms->pcOutStringLast),
-                    _s[FSDSS_E],
-                    _s[WL_E],
-                    psPrms->u16LinesProcessed,
-                    _s[SW_E],
-                    _s[INITF_E]);
-                psPrms->szNumberOfWarnings++;
-            }
+            bInitOk =
+                (Switch_eInit(psSwitchHnd, &(psPrms->sTempStrPt), psPrms->u8PresentablesCount, eMode, u8Pin, u8FbPin) ==
+                 SWITCH_OK_E);
         }
 
-        if (psPrms->pszMemoryRequired != NULL)
-            *(psPrms->pszMemoryRequired) +=
-                szGetAllocatedSize(sizeof(SWITCH_HANDLE_T)) + szGetAllocatedSize(psPrms->sTempStrPt.szLen + 1);
+        if (bInitOk && psPrms->psParsePrms->eAddToPresentables != NULL)
+        {
+            if (psPrms->psParsePrms->eAddToPresentables((PRESENTABLE_T *)psSwitchHnd) == PINCFG_OK_E)
+            {
+                bInitOk = true;
+                psPrms->u8PresentablesCount++;
+            }
+        }
+        if (bInitOk && psPrms->psParsePrms->eAddToLoopables != NULL)
+        {
+            bInitOk = (psPrms->psParsePrms->eAddToLoopables(&(psSwitchHnd->sLoopable)) == PINCFG_OK_E);
+        }
+        if (!bInitOk)
+        {
+            psPrms->pcOutStringLast += snprintf(
+                (char *)(psPrms->psParsePrms->pcOutString + psPrms->pcOutStringLast),
+                szGetSize(psPrms->psParsePrms->u16OutStrMaxLen, psPrms->pcOutStringLast),
+                _s[FSDSS_E],
+                _s[WL_E],
+                psPrms->u16LinesProcessed,
+                _s[SW_E],
+                _s[INITF_E]);
+            psPrms->szNumberOfWarnings++;
+        }
+
+        if (psPrms->psParsePrms->pszMemoryRequired != NULL)
+            *(psPrms->psParsePrms->pszMemoryRequired) +=
+                szGetAllocatedSize(sizeof(SWITCH_T)) + szGetAllocatedSize(psPrms->sTempStrPt.szLen + 1);
     }
 
     return PINCFG_OK_E;
@@ -585,8 +623,8 @@ static inline PINCFG_RESULT_T PinCfgCsv_ParseInpins(PINCFG_PARSE_SUBFN_PARAMS_T 
     if (psPrms->u8LineItemsLen < 3)
     {
         psPrms->pcOutStringLast += snprintf(
-            (char *)(psPrms->pcOutString + psPrms->pcOutStringLast),
-            szGetSize(psPrms->u16OutStrMaxLen, psPrms->pcOutStringLast),
+            (char *)(psPrms->psParsePrms->pcOutString + psPrms->pcOutStringLast),
+            szGetSize(psPrms->psParsePrms->u16OutStrMaxLen, psPrms->pcOutStringLast),
             _s[FSDSSS_E],
             _s[WL_E],
             psPrms->u16LinesProcessed,
@@ -602,8 +640,8 @@ static inline PINCFG_RESULT_T PinCfgCsv_ParseInpins(PINCFG_PARSE_SUBFN_PARAMS_T 
     if (u8Count != 0)
     {
         psPrms->pcOutStringLast += snprintf(
-            (char *)(psPrms->pcOutString + psPrms->pcOutStringLast),
-            szGetSize(psPrms->u16OutStrMaxLen, psPrms->pcOutStringLast),
+            (char *)(psPrms->psParsePrms->pcOutString + psPrms->pcOutStringLast),
+            szGetSize(psPrms->psParsePrms->u16OutStrMaxLen, psPrms->pcOutStringLast),
             _s[FSDSSS_E],
             _s[WL_E],
             psPrms->u16LinesProcessed,
@@ -623,8 +661,8 @@ static inline PINCFG_RESULT_T PinCfgCsv_ParseInpins(PINCFG_PARSE_SUBFN_PARAMS_T 
         if (PinCfgStr_eAtoU8(&(psPrms->sTempStrPt), &u8Pin) != PINCFG_STR_OK_E || u8Pin < 1)
         {
             psPrms->pcOutStringLast += snprintf(
-                (char *)(psPrms->pcOutString + psPrms->pcOutStringLast),
-                szGetSize(psPrms->u16OutStrMaxLen, psPrms->pcOutStringLast),
+                (char *)(psPrms->psParsePrms->pcOutString + psPrms->pcOutStringLast),
+                szGetSize(psPrms->psParsePrms->u16OutStrMaxLen, psPrms->pcOutStringLast),
                 _s[FSDSS_E],
                 _s[WL_E],
                 psPrms->u16LinesProcessed,
@@ -636,15 +674,19 @@ static inline PINCFG_RESULT_T PinCfgCsv_ParseInpins(PINCFG_PARSE_SUBFN_PARAMS_T 
 
         psPrms->sTempStrPt = psPrms->sLine;
         PinCfgStr_vGetSplitElemByIndex(&(psPrms->sTempStrPt), PINCFG_VALUE_SEPARATOR_D, u8Offset);
-        if (!psPrms->bValidate)
+
+        INPIN_T *psInPinHnd = NULL;
+        bool bInitOk = true;
+        if (!psPrms->psParsePrms->bValidate)
         {
-            INPIN_HANDLE_T *psInPinHnd = (INPIN_HANDLE_T *)Memory_vpAlloc(sizeof(INPIN_HANDLE_T));
-            if (psInPinHnd == NULL)
+            psInPinHnd = (INPIN_T *)Memory_vpAlloc(sizeof(INPIN_T));
+            bInitOk = (psInPinHnd != NULL);
+            if (!bInitOk)
             {
                 Memory_eReset();
                 psPrms->pcOutStringLast += snprintf(
-                    (char *)(psPrms->pcOutString + psPrms->pcOutStringLast),
-                    szGetSize(psPrms->u16OutStrMaxLen, psPrms->pcOutStringLast),
+                    (char *)(psPrms->psParsePrms->pcOutString + psPrms->pcOutStringLast),
+                    szGetSize(psPrms->psParsePrms->u16OutStrMaxLen, psPrms->pcOutStringLast),
                     _s[FSDSS_E],
                     _s[EL_E],
                     psPrms->u16LinesProcessed,
@@ -654,29 +696,38 @@ static inline PINCFG_RESULT_T PinCfgCsv_ParseInpins(PINCFG_PARSE_SUBFN_PARAMS_T 
                 return PINCFG_OUTOFMEMORY_ERROR_E;
             }
 
-            if (InPin_eInit(psInPinHnd, &(psPrms->sTempStrPt), psPrms->u8PresentablesCount, u8Pin) == INPIN_OK_E)
-            {
-                PinCfgCsv_vAddToPresentables((LOOPRE_T *)psInPinHnd);
-                psPrms->u8PresentablesCount++;
-                PinCfgCsv_vAddToLoopables((LOOPRE_T *)psInPinHnd);
-            }
-            else
-            {
-                psPrms->pcOutStringLast += snprintf(
-                    (char *)(psPrms->pcOutString + psPrms->pcOutStringLast),
-                    szGetSize(psPrms->u16OutStrMaxLen, psPrms->pcOutStringLast),
-                    _s[FSDSS_E],
-                    _s[WL_E],
-                    psPrms->u16LinesProcessed,
-                    _s[IP_E],
-                    _s[INITF_E]);
-                psPrms->szNumberOfWarnings++;
-            }
+            bInitOk =
+                (InPin_eInit(psInPinHnd, &(psPrms->sTempStrPt), psPrms->u8PresentablesCount, u8Pin) == INPIN_OK_E);
         }
 
-        if (psPrms->pszMemoryRequired != NULL)
-            *(psPrms->pszMemoryRequired) +=
-                szGetAllocatedSize(sizeof(INPIN_HANDLE_T)) + szGetAllocatedSize(psPrms->sTempStrPt.szLen + 1);
+        if (bInitOk && psPrms->psParsePrms->eAddToPresentables != NULL)
+        {
+            if (psPrms->psParsePrms->eAddToPresentables((PRESENTABLE_T *)psInPinHnd) == PINCFG_OK_E)
+            {
+                bInitOk = true;
+                psPrms->u8PresentablesCount++;
+            }
+        }
+        if (bInitOk && psPrms->psParsePrms->eAddToLoopables != NULL)
+        {
+            bInitOk = (psPrms->psParsePrms->eAddToLoopables(&(psInPinHnd->sLoopable)) == PINCFG_OK_E);
+        }
+        if (!bInitOk)
+        {
+            psPrms->pcOutStringLast += snprintf(
+                (char *)(psPrms->psParsePrms->pcOutString + psPrms->pcOutStringLast),
+                szGetSize(psPrms->psParsePrms->u16OutStrMaxLen, psPrms->pcOutStringLast),
+                _s[FSDSS_E],
+                _s[WL_E],
+                psPrms->u16LinesProcessed,
+                _s[IP_E],
+                _s[INITF_E]);
+            psPrms->szNumberOfWarnings++;
+        }
+
+        if (psPrms->psParsePrms->pszMemoryRequired != NULL)
+            *(psPrms->psParsePrms->pszMemoryRequired) +=
+                szGetAllocatedSize(sizeof(INPIN_T)) + szGetAllocatedSize(psPrms->sTempStrPt.szLen + 1);
     }
 
     return PINCFG_OK_E;
@@ -685,8 +736,8 @@ static inline PINCFG_RESULT_T PinCfgCsv_ParseInpins(PINCFG_PARSE_SUBFN_PARAMS_T 
 static inline PINCFG_RESULT_T PinCfgCsv_ParseTriggers(PINCFG_PARSE_SUBFN_PARAMS_T *psPrms)
 {
     uint8_t u8Count, u8EventType, u8EventCount, u8DrivesCountReal, u8Offset, u8DrivenAction, i;
-    INPIN_HANDLE_T *psInPinEmiterHnd;
-    SWITCH_HANDLE_T *psSwitchHnd;
+    INPIN_T *psInPinEmiterHnd;
+    SWITCH_T *psSwitchHnd;
     TRIGGER_SWITCHACTION_T *pasSwActs;
     TRIGGER_SWITCHACTION_T *psSwAct;
 
@@ -696,8 +747,8 @@ static inline PINCFG_RESULT_T PinCfgCsv_ParseTriggers(PINCFG_PARSE_SUBFN_PARAMS_
     if (psPrms->u8LineItemsLen < 7)
     {
         psPrms->pcOutStringLast += snprintf(
-            (char *)(psPrms->pcOutString + psPrms->pcOutStringLast),
-            szGetSize(psPrms->u16OutStrMaxLen, psPrms->pcOutStringLast),
+            (char *)(psPrms->psParsePrms->pcOutString + psPrms->pcOutStringLast),
+            szGetSize(psPrms->psParsePrms->u16OutStrMaxLen, psPrms->pcOutStringLast),
             _s[FSDSSS_E],
             _s[WL_E],
             psPrms->u16LinesProcessed,
@@ -712,13 +763,13 @@ static inline PINCFG_RESULT_T PinCfgCsv_ParseTriggers(PINCFG_PARSE_SUBFN_PARAMS_
     psPrms->sTempStrPt = psPrms->sLine;
     PinCfgStr_vGetSplitElemByIndex(&(psPrms->sTempStrPt), PINCFG_VALUE_SEPARATOR_D, 2);
 
-    if (psPrms->bValidate)
+    if (psPrms->psParsePrms->bValidate)
     {
-        if (PinCfgCsv_pcStrstrpt(psGlobals->acCfgBuf, &(psPrms->sTempStrPt)) == NULL)
+        if (PinCfgCsv_pcStrstrpt(psPrms->psParsePrms->pcConfig, &(psPrms->sTempStrPt)) == NULL)
         {
             psPrms->pcOutStringLast += snprintf(
-                (char *)(psPrms->pcOutString + psPrms->pcOutStringLast),
-                szGetSize(psPrms->u16OutStrMaxLen, psPrms->pcOutStringLast),
+                (char *)(psPrms->psParsePrms->pcOutString + psPrms->pcOutStringLast),
+                szGetSize(psPrms->psParsePrms->u16OutStrMaxLen, psPrms->pcOutStringLast),
                 _s[FSDSS_E],
                 _s[WL_E],
                 psPrms->u16LinesProcessed,
@@ -731,12 +782,12 @@ static inline PINCFG_RESULT_T PinCfgCsv_ParseTriggers(PINCFG_PARSE_SUBFN_PARAMS_
     }
     else
     {
-        psInPinEmiterHnd = (INPIN_HANDLE_T *)PinCfgCsv_psFindInLoopablesByName(&(psPrms->sTempStrPt));
+        psInPinEmiterHnd = (INPIN_T *)PinCfgCsv_psFindInTempPresentablesByName(&(psPrms->sTempStrPt));
         if (psInPinEmiterHnd == NULL)
         {
             psPrms->pcOutStringLast += snprintf(
-                (char *)(psPrms->pcOutString + psPrms->pcOutStringLast),
-                szGetSize(psPrms->u16OutStrMaxLen, psPrms->pcOutStringLast),
+                (char *)(psPrms->psParsePrms->pcOutString + psPrms->pcOutStringLast),
+                szGetSize(psPrms->psParsePrms->u16OutStrMaxLen, psPrms->pcOutStringLast),
                 _s[FSDSS_E],
                 _s[WL_E],
                 psPrms->u16LinesProcessed,
@@ -753,8 +804,8 @@ static inline PINCFG_RESULT_T PinCfgCsv_ParseTriggers(PINCFG_PARSE_SUBFN_PARAMS_
     if (PinCfgStr_eAtoU8(&(psPrms->sTempStrPt), &u8EventType) != PINCFG_STR_OK_E || u8EventType > (uint8_t)TRIGGER_LONG)
     {
         psPrms->pcOutStringLast += snprintf(
-            (char *)(psPrms->pcOutString + psPrms->pcOutStringLast),
-            szGetSize(psPrms->u16OutStrMaxLen, psPrms->pcOutStringLast),
+            (char *)(psPrms->psParsePrms->pcOutString + psPrms->pcOutStringLast),
+            szGetSize(psPrms->psParsePrms->u16OutStrMaxLen, psPrms->pcOutStringLast),
             _s[FSDSS_E],
             _s[WL_E],
             psPrms->u16LinesProcessed,
@@ -770,8 +821,8 @@ static inline PINCFG_RESULT_T PinCfgCsv_ParseTriggers(PINCFG_PARSE_SUBFN_PARAMS_
     if (PinCfgStr_eAtoU8(&(psPrms->sTempStrPt), &u8EventCount) != PINCFG_STR_OK_E)
     {
         psPrms->pcOutStringLast += snprintf(
-            (char *)(psPrms->pcOutString + psPrms->pcOutStringLast),
-            szGetSize(psPrms->u16OutStrMaxLen, psPrms->pcOutStringLast),
+            (char *)(psPrms->psParsePrms->pcOutString + psPrms->pcOutStringLast),
+            szGetSize(psPrms->psParsePrms->u16OutStrMaxLen, psPrms->pcOutStringLast),
             _s[FSDSS_E],
             _s[WL_E],
             psPrms->u16LinesProcessed,
@@ -791,13 +842,13 @@ static inline PINCFG_RESULT_T PinCfgCsv_ParseTriggers(PINCFG_PARSE_SUBFN_PARAMS_
         u8Offset = 5 + i * 2;
         psPrms->sTempStrPt = psPrms->sLine;
         PinCfgStr_vGetSplitElemByIndex(&(psPrms->sTempStrPt), PINCFG_VALUE_SEPARATOR_D, u8Offset);
-        if (psPrms->bValidate)
+        if (psPrms->psParsePrms->bValidate)
         {
-            if (PinCfgCsv_pcStrstrpt(psGlobals->acCfgBuf, &(psPrms->sTempStrPt)) == NULL)
+            if (PinCfgCsv_pcStrstrpt(psPrms->psParsePrms->pcConfig, &(psPrms->sTempStrPt)) == NULL)
             {
                 psPrms->pcOutStringLast += snprintf(
-                    (char *)(psPrms->pcOutString + psPrms->pcOutStringLast),
-                    szGetSize(psPrms->u16OutStrMaxLen, psPrms->pcOutStringLast),
+                    (char *)(psPrms->psParsePrms->pcOutString + psPrms->pcOutStringLast),
+                    szGetSize(psPrms->psParsePrms->u16OutStrMaxLen, psPrms->pcOutStringLast),
                     _s[FSDSS_E],
                     _s[WL_E],
                     psPrms->u16LinesProcessed,
@@ -809,12 +860,12 @@ static inline PINCFG_RESULT_T PinCfgCsv_ParseTriggers(PINCFG_PARSE_SUBFN_PARAMS_
         }
         else
         {
-            psSwitchHnd = (SWITCH_HANDLE_T *)PinCfgCsv_psFindInLoopablesByName(&(psPrms->sTempStrPt));
+            psSwitchHnd = (SWITCH_T *)PinCfgCsv_psFindInTempPresentablesByName(&(psPrms->sTempStrPt));
             if (psSwitchHnd == NULL)
             {
                 psPrms->pcOutStringLast += snprintf(
-                    (char *)(psPrms->pcOutString + psPrms->pcOutStringLast),
-                    szGetSize(psPrms->u16OutStrMaxLen, psPrms->pcOutStringLast),
+                    (char *)(psPrms->psParsePrms->pcOutString + psPrms->pcOutStringLast),
+                    szGetSize(psPrms->psParsePrms->u16OutStrMaxLen, psPrms->pcOutStringLast),
                     _s[FSDSS_E],
                     _s[WL_E],
                     psPrms->u16LinesProcessed,
@@ -830,8 +881,8 @@ static inline PINCFG_RESULT_T PinCfgCsv_ParseTriggers(PINCFG_PARSE_SUBFN_PARAMS_
         if (PinCfgStr_eAtoU8(&(psPrms->sTempStrPt), &u8DrivenAction) != PINCFG_STR_OK_E || u8DrivenAction > 2)
         {
             psPrms->pcOutStringLast += snprintf(
-                (char *)(psPrms->pcOutString + psPrms->pcOutStringLast),
-                szGetSize(psPrms->u16OutStrMaxLen, psPrms->pcOutStringLast),
+                (char *)(psPrms->psParsePrms->pcOutString + psPrms->pcOutStringLast),
+                szGetSize(psPrms->psParsePrms->u16OutStrMaxLen, psPrms->pcOutStringLast),
                 _s[FSDSS_E],
                 _s[WL_E],
                 psPrms->u16LinesProcessed,
@@ -842,15 +893,15 @@ static inline PINCFG_RESULT_T PinCfgCsv_ParseTriggers(PINCFG_PARSE_SUBFN_PARAMS_
         }
         u8DrivesCountReal++;
 
-        if (!psPrms->bValidate)
+        if (!psPrms->psParsePrms->bValidate)
         {
             psSwAct = (TRIGGER_SWITCHACTION_T *)Memory_vpAlloc(sizeof(TRIGGER_SWITCHACTION_T));
             if (psSwAct == NULL)
             {
                 Memory_eReset();
                 psPrms->pcOutStringLast += snprintf(
-                    (char *)(psPrms->pcOutString + psPrms->pcOutStringLast),
-                    szGetSize(psPrms->u16OutStrMaxLen, psPrms->pcOutStringLast),
+                    (char *)(psPrms->psParsePrms->pcOutString + psPrms->pcOutStringLast),
+                    szGetSize(psPrms->psParsePrms->u16OutStrMaxLen, psPrms->pcOutStringLast),
                     _s[FSDSSS_E],
                     _s[EL_E],
                     psPrms->u16LinesProcessed,
@@ -868,17 +919,17 @@ static inline PINCFG_RESULT_T PinCfgCsv_ParseTriggers(PINCFG_PARSE_SUBFN_PARAMS_
             }
         }
 
-        if (psPrms->pszMemoryRequired != NULL)
-            *(psPrms->pszMemoryRequired) += szGetAllocatedSize(sizeof(TRIGGER_SWITCHACTION_T));
+        if (psPrms->psParsePrms->pszMemoryRequired != NULL)
+            *(psPrms->psParsePrms->pszMemoryRequired) += szGetAllocatedSize(sizeof(TRIGGER_SWITCHACTION_T));
     }
 
-    if (!psPrms->bValidate)
+    if (!psPrms->psParsePrms->bValidate)
     {
         if ((u8DrivesCountReal == 0U || pasSwActs == NULL))
         {
             psPrms->pcOutStringLast += snprintf(
-                (char *)(psPrms->pcOutString + psPrms->pcOutStringLast),
-                szGetSize(psPrms->u16OutStrMaxLen, psPrms->pcOutStringLast),
+                (char *)(psPrms->psParsePrms->pcOutString + psPrms->pcOutStringLast),
+                szGetSize(psPrms->psParsePrms->u16OutStrMaxLen, psPrms->pcOutStringLast),
                 _s[FSDSS_E],
                 _s[WL_E],
                 psPrms->u16LinesProcessed,
@@ -889,13 +940,13 @@ static inline PINCFG_RESULT_T PinCfgCsv_ParseTriggers(PINCFG_PARSE_SUBFN_PARAMS_
             return PINCFG_OK_E;
         }
 
-        TRIGGER_HANDLE_T *psTriggerHnd = (TRIGGER_HANDLE_T *)Memory_vpAlloc(sizeof(TRIGGER_HANDLE_T));
+        TRIGGER_T *psTriggerHnd = (TRIGGER_T *)Memory_vpAlloc(sizeof(TRIGGER_T));
         if (psTriggerHnd == NULL)
         {
             Memory_eReset();
             psPrms->pcOutStringLast += snprintf(
-                (char *)(psPrms->pcOutString + psPrms->pcOutStringLast),
-                szGetSize(psPrms->u16OutStrMaxLen, psPrms->pcOutStringLast),
+                (char *)(psPrms->psParsePrms->pcOutString + psPrms->pcOutStringLast),
+                szGetSize(psPrms->psParsePrms->u16OutStrMaxLen, psPrms->pcOutStringLast),
                 _s[FSDSS_E],
                 _s[EL_E],
                 psPrms->u16LinesProcessed,
@@ -913,8 +964,8 @@ static inline PINCFG_RESULT_T PinCfgCsv_ParseTriggers(PINCFG_PARSE_SUBFN_PARAMS_
         {
             Memory_eReset();
             psPrms->pcOutStringLast += snprintf(
-                (char *)(psPrms->pcOutString + psPrms->pcOutStringLast),
-                szGetSize(psPrms->u16OutStrMaxLen, psPrms->pcOutStringLast),
+                (char *)(psPrms->psParsePrms->pcOutString + psPrms->pcOutStringLast),
+                szGetSize(psPrms->psParsePrms->u16OutStrMaxLen, psPrms->pcOutStringLast),
                 _s[FSDSS_E],
                 _s[WL_E],
                 psPrms->u16LinesProcessed,
@@ -924,8 +975,155 @@ static inline PINCFG_RESULT_T PinCfgCsv_ParseTriggers(PINCFG_PARSE_SUBFN_PARAMS_
         }
     }
 
-    if (psPrms->pszMemoryRequired != NULL)
-        *(psPrms->pszMemoryRequired) += szGetAllocatedSize(sizeof(TRIGGER_HANDLE_T));
+    if (psPrms->psParsePrms->pszMemoryRequired != NULL)
+        *(psPrms->psParsePrms->pszMemoryRequired) += szGetAllocatedSize(sizeof(TRIGGER_T));
+
+    return PINCFG_OK_E;
+}
+
+static inline PINCFG_RESULT_T PinCfgCsv_ParseTemperatureSensors(PINCFG_PARSE_SUBFN_PARAMS_T *psPrms)
+{
+    switch (psPrms->sTempStrPt.pcStrStart[1])
+    {
+    case 'I': return PinCfgCsv_ParseCPUTemperatureSensor(psPrms); break;
+    default:
+    {
+        psPrms->pcOutStringLast += snprintf(
+            (char *)(psPrms->psParsePrms->pcOutString + psPrms->pcOutStringLast),
+            szGetSize(psPrms->psParsePrms->u16OutStrMaxLen, psPrms->pcOutStringLast),
+            _s[FSDS_E],
+            _s[WL_E],
+            psPrms->u16LinesProcessed,
+            " Unknown type of temperature sensor.");
+        psPrms->szNumberOfWarnings++;
+
+        return PINCFG_OK_E;
+    }
+    break;
+    }
+
+    return PINCFG_OK_E;
+}
+
+static inline PINCFG_RESULT_T PinCfgCsv_ParseCPUTemperatureSensor(PINCFG_PARSE_SUBFN_PARAMS_T *psPrms)
+{
+    if (psPrms->u8LineItemsLen < 2)
+    {
+        psPrms->pcOutStringLast += snprintf(
+            (char *)(psPrms->psParsePrms->pcOutString + psPrms->pcOutStringLast),
+            szGetSize(psPrms->psParsePrms->u16OutStrMaxLen, psPrms->pcOutStringLast),
+            _s[FSDSSS_E],
+            _s[WL_E],
+            psPrms->u16LinesProcessed,
+            _s[CPUTMP_E],
+            _s[IN_E],
+            _s[OARGS_E]);
+        psPrms->szNumberOfWarnings++;
+
+        return PINCFG_OK_E;
+    }
+
+    uint32_t u32ReportInterval = PINCFG_CPUTEMP_REPORTING_INTV_MS_D;
+    if (psPrms->u8LineItemsLen >= 3)
+    {
+        psPrms->sTempStrPt = psPrms->sLine;
+        PinCfgStr_vGetSplitElemByIndex(&(psPrms->sTempStrPt), PINCFG_VALUE_SEPARATOR_D, 2);
+        if (PinCfgStr_eAtoU32(&(psPrms->sTempStrPt), &u32ReportInterval) != PINCFG_STR_OK_E)
+        {
+            psPrms->pcOutStringLast += snprintf(
+                (char *)(psPrms->psParsePrms->pcOutString + psPrms->pcOutStringLast),
+                szGetSize(psPrms->psParsePrms->u16OutStrMaxLen, psPrms->pcOutStringLast),
+                _s[FSDSSS_E],
+                _s[WL_E],
+                psPrms->u16LinesProcessed,
+                _s[CPUTMP_E],
+                _s[IN_E],
+                ".");
+            psPrms->szNumberOfWarnings++;
+
+            return PINCFG_OK_E;
+        }
+    }
+
+    float fOffset = PINCFG_CPUTEMP_OFFSET_D;
+    if (psPrms->u8LineItemsLen >= 4)
+    {
+        psPrms->sTempStrPt = psPrms->sLine;
+        PinCfgStr_vGetSplitElemByIndex(&(psPrms->sTempStrPt), PINCFG_VALUE_SEPARATOR_D, 3);
+        if (PinCfgStr_eAtoFloat(&(psPrms->sTempStrPt), &fOffset) != PINCFG_STR_OK_E)
+        {
+            psPrms->pcOutStringLast += snprintf(
+                (char *)(psPrms->psParsePrms->pcOutString + psPrms->pcOutStringLast),
+                szGetSize(psPrms->psParsePrms->u16OutStrMaxLen, psPrms->pcOutStringLast),
+                _s[FSDSSS_E],
+                _s[WL_E],
+                psPrms->u16LinesProcessed,
+                _s[CPUTMP_E],
+                _s[IN_E],
+                ".");
+            psPrms->szNumberOfWarnings++;
+
+            return PINCFG_OK_E;
+        }
+    }
+
+    psPrms->sTempStrPt = psPrms->sLine;
+    PinCfgStr_vGetSplitElemByIndex(&(psPrms->sTempStrPt), PINCFG_VALUE_SEPARATOR_D, 1);
+
+    CPUTEMP_T *psTempHnd = NULL;
+    bool bInitOk = true;
+    if (!psPrms->psParsePrms->bValidate)
+    {
+        psTempHnd = (CPUTEMP_T *)Memory_vpAlloc(sizeof(CPUTEMP_T));
+        bInitOk = (psTempHnd != NULL);
+        if (!bInitOk)
+        {
+            Memory_eReset();
+            psPrms->pcOutStringLast += snprintf(
+                (char *)(psPrms->psParsePrms->pcOutString + psPrms->pcOutStringLast),
+                szGetSize(psPrms->psParsePrms->u16OutStrMaxLen, psPrms->pcOutStringLast),
+                _s[FSDSS_E],
+                _s[EL_E],
+                psPrms->u16LinesProcessed,
+                _s[CPUTMP_E],
+                _s[OOM_E]);
+
+            return PINCFG_OUTOFMEMORY_ERROR_E;
+        }
+
+        bInitOk =
+            (CPUTemp_eInit(psTempHnd, &(psPrms->sTempStrPt), psPrms->u8PresentablesCount, u32ReportInterval, fOffset) ==
+             CPUTEMP_OK_E);
+    }
+
+    if (bInitOk && psPrms->psParsePrms->eAddToPresentables != NULL)
+    {
+        if (psPrms->psParsePrms->eAddToPresentables((PRESENTABLE_T *)psTempHnd) == PINCFG_OK_E)
+        {
+            bInitOk = true;
+            psPrms->u8PresentablesCount++;
+        }
+    }
+    if (bInitOk && psPrms->psParsePrms->eAddToLoopables != NULL)
+    {
+        bInitOk = (psPrms->psParsePrms->eAddToLoopables(&(psTempHnd->sLoopable)) == PINCFG_OK_E);
+    }
+    if (!bInitOk)
+    {
+        psPrms->pcOutStringLast += snprintf(
+            (char *)(psPrms->psParsePrms->pcOutString + psPrms->pcOutStringLast),
+            szGetSize(psPrms->psParsePrms->u16OutStrMaxLen, psPrms->pcOutStringLast),
+            _s[FSDSS_E],
+            _s[WL_E],
+            psPrms->u16LinesProcessed,
+            _s[CPUTMP_E],
+            _s[INITF_E]);
+        psPrms->szNumberOfWarnings++;
+    }
+
+    if (psPrms->psParsePrms->pszMemoryRequired != NULL)
+        *(psPrms->psParsePrms->pszMemoryRequired) +=
+            szGetAllocatedSize(sizeof(CPUTEMP_T)) + szGetAllocatedSize(psPrms->sTempStrPt.szLen + 1);
 
     return PINCFG_OK_E;
 }
@@ -952,8 +1150,8 @@ static inline PINCFG_RESULT_T PinCfgCsv_ParseGlobalConfigItems(PINCFG_PARSE_SUBF
     default:
     {
         psPrms->pcOutStringLast += snprintf(
-            (char *)(psPrms->pcOutString + psPrms->pcOutStringLast),
-            szGetSize(psPrms->u16OutStrMaxLen, psPrms->pcOutStringLast),
+            (char *)(psPrms->psParsePrms->pcOutString + psPrms->pcOutStringLast),
+            szGetSize(psPrms->psParsePrms->u16OutStrMaxLen, psPrms->pcOutStringLast),
             _s[FSDS_E],
             _s[WL_E],
             psPrms->u16LinesProcessed,
@@ -968,8 +1166,8 @@ static inline PINCFG_RESULT_T PinCfgCsv_ParseGlobalConfigItems(PINCFG_PARSE_SUBF
     if (psPrms->u8LineItemsLen < 2)
     {
         psPrms->pcOutStringLast += snprintf(
-            (char *)(psPrms->pcOutString + psPrms->pcOutStringLast),
-            szGetSize(psPrms->u16OutStrMaxLen, psPrms->pcOutStringLast),
+            (char *)(psPrms->psParsePrms->pcOutString + psPrms->pcOutStringLast),
+            szGetSize(psPrms->psParsePrms->u16OutStrMaxLen, psPrms->pcOutStringLast),
             _s[FSDSSS_E],
             _s[WL_E],
             psPrms->u16LinesProcessed,
@@ -986,8 +1184,8 @@ static inline PINCFG_RESULT_T PinCfgCsv_ParseGlobalConfigItems(PINCFG_PARSE_SUBF
     if (PinCfgStr_eAtoU32(&(psPrms->sTempStrPt), &u32ParsedNumber) != PINCFG_STR_OK_E || u32ParsedNumber < u32Min)
     {
         psPrms->pcOutStringLast += snprintf(
-            (char *)(psPrms->pcOutString + psPrms->pcOutStringLast),
-            szGetSize(psPrms->u16OutStrMaxLen, psPrms->pcOutStringLast),
+            (char *)(psPrms->psParsePrms->pcOutString + psPrms->pcOutStringLast),
+            szGetSize(psPrms->psParsePrms->u16OutStrMaxLen, psPrms->pcOutStringLast),
             _s[FSDSSS_E],
             _s[WL_E],
             psPrms->u16LinesProcessed,
@@ -1013,64 +1211,38 @@ static inline PINCFG_RESULT_T PinCfgCsv_ParseGlobalConfigItems(PINCFG_PARSE_SUBF
     return PINCFG_OK_E;
 }
 
-static inline LOOPRE_T *PinCfgCsv_psFindInPresentablesById(uint8_t u8Id)
+static inline PRESENTABLE_T *PinCfgCsv_psFindInPresentablesById(uint8_t u8Id)
 {
-    LOOPRE_T *psCurrent = psGlobals->psPresentablesFirst;
-    while (psCurrent != NULL && (LooPre_u8GetId(psCurrent) != u8Id))
-    {
-        psCurrent = psCurrent->psNextPresentable;
-    }
+    // for (uint8_t i = 0; i < psGlobals->u8PresentablesCount; i++)
+    // {
+    //     if (psGlobals->ppsPresentables[i]->u8Id == u8Id)
+    //         return psGlobals->ppsPresentables[i];
+    // }
 
-    return psCurrent;
+    // TODO: check this
+    if (u8Id >= psGlobals->u8PresentablesCount)
+        return NULL;
+
+    return (psGlobals->ppsPresentables)[u8Id];
 }
 
-static inline void PinCfgCsv_vAddToLoopables(LOOPRE_T *psLoopable)
+static PRESENTABLE_T *PinCfgCsv_psFindInTempPresentablesByName(const STRING_POINT_T *psName)
 {
-    if (psGlobals->psLoopablesFirst == NULL)
-        psGlobals->psLoopablesFirst = psLoopable;
-    else
-    {
-        LOOPRE_T *psCurrent = psGlobals->psLoopablesFirst;
-        while (psCurrent->psNextLoopable != NULL)
-        {
-            psCurrent = psCurrent->psNextLoopable;
-        }
-        psCurrent->psNextLoopable = psLoopable;
-    }
-}
+    PRESENTABLE_T *psReturn = NULL;
 
-static LOOPRE_T *PinCfgCsv_psFindInLoopablesByName(const STRING_POINT_T *psName)
-{
-    LOOPRE_T *psReturn = psGlobals->psLoopablesFirst;
-    char *pcTempStr = (char *)Memory_vpTempAlloc(psName->szLen + 1);
-
-    if (pcTempStr != NULL)
+    LINKEDLIST_ITEM_T *psLLItem = (LINKEDLIST_ITEM_T *)psGlobals->ppsPresentables;
+    while (psLLItem != NULL)
     {
-        memcpy(pcTempStr, psName->pcStrStart, psName->szLen);
-        pcTempStr[psName->szLen] = '\0';
-        while (psReturn != NULL && strcmp(LooPre_pcGetName(psReturn), pcTempStr) != 0)
-        {
-            psReturn = psReturn->psNextLoopable;
-        }
+        psReturn = (PRESENTABLE_T *)LinkedList_pvGetStoredItem(psLLItem);
+        size_t szPcHeyNameLength = strlen(psReturn->pcName);
+        if (szPcHeyNameLength == psName->szLen && memcmp(psName->pcStrStart, psReturn->pcName, szPcHeyNameLength) == 0)
+            break;
+
+        psLLItem = LinkedList_psGetNext((void *)psLLItem);
+        psReturn = NULL;
     }
-    Memory_vTempFreeSize(psName->szLen + 1);
 
     return psReturn;
-}
-
-static inline void PinCfgCsv_vAddToPresentables(LOOPRE_T *psPresentable)
-{
-    if (psGlobals->psPresentablesFirst == NULL)
-        psGlobals->psPresentablesFirst = psPresentable;
-    else
-    {
-        LOOPRE_T *psCurrent = psGlobals->psPresentablesFirst;
-        while (psCurrent->psNextPresentable != NULL)
-        {
-            psCurrent = psCurrent->psNextPresentable;
-        }
-        psCurrent->psNextPresentable = psPresentable;
-    }
 }
 
 static inline size_t szGetAllocatedSize(size_t szToAllocate)
@@ -1089,4 +1261,49 @@ static inline size_t szGetSize(size_t a, size_t b)
         return 0;
 
     return a - b;
+}
+
+static inline PINCFG_RESULT_T PinCfgCsv_eAddToLinkedList(LINKEDLIST_ITEM_T **psFirst, void *pvNew)
+{
+    LINKEDLIST_RESULT_T eAddRes = LinkedList_eAddToLinkedList(psFirst, pvNew);
+
+    if (eAddRes == LINKEDLIST_OUTOFMEMORY_ERROR_E)
+        return PINCFG_OUTOFMEMORY_ERROR_E;
+
+    if (eAddRes == LINKEDLIST_NULLPTR_ERROR_E)
+        return PINCFG_NULLPTR_ERROR_E;
+
+    return PINCFG_OK_E;
+}
+
+PINCFG_RESULT_T PinCfgCsv_eAddToTempLoopables(LOOPABLE_T *psLoopable)
+{
+    return PinCfgCsv_eAddToLinkedList((LINKEDLIST_ITEM_T **)&(psGlobals->ppsLoopables), (void *)psLoopable);
+}
+
+PINCFG_RESULT_T PinCfgCsv_eAddToTempPresentables(PRESENTABLE_T *psPresentable)
+{
+    return PinCfgCsv_eAddToLinkedList((LINKEDLIST_ITEM_T **)&(psGlobals->ppsPresentables), (void *)psPresentable);
+}
+
+PINCFG_RESULT_T PinCfgCsv_eLinkedListToArray(LINKEDLIST_ITEM_T **ppsFirst, uint8_t *u8Count)
+{
+    void *pvNewFirst = NULL;
+    void *pvItem = LinkedList_pvPopFront(ppsFirst);
+    while (pvItem != NULL)
+    {
+        void **pvArrayItem = (void **)Memory_vpAlloc(sizeof(void **));
+        if (pvArrayItem == NULL)
+            return PINCFG_OUTOFMEMORY_ERROR_E;
+
+        if (pvNewFirst == NULL)
+            pvNewFirst = pvArrayItem;
+
+        *pvArrayItem = pvItem;
+        (*u8Count)++;
+        pvItem = LinkedList_pvPopFront(ppsFirst);
+    }
+    *ppsFirst = pvNewFirst;
+
+    return PINCFG_OK_E;
 }

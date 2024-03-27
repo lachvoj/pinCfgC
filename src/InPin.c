@@ -1,12 +1,8 @@
-#ifdef ARDUINO
-#include <Arduino.h>
-#else
-#include <ArduinoMock.h>
-#endif
 #include <errno.h>
 
 #include "Globals.h"
 #include "InPin.h"
+#include "MySensorsWrapper.h"
 #include "PinSubscriberIf.h"
 
 void InPin_SetDebounceMs(uint32_t u32Debounce)
@@ -19,18 +15,28 @@ void InPin_SetMulticlickMaxDelayMs(uint32_t u32MultikMaxDelay)
     psGlobals->u32InPinMulticlickMaxDelayMs = u32MultikMaxDelay;
 }
 
-INPIN_RESULT_T InPin_eInit(INPIN_HANDLE_T *psHandle, STRING_POINT_T *sName, uint8_t u8Id, uint8_t u8InPin)
+void InPin_vInitType(PRESENTABLE_VTAB_T *psVtab)
+{
+    psVtab->eVType = V_TRIPPED;
+    psVtab->eSType = S_DOOR;
+    psVtab->vReceive = InPin_vRcvMessage;
+
+    InPin_SetDebounceMs(PINCFG_DEBOUNCE_MS_D);
+    InPin_SetMulticlickMaxDelayMs(PINCFG_MULTICLICK_MAX_DELAY_MS_D);
+}
+
+INPIN_RESULT_T InPin_eInit(INPIN_T *psHandle, STRING_POINT_T *sName, uint8_t u8Id, uint8_t u8InPin)
 {
     if (psHandle == NULL)
         return INPIN_NULLPTR_ERROR_E;
 
-    if (MySensorsPresent_eInit(&psHandle->sMySenPresent, sName, u8Id) != MYSENSORSPRESENT_OK_E)
+    if (Presentable_eInit(&psHandle->sPresentable, sName, u8Id) != PRESENTABLE_OK_E)
     {
         return INPIN_SUBINIT_ERROR_E;
     }
 
     // vtab init
-    psHandle->sMySenPresent.sLooPre.psVtab = &psGlobals->sInPinVTab;
+    psHandle->sPresentable.psVtab = &psGlobals->sInPinPrVTab;
 
     psHandle->u8InPin = u8InPin;
     psHandle->u32TimerDebounceStarted--;
@@ -42,7 +48,7 @@ INPIN_RESULT_T InPin_eInit(INPIN_HANDLE_T *psHandle, STRING_POINT_T *sName, uint
     return INPIN_OK_E;
 }
 
-INPIN_RESULT_T InPin_eAddSubscriber(INPIN_HANDLE_T *psHandle, PINSUBSCRIBER_IF_T *psSubscriber)
+INPIN_RESULT_T InPin_eAddSubscriber(INPIN_T *psHandle, PINSUBSCRIBER_IF_T *psSubscriber)
 {
     if (psHandle == NULL || psSubscriber == NULL)
         return INPIN_NULLPTR_ERROR_E;
@@ -64,12 +70,12 @@ INPIN_RESULT_T InPin_eAddSubscriber(INPIN_HANDLE_T *psHandle, PINSUBSCRIBER_IF_T
     return INPIN_OK_E;
 }
 
-void InPin_vSendEvent(INPIN_HANDLE_T *psHandle, uint8_t u8EventType, uint32_t u32Data)
+void InPin_vSendEvent(INPIN_T *psHandle, uint8_t u8EventType, uint32_t u32Data)
 {
     PINSUBSCRIBER_IF_T *psCurrent = psHandle->psFirstSubscriber;
     while (psCurrent != NULL)
     {
-        psCurrent->psVtab->vEventHandle(psCurrent, u8EventType, u32Data);
+        psCurrent->vEventHandle(psCurrent, u8EventType, u32Data);
         psCurrent = psCurrent->psNext;
     }
 }
@@ -82,10 +88,9 @@ typedef enum
     INPIN_CHANGE_DOWN_E
 } INPIN_CHANGE_T;
 
-void InPin_vLoop(LOOPRE_T *psBaseHandle, uint32_t u32ms)
+void InPin_vLoop(LOOPABLE_T *psLoopableHandle, uint32_t u32ms)
 {
-    MYSENSORSPRESENT_HANDLE_T *psMySensorsPresentHnd = (MYSENSORSPRESENT_HANDLE_T *)psBaseHandle;
-    INPIN_HANDLE_T *psHandle = (INPIN_HANDLE_T *)psBaseHandle;
+    INPIN_T *psHandle = (INPIN_T *)(((uint8_t *)psLoopableHandle) - sizeof(PRESENTABLE_T));
 
     INPIN_CHANGE_T eChange = INPIN_CHANGE_NOCHANGE_E;
     if (psHandle->ePinState != INPIN_DEBOUNCEDOWN_E && psHandle->ePinState != INPIN_DEBOUNCEUP_E)
@@ -111,7 +116,7 @@ void InPin_vLoop(LOOPRE_T *psBaseHandle, uint32_t u32ms)
 
         psHandle->ePinState = INPIN_DOWN_E;
         InPin_vSendEvent(psHandle, (uint8_t)psHandle->ePinState, 0U);
-        MySensorsPresent_vSetState(psMySensorsPresentHnd, (uint8_t) false, true);
+        Presentable_vSetState((PRESENTABLE_T *)psHandle, (uint8_t) false, true);
     }
     break;
     case INPIN_DOWN_E:
@@ -138,7 +143,7 @@ void InPin_vLoop(LOOPRE_T *psBaseHandle, uint32_t u32ms)
         psHandle->u32timerMultiStarted = u32ms;
         psHandle->u8PressCount++;
         InPin_vSendEvent(psHandle, (uint8_t)psHandle->ePinState, (int)psHandle->u8PressCount);
-        MySensorsPresent_vSetState(psMySensorsPresentHnd, (uint8_t) true, true);
+        Presentable_vSetState((PRESENTABLE_T *)psHandle, (uint8_t) true, true);
     }
     break;
     case INPIN_UP_E:
@@ -170,7 +175,7 @@ void InPin_vLoop(LOOPRE_T *psBaseHandle, uint32_t u32ms)
 }
 
 // presentable IF
-void InPin_vRcvMessage(LOOPRE_T *psBaseHandle, const void *pvMessage)
+void InPin_vRcvMessage(PRESENTABLE_T *psBaseHandle, const void *pvMessage)
 {
     (void)pvMessage;
 #ifdef MY_CONTROLLER_HA

@@ -1,8 +1,8 @@
 #ifndef INPIN_H
 #define INPIN_H
 
-#include "LooPre.h"
-#include "MySensorsPresent.h"
+#include "ILoopable.h"
+#include "Presentable.h"
 #include "PinSubscriberIf.h"
 #include "Types.h"
 
@@ -27,7 +27,8 @@ typedef enum
 
 typedef struct
 {
-    MYSENSORSPRESENT_HANDLE_T sMySenPresent;
+    PRESENTABLE_T sPresentable;
+    LOOPABLE_T sLoopable;
     PINSUBSCRIBER_IF_T *psFirstSubscriber;
     uint32_t u32TimerDebounceStarted;
     uint32_t u32timerMultiStarted;
@@ -35,19 +36,20 @@ typedef struct
     uint8_t u8PressCount;
     PIN_STATE_T ePinState;
     bool bLastPinState;
-} INPIN_HANDLE_T;
+} INPIN_T;
 
 void InPin_SetDebounceMs(uint32_t debounce);
 void InPin_SetMulticlickMaxDelayMs(uint32_t multikMaxDelay);
+void InPin_vInitType(PRESENTABLE_VTAB_T *psVtab);
 
-INPIN_RESULT_T InPin_eInit(INPIN_HANDLE_T *psHandle, STRING_POINT_T *sName, uint8_t u8Id, uint8_t u8InPin);
-INPIN_RESULT_T InPin_eAddSubscriber(INPIN_HANDLE_T *psHandle, PINSUBSCRIBER_IF_T *psSubscriber);
-void InPin_vSendEvent(INPIN_HANDLE_T *psHandle, uint8_t u8EventType, uint32_t u32Data);
+INPIN_RESULT_T InPin_eInit(INPIN_T *psHandle, STRING_POINT_T *sName, uint8_t u8Id, uint8_t u8InPin);
+INPIN_RESULT_T InPin_eAddSubscriber(INPIN_T *psHandle, PINSUBSCRIBER_IF_T *psSubscriber);
+void InPin_vSendEvent(INPIN_T *psHandle, uint8_t u8EventType, uint32_t u32Data);
 
 // loopable IF
-void InPin_vLoop(LOOPRE_T *psBaseHandle, uint32_t u32ms);
+void InPin_vLoop(LOOPABLE_T *psLoopableHandle, uint32_t u32ms);
 
 // presentable IF
-void InPin_vRcvMessage(LOOPRE_T *psBaseHandle, const void *pvMessage);
+void InPin_vRcvMessage(PRESENTABLE_T *psBaseHandle, const void *pvMessage);
 
 #endif // INPIN_H

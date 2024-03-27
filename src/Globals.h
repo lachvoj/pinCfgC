@@ -1,9 +1,9 @@
 #ifndef GLOBALS_H
 #define GLOBALS_H
 
-#include "LooPre.h"
+#include "ILoopable.h"
 #include "PinSubscriberIf.h"
-#include "PincfgIf.h"
+#include "Presentable.h"
 
 typedef struct
 {
@@ -13,14 +13,14 @@ typedef struct
     char *pvMemTempEnd;
     bool bMemIsInitialized;
     // pincfgcsv
-    LOOPRE_T *psLoopablesFirst;
-    LOOPRE_T *psPresentablesFirst;
-    LOOPRE_VTAB_T sSwitchVTab;
-    LOOPRE_VTAB_T sInPinVTab;
-    LOOPRE_VTAB_T sExtCfgReceiverVTab;
-    PINSUBSCRIBER_VTAB_T sTriggerVTab;
-    // pincfgif
-    PINCFG_IF_T sPincfgIf;
+    uint8_t u8LoopablesCount;
+    uint8_t u8PresentablesCount;
+    LOOPABLE_T **ppsLoopables;
+    PRESENTABLE_T **ppsPresentables;
+    PRESENTABLE_VTAB_T sSwitchPrVTab;
+    PRESENTABLE_VTAB_T sInPinPrVTab;
+    PRESENTABLE_VTAB_T sCliPrVTab;
+    PRESENTABLE_VTAB_T sCpuTempPrVTab;
     // InPin
     uint32_t u32InPinDebounceMs;
     uint32_t u32InPinMulticlickMaxDelayMs;
@@ -29,10 +29,8 @@ typedef struct
     uint32_t u32SwitchFbOnDelayMs;
     uint32_t u32SwitchFbOffDelayMs;
     uint32_t u32SwitchTimedActionAdditionMs;
-    // cfg buf
-    char acCfgBuf[PINCFG_CONFIG_MAX_SZ_D];
-} GLOBALS_HANDLE_T;
+} GLOBALS_T;
 
-extern GLOBALS_HANDLE_T *psGlobals;
+extern GLOBALS_T *psGlobals;
 
 #endif // GLOBALS_H
