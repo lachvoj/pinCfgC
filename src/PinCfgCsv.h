@@ -1,7 +1,6 @@
 #ifndef PINCFGCSV_H
 #define PINCFGCSV_H
 
-#include "PincfgIf.h"
 #include "Types.h"
 
 typedef enum
@@ -18,7 +17,7 @@ typedef enum
     PINCFG_WARNINGS_E
 } PINCFG_RESULT_T;
 
-PINCFG_RESULT_T PinCfgCsv_eInit(uint8_t *pu8Memory, size_t szMemorySize, PINCFG_IF_T *psPincfgIf);
+PINCFG_RESULT_T PinCfgCsv_eInit(uint8_t *pu8Memory, size_t szMemorySize, const char *pcDefaultCfg);
 
 char *PinCfgCsv_pcGetCfgBuf(void);
 
@@ -26,8 +25,7 @@ PINCFG_RESULT_T PinCfgCsv_eParse(
     size_t *pszMemoryRequired,
     char *pcOutString,
     const uint16_t u16OutStrMaxLen,
-    const bool bValidate,
-    const bool bRemoteConfigEnabled);
+    const bool bValidate);
 
 PINCFG_RESULT_T PinCfgCsv_eValidate(size_t *pszMemoryRequired, char *pcOutString, const uint16_t u16OutStrMaxLen);
 

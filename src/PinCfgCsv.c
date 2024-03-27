@@ -1,16 +1,14 @@
-#ifdef ARDUINO
-#include <Arduino.h>
-#else
-#include <ArduinoMock.h>
-#endif
 #include <stdarg.h>
 #include <stdio.h>
 #include <string.h>
 
+#include "CPUTemp.h"
 #include "ExtCfgReceiver.h"
 #include "Globals.h"
 #include "InPin.h"
 #include "Memory.h"
+#include "MySensorsWrapper.h"
+#include "PersistentConfigiration.h"
 #include "PinCfgCsv.h"
 #include "PinCfgStr.h"
 #include "Switch.h"
@@ -46,6 +44,7 @@ static const char *_s[] = {
     "Switch:",                            // SW_E
     "InPin:",                             // IP_E
     "Trigger:",                           // TRG_E
+    "CPUTemperature",                     // CPUTMP_E
     "InPinDebounceMs:",                   // IPDMS_E
     "InPinMulticlickMaxDelayMs:",         // IPMCDMS_E
     "SwitchImpulseDurationMs:",           // SWIDMS_E
@@ -77,6 +76,7 @@ typedef enum
     SW_E,
     IP_E,
     TRG_E,
+    CPUTMP_E,
     IPDMS_E,
     IPMCDMS_E,
     SWIDMS_E,
@@ -92,12 +92,12 @@ typedef enum
     SNNF_E
 } PINCFG_PARSE_STRINGS_T;
 
-static inline PINCFG_RESULT_T PinCfgCsv_CreateExternalCfgReceiver(
-    PINCFG_PARSE_SUBFN_PARAMS_T *psPrms,
-    bool bRemoteConfigEnabled);
+static inline PINCFG_RESULT_T PinCfgCsv_CreateExternalCfgReceiver(PINCFG_PARSE_SUBFN_PARAMS_T *psPrms);
 static inline PINCFG_RESULT_T PinCfgCsv_ParseSwitch(PINCFG_PARSE_SUBFN_PARAMS_T *psPrms);
 static inline PINCFG_RESULT_T PinCfgCsv_ParseInpins(PINCFG_PARSE_SUBFN_PARAMS_T *psPrms);
 static inline PINCFG_RESULT_T PinCfgCsv_ParseTriggers(PINCFG_PARSE_SUBFN_PARAMS_T *psPrms);
+static inline PINCFG_RESULT_T PinCfgCsv_ParseTemperatureSensors(PINCFG_PARSE_SUBFN_PARAMS_T *psPrms);
+static inline PINCFG_RESULT_T PinCfgCsv_ParseCPUTemperatureSensor(PINCFG_PARSE_SUBFN_PARAMS_T *psPrms);
 
 static inline PINCFG_RESULT_T PinCfgCsv_ParseGlobalConfigItems(PINCFG_PARSE_SUBFN_PARAMS_T *psPrms);
 
@@ -108,7 +108,7 @@ static inline void PinCfgCsv_vAddToPresentables(LOOPRE_T *psLoopable);
 static inline size_t szGetAllocatedSize(size_t szToAllocate);
 static inline size_t szGetSize(size_t a, size_t b);
 
-PINCFG_RESULT_T PinCfgCsv_eInit(uint8_t *pu8Memory, size_t szMemorySize, PINCFG_IF_T *psPincfgIf)
+PINCFG_RESULT_T PinCfgCsv_eInit(uint8_t *pu8Memory, size_t szMemorySize, const char *pcDefaultCfg)
 {
     // Memory init
     if (pu8Memory == NULL)
@@ -123,39 +123,27 @@ PINCFG_RESULT_T PinCfgCsv_eInit(uint8_t *pu8Memory, size_t szMemorySize, PINCFG_
 
     memset((void *)psGlobals->acCfgBuf, 0, PINCFG_CONFIG_MAX_SZ_D);
 
-    // pincfg if init
-    if (psPincfgIf == NULL || psPincfgIf->bRequest == NULL || psPincfgIf->bPresent == NULL ||
-        psPincfgIf->bSend == NULL || psPincfgIf->u8SaveCfg == NULL)
-    {
-        return PINCFG_IF_NULLPTR_ERROR_E;
-    }
-    psGlobals->sPincfgIf = *psPincfgIf;
-
     // V tabs init
     // extcfgreceiver
-    psGlobals->sExtCfgReceiverVTab.u8VType = V_TEXT;
-    psGlobals->sExtCfgReceiverVTab.u8SType = S_INFO;
+    psGlobals->sExtCfgReceiverVTab.eVType = V_TEXT;
+    psGlobals->sExtCfgReceiverVTab.eSType = S_INFO;
     psGlobals->sExtCfgReceiverVTab.vLoop = NULL;
     psGlobals->sExtCfgReceiverVTab.vReceive = ExtCfgReceiver_vRcvMessage;
-    psGlobals->sExtCfgReceiverVTab.vPresent = MySensorsPresent_vPresent;
-    psGlobals->sExtCfgReceiverVTab.vPresentState = MySensorsPresent_vPresentState;
-    psGlobals->sExtCfgReceiverVTab.vSendState = MySensorsPresent_vSendState;
     // switch
-    psGlobals->sSwitchVTab.u8VType = V_STATUS;
-    psGlobals->sSwitchVTab.u8SType = S_BINARY;
+    psGlobals->sSwitchVTab.eVType = V_STATUS;
+    psGlobals->sSwitchVTab.eSType = S_BINARY;
     psGlobals->sSwitchVTab.vLoop = Switch_vLoop;
     psGlobals->sSwitchVTab.vReceive = MySensorsPresent_vRcvMessage;
-    psGlobals->sSwitchVTab.vPresent = MySensorsPresent_vPresent;
-    psGlobals->sSwitchVTab.vPresentState = MySensorsPresent_vPresentState;
-    psGlobals->sSwitchVTab.vSendState = MySensorsPresent_vSendState;
     // inpin
-    psGlobals->sInPinVTab.u8VType = V_TRIPPED;
-    psGlobals->sInPinVTab.u8SType = S_DOOR;
+    psGlobals->sInPinVTab.eVType = V_TRIPPED;
+    psGlobals->sInPinVTab.eSType = S_DOOR;
     psGlobals->sInPinVTab.vLoop = InPin_vLoop;
     psGlobals->sInPinVTab.vReceive = InPin_vRcvMessage;
-    psGlobals->sInPinVTab.vPresent = MySensorsPresent_vPresent;
-    psGlobals->sInPinVTab.vPresentState = MySensorsPresent_vPresentState;
-    psGlobals->sInPinVTab.vSendState = MySensorsPresent_vSendState;
+    // CPUTemp
+    psGlobals->sCpuTempVTab.eVType = V_TEMP;
+    psGlobals->sCpuTempVTab.eSType = S_TEMP;
+    psGlobals->sCpuTempVTab.vLoop = CPUTemp_vLoop;
+    psGlobals->sCpuTempVTab.vReceive = InPin_vRcvMessage;
     // trigger
     psGlobals->sTriggerVTab.vEventHandle = Trigger_vEventHandle;
 
@@ -166,7 +154,23 @@ PINCFG_RESULT_T PinCfgCsv_eInit(uint8_t *pu8Memory, size_t szMemorySize, PINCFG_
     Switch_SetFbOffDelayMs(PINCFG_SWITCH_FB_OFF_DELAY_MS_D);
     Switch_vSetTimedActionAdditionMs(PINCFG_TIMED_ACTION_ADDITION_MS_D);
 
-    return PINCFG_OK_E;
+    char *pcCfgBuf = PinCfgCsv_pcGetCfgBuf();
+    PINCFG_RESULT_T ePincfgResult = PINCFG_ERROR_E;
+    PERCFG_RESULT_T eLoadResult = eLoadCfg(pcCfgBuf);
+
+    if (eLoadResult == PERCFG_OK_E)
+        ePincfgResult = PinCfgCsv_eParse(NULL, NULL, 0, false);
+
+    if (pcDefaultCfg != NULL &&
+        (eLoadResult != PERCFG_OK_E || (ePincfgResult != PINCFG_OK_E && ePincfgResult != PINCFG_WARNINGS_E)))
+    {
+        strcpy(pcCfgBuf, pcDefaultCfg);
+        ePincfgResult = PinCfgCsv_eParse(NULL, NULL, 0, false);
+        // char sOutStr[1000];
+        // ePincfgResult = PinCfgCsv_eParse(NULL, sOutStr, sizeof(sOutStr), false);
+    }
+
+    return ePincfgResult;
 }
 
 char *PinCfgCsv_pcGetCfgBuf(void)
@@ -181,8 +185,7 @@ PINCFG_RESULT_T PinCfgCsv_eParse(
     size_t *pszMemoryRequired,
     char *pcOutString,
     const uint16_t u16OutStrMaxLen,
-    const bool bValidate,
-    const bool bRemoteConfigEnabled)
+    const bool bValidate)
 {
     PINCFG_PARSE_SUBFN_PARAMS_T sPrms = {
         .pszMemoryRequired = pszMemoryRequired,
@@ -204,7 +207,7 @@ PINCFG_RESULT_T PinCfgCsv_eParse(
     if (pcOutString != NULL && u16OutStrMaxLen > 0)
         pcOutString[0] = '\0';
 
-    eResult = PinCfgCsv_CreateExternalCfgReceiver(&sPrms, bRemoteConfigEnabled);
+    eResult = PinCfgCsv_CreateExternalCfgReceiver(&sPrms);
     if (eResult != PINCFG_OK_E)
         return eResult;
 
@@ -263,6 +266,13 @@ PINCFG_RESULT_T PinCfgCsv_eParse(
             if (eResult != PINCFG_OK_E)
                 return eResult;
         }
+        // temperature
+        else if (sPrms.sTempStrPt.szLen == 2 && sPrms.sTempStrPt.pcStrStart[0] == 'T')
+        {
+            eResult = PinCfgCsv_ParseTemperatureSensors(&sPrms);
+            if (eResult != PINCFG_OK_E)
+                return eResult;
+        }
         // global config items
         else if (sPrms.sTempStrPt.szLen == 2 && sPrms.sTempStrPt.pcStrStart[0] == 'C')
         {
@@ -295,7 +305,7 @@ PINCFG_RESULT_T PinCfgCsv_eParse(
 
 PINCFG_RESULT_T PinCfgCsv_eValidate(size_t *pszMemoryRequired, char *pcOutString, const uint16_t u16OutStrMaxLen)
 {
-    return PinCfgCsv_eParse(pszMemoryRequired, pcOutString, u16OutStrMaxLen, true, false);
+    return PinCfgCsv_eParse(pszMemoryRequired, pcOutString, u16OutStrMaxLen, true);
 }
 
 #ifdef MY_CONTROLLER_HA
@@ -316,8 +326,8 @@ void PinCfgCsv_vLoop(uint32_t u32ms)
         {
             if (!psCurrent->bStatePresented)
             {
-                psCurrent->psVtab->vPresentState(psCurrent);
-                psGlobals->sPincfgIf.vWait(50);
+                MySensorsPresent_vPresentState(psCurrent);
+                vWait(50);
                 bAllPresented = false;
             }
             psCurrent = psCurrent->psNextPresentable;
@@ -343,9 +353,9 @@ void PinCfgCsv_vPresentation(void)
     LOOPRE_T *psCurrent = psGlobals->psPresentablesFirst;
     while (psCurrent != NULL)
     {
-        psCurrent->psVtab->vPresent(psCurrent);
+        MySensorsPresent_vPresent(psCurrent);
         psCurrent = psCurrent->psNextPresentable;
-        psGlobals->sPincfgIf.vWait(50);
+        vWait(50);
     }
 }
 
@@ -362,14 +372,12 @@ void PinCfgCfg_vReceive(const uint8_t u8Id, const void *pvMessage)
 }
 
 // private
-static inline PINCFG_RESULT_T PinCfgCsv_CreateExternalCfgReceiver(
-    PINCFG_PARSE_SUBFN_PARAMS_T *psPrms,
-    bool bRemoteConfigEnabled)
+static inline PINCFG_RESULT_T PinCfgCsv_CreateExternalCfgReceiver(PINCFG_PARSE_SUBFN_PARAMS_T *psPrms)
 {
     if (psPrms == NULL)
         return PINCFG_NULLPTR_ERROR_E;
 
-    if (!psPrms->bValidate && bRemoteConfigEnabled)
+    if (!psPrms->bValidate)
     {
         EXTCFGRECEIVER_HANDLE_T *psCfgRcvrHnd =
             (EXTCFGRECEIVER_HANDLE_T *)Memory_vpAlloc(sizeof(EXTCFGRECEIVER_HANDLE_T));
@@ -930,6 +938,140 @@ static inline PINCFG_RESULT_T PinCfgCsv_ParseTriggers(PINCFG_PARSE_SUBFN_PARAMS_
     return PINCFG_OK_E;
 }
 
+static inline PINCFG_RESULT_T PinCfgCsv_ParseTemperatureSensors(PINCFG_PARSE_SUBFN_PARAMS_T *psPrms)
+{
+    switch (psPrms->sTempStrPt.pcStrStart[1])
+    {
+    case 'I': return PinCfgCsv_ParseCPUTemperatureSensor(psPrms); break;
+    default:
+    {
+        psPrms->pcOutStringLast += snprintf(
+            (char *)(psPrms->pcOutString + psPrms->pcOutStringLast),
+            szGetSize(psPrms->u16OutStrMaxLen, psPrms->pcOutStringLast),
+            _s[FSDS_E],
+            _s[WL_E],
+            psPrms->u16LinesProcessed,
+            " Unknown type of temperature sensor.");
+        psPrms->szNumberOfWarnings++;
+
+        return PINCFG_OK_E;
+    }
+    break;
+    }
+
+    return PINCFG_OK_E;
+}
+
+static inline PINCFG_RESULT_T PinCfgCsv_ParseCPUTemperatureSensor(PINCFG_PARSE_SUBFN_PARAMS_T *psPrms)
+{
+    if (psPrms->u8LineItemsLen < 2)
+    {
+        psPrms->pcOutStringLast += snprintf(
+            (char *)(psPrms->pcOutString + psPrms->pcOutStringLast),
+            szGetSize(psPrms->u16OutStrMaxLen, psPrms->pcOutStringLast),
+            _s[FSDSSS_E],
+            _s[WL_E],
+            psPrms->u16LinesProcessed,
+            _s[CPUTMP_E],
+            _s[IN_E],
+            _s[OARGS_E]);
+        psPrms->szNumberOfWarnings++;
+
+        return PINCFG_OK_E;
+    }
+
+    uint32_t u32ReportInterval = PINCFG_CPUTEMP_REPORTING_INTV_MS_D;
+    if (psPrms->u8LineItemsLen >= 3)
+    {
+        psPrms->sTempStrPt = psPrms->sLine;
+        PinCfgStr_vGetSplitElemByIndex(&(psPrms->sTempStrPt), PINCFG_VALUE_SEPARATOR_D, 2);
+        if (PinCfgStr_eAtoU32(&(psPrms->sTempStrPt), &u32ReportInterval) != PINCFG_STR_OK_E)
+        {
+            psPrms->pcOutStringLast += snprintf(
+                (char *)(psPrms->pcOutString + psPrms->pcOutStringLast),
+                szGetSize(psPrms->u16OutStrMaxLen, psPrms->pcOutStringLast),
+                _s[FSDSSS_E],
+                _s[WL_E],
+                psPrms->u16LinesProcessed,
+                _s[CPUTMP_E],
+                _s[IN_E],
+                ".");
+            psPrms->szNumberOfWarnings++;
+
+            return PINCFG_OK_E;
+        }
+    }
+
+    float fOffset = PINCFG_CPUTEMP_OFFSET_D;
+    if (psPrms->u8LineItemsLen >= 4)
+    {
+        psPrms->sTempStrPt = psPrms->sLine;
+        PinCfgStr_vGetSplitElemByIndex(&(psPrms->sTempStrPt), PINCFG_VALUE_SEPARATOR_D, 3);
+        if (PinCfgStr_eAtoFloat(&(psPrms->sTempStrPt), &fOffset) != PINCFG_STR_OK_E)
+        {
+            psPrms->pcOutStringLast += snprintf(
+                (char *)(psPrms->pcOutString + psPrms->pcOutStringLast),
+                szGetSize(psPrms->u16OutStrMaxLen, psPrms->pcOutStringLast),
+                _s[FSDSSS_E],
+                _s[WL_E],
+                psPrms->u16LinesProcessed,
+                _s[CPUTMP_E],
+                _s[IN_E],
+                ".");
+            psPrms->szNumberOfWarnings++;
+
+            return PINCFG_OK_E;
+        }
+    }
+
+    psPrms->sTempStrPt = psPrms->sLine;
+    PinCfgStr_vGetSplitElemByIndex(&(psPrms->sTempStrPt), PINCFG_VALUE_SEPARATOR_D, 1);
+    if (!psPrms->bValidate)
+    {
+        CPUTEMP_HANDLE_T *psHnd = (CPUTEMP_HANDLE_T *)Memory_vpAlloc(sizeof(CPUTEMP_HANDLE_T));
+        if (psHnd == NULL)
+        {
+            Memory_eReset();
+            psPrms->pcOutStringLast += snprintf(
+                (char *)(psPrms->pcOutString + psPrms->pcOutStringLast),
+                szGetSize(psPrms->u16OutStrMaxLen, psPrms->pcOutStringLast),
+                _s[FSDSS_E],
+                _s[EL_E],
+                psPrms->u16LinesProcessed,
+                _s[CPUTMP_E],
+                _s[OOM_E]);
+
+            return PINCFG_OUTOFMEMORY_ERROR_E;
+        }
+
+        if (CPUTemp_eInit(psHnd, &(psPrms->sTempStrPt), psPrms->u8PresentablesCount, u32ReportInterval, fOffset) ==
+            CPUTEMP_OK_E)
+        {
+            PinCfgCsv_vAddToPresentables((LOOPRE_T *)psHnd);
+            psPrms->u8PresentablesCount++;
+            PinCfgCsv_vAddToLoopables((LOOPRE_T *)psHnd);
+        }
+        else
+        {
+            psPrms->pcOutStringLast += snprintf(
+                (char *)(psPrms->pcOutString + psPrms->pcOutStringLast),
+                szGetSize(psPrms->u16OutStrMaxLen, psPrms->pcOutStringLast),
+                _s[FSDSS_E],
+                _s[WL_E],
+                psPrms->u16LinesProcessed,
+                _s[CPUTMP_E],
+                _s[INITF_E]);
+            psPrms->szNumberOfWarnings++;
+        }
+    }
+
+    if (psPrms->pszMemoryRequired != NULL)
+        *(psPrms->pszMemoryRequired) +=
+            szGetAllocatedSize(sizeof(CPUTEMP_HANDLE_T)) + szGetAllocatedSize(psPrms->sTempStrPt.szLen + 1);
+
+    return PINCFG_OK_E;
+}
+
 static inline PINCFG_RESULT_T PinCfgCsv_ParseGlobalConfigItems(PINCFG_PARSE_SUBFN_PARAMS_T *psPrms)
 {
     PINCFG_PARSE_STRINGS_T eItem;
@@ -1041,17 +1183,18 @@ static inline void PinCfgCsv_vAddToLoopables(LOOPRE_T *psLoopable)
 
 static LOOPRE_T *PinCfgCsv_psFindInLoopablesByName(const STRING_POINT_T *psName)
 {
-    LOOPRE_T *psReturn = psGlobals->psLoopablesFirst;
+    LOOPRE_T *psReturn = NULL;
     char *pcTempStr = (char *)Memory_vpTempAlloc(psName->szLen + 1);
 
-    if (pcTempStr != NULL)
+    if (pcTempStr == NULL)
+        return psReturn;
+
+    psReturn = psGlobals->psLoopablesFirst;
+    memcpy(pcTempStr, psName->pcStrStart, psName->szLen);
+    pcTempStr[psName->szLen] = '\0';
+    while (psReturn != NULL && strcmp(LooPre_pcGetName(psReturn), pcTempStr) != 0)
     {
-        memcpy(pcTempStr, psName->pcStrStart, psName->szLen);
-        pcTempStr[psName->szLen] = '\0';
-        while (psReturn != NULL && strcmp(LooPre_pcGetName(psReturn), pcTempStr) != 0)
-        {
-            psReturn = psReturn->psNextLoopable;
-        }
+        psReturn = psReturn->psNextLoopable;
     }
     Memory_vTempFreeSize(psName->szLen + 1);
 

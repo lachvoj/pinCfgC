@@ -1,10 +1,5 @@
-#ifdef ARDUINO
-#include <Arduino.h>
-#else
-#include <ArduinoMock.h>
-#endif
-
 #include "Globals.h"
+#include "MySensorsWrapper.h"
 #include "Switch.h"
 
 static inline void Switch_vWritePin(SWITCH_HANDLE_T *psHandle, uint8_t u8Value)
@@ -91,7 +86,7 @@ void Switch_vLoop(LOOPRE_T *psBaseHandle, uint32_t u32ms)
                 psHandle->u32FbReadStarted = 0U;
                 psPresentHnd->u8State = u8ActualPinState;
                 psPresentHnd->bStateChanged = false;
-                psBaseHandle->psVtab->vSendState(psBaseHandle);
+                MySensorsPresent_vSendState(psBaseHandle);
             }
         }
         else if (psHandle->u32FbReadStarted != 0)

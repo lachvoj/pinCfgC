@@ -1,12 +1,8 @@
-#ifdef ARDUINO
-#include <Arduino.h>
-#else
-#include <ArduinoMock.h>
-#endif
 #include <errno.h>
 
 #include "Globals.h"
 #include "InPin.h"
+#include "MySensorsWrapper.h"
 #include "PinSubscriberIf.h"
 
 void InPin_SetDebounceMs(uint32_t u32Debounce)

@@ -3,7 +3,6 @@
 
 #include "LooPre.h"
 #include "PinCfgStr.h"
-#include "PincfgIf.h"
 #include "Types.h"
 
 typedef struct
@@ -34,6 +33,6 @@ void MySensorsPresent_vToggle(MYSENSORSPRESENT_HANDLE_T *psHandle);
 void MySensorsPresent_vRcvMessage(LOOPRE_T *psBaseHandle, const void *pvMessage);
 void MySensorsPresent_vPresent(LOOPRE_T *psBaseHandle);
 void MySensorsPresent_vPresentState(LOOPRE_T *psBaseHandle);
-void MySensorsPresent_vSendState(LOOPRE_T *psBaseHandle);
+void MySensorsPresent_ (LOOPRE_T *psBaseHandle);
 
 #endif // MYSENSORSPRESENT_H

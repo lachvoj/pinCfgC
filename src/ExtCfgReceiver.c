@@ -3,12 +3,14 @@
 #include "ExtCfgReceiver.h"
 #include "Globals.h"
 #include "Memory.h"
+#include "MySensorsWrapper.h"
+#include "PersistentConfigiration.h"
 #include "PinCfgCsv.h"
-#include "PincfgIf.h"
 
 static void ExtCfgReceiver_vConfigurationReceived(EXTCFGRECEIVER_HANDLE_T *psHandle);
 static void ExtCfgReceiver_vCommandFunction(EXTCFGRECEIVER_HANDLE_T *psHandle, char *cmd);
-static void ExtCfgReceiver_vSendBigMessage(EXTCFGRECEIVER_HANDLE_T *psHandle, char *pcBigMsg, size_t szMsgSize);
+static void ExtCfgReceiver_vSendBigMessage(EXTCFGRECEIVER_HANDLE_T *psHandle, char *pcBigMsg);
+static void ExtCfgReceiver_vSendMessage(EXTCFGRECEIVER_HANDLE_T *psHandle, const char *pvMessage);
 
 #if defined(ARDUINO) && !defined(TEST)
 void (*resetFunc)(void) = 0; // declare reset fuction at address 0
@@ -66,7 +68,7 @@ void ExtCfgReceiver_vSetState(
     }
 
     if (bSendState)
-        psGlobals->sPincfgIf.bSend(psHandle->sLooPre.u8Id, V_TEXT, psHandle->acState);
+        ExtCfgReceiver_vSendMessage(psHandle, psHandle->acState);
 }
 
 // presentable IF
@@ -83,7 +85,7 @@ void ExtCfgReceiver_vRcvMessage(LOOPRE_T *psBaseHandle, const void *pvMessage)
 
     if (psHandle->eState == EXTCFGRECEIVER_LISTENING_E)
     {
-        char *pcStartString = strstr(pcMessage, "#[#");
+        char *pcStartString = strstr((char *)pcMessage, "#[#");
         if (pcStartString != NULL)
         {
             strcpy(psGlobals->acCfgBuf, pcStartString + strlen("#[#"));
@@ -93,14 +95,14 @@ void ExtCfgReceiver_vRcvMessage(LOOPRE_T *psBaseHandle, const void *pvMessage)
         }
         else
         {
-            pcStartString = strstr(pcMessage, "#C:");
+            pcStartString = strstr((char *)pcMessage, "#C:");
             if (pcStartString != NULL)
                 ExtCfgReceiver_vCommandFunction(psHandle, pcStartString + strlen("#C:"));
         }
     }
     if (psHandle->eState == EXTCFGRECEIVER_RECEIVNG_E)
     {
-        char *pcEndString = strstr(pcMessage, "#]#");
+        char *pcEndString = strstr((char *)pcMessage, "#]#");
         if (pcEndString != NULL)
         {
             size_t szLen = pcEndString - pcMessage;
@@ -137,7 +139,7 @@ static void ExtCfgReceiver_vConfigurationReceived(EXTCFGRECEIVER_HANDLE_T *psHan
     if (eValidationResult == PINCFG_OK_E)
     {
         ExtCfgReceiver_vSetState(psHandle, EXTCFGRECEIVER_VALIDATION_OK_E, NULL, true);
-        if (psGlobals->sPincfgIf.u8SaveCfg(psGlobals->acCfgBuf) == 0U)
+        if (eSaveCfg(psGlobals->acCfgBuf) == 0U)
         {
 #ifdef ARDUINO_ARCH_STM32F1
             asm("b Reset_Handler");
@@ -151,7 +153,7 @@ static void ExtCfgReceiver_vConfigurationReceived(EXTCFGRECEIVER_HANDLE_T *psHan
         size_t szOutSize = strlen(pcOut);
         if (szOutSize > 0)
         {
-            ExtCfgReceiver_vSendBigMessage(psHandle, pcOut, strlen(pcOut));
+            ExtCfgReceiver_vSendBigMessage(psHandle, pcOut);
         }
 
         ExtCfgReceiver_vSetState(psHandle, EXTCFGRECEIVER_VALIDATION_ERROR_E, NULL, true);
@@ -166,20 +168,35 @@ static void ExtCfgReceiver_vCommandFunction(EXTCFGRECEIVER_HANDLE_T *psHandle, c
 {
     if (strcmp("GET_CFG", cmd) == 0)
     {
-        ExtCfgReceiver_vSendBigMessage(psHandle, psGlobals->acCfgBuf, strlen(psGlobals->acCfgBuf));
+        ExtCfgReceiver_vSendBigMessage(psHandle, psGlobals->acCfgBuf);
         ExtCfgReceiver_vSetState(psHandle, EXTCFGRECEIVER_LISTENING_E, NULL, true);
     }
 }
 
-static void ExtCfgReceiver_vSendBigMessage(EXTCFGRECEIVER_HANDLE_T *psHandle, char *pcBigMsg, size_t szMsgSize)
+static void ExtCfgReceiver_vSendBigMessage(EXTCFGRECEIVER_HANDLE_T *psHandle, char *pcBigMsg)
 {
+    size_t szMsgSize = strlen(pcBigMsg);
     uint8_t u8MyMsgsCount = szMsgSize / PINCFG_TXTSTATE_MAX_SZ_D;
     if ((szMsgSize % PINCFG_TXTSTATE_MAX_SZ_D) > 0)
         u8MyMsgsCount++;
 
     for (uint8_t u8i = 0; u8i < u8MyMsgsCount; u8i++)
     {
-        psGlobals->sPincfgIf.bSend(psHandle->sLooPre.u8Id, V_TEXT, pcBigMsg + (u8i * PINCFG_TXTSTATE_MAX_SZ_D));
-        psGlobals->sPincfgIf.vWait(PINCFG_LONG_MESSAGE_DELAY_MS_D);
+        ExtCfgReceiver_vSendMessage(psHandle, pcBigMsg + (u8i * PINCFG_TXTSTATE_MAX_SZ_D));
+        vWait(PINCFG_LONG_MESSAGE_DELAY_MS_D);
     }
+}
+
+static void ExtCfgReceiver_vSendMessage(EXTCFGRECEIVER_HANDLE_T *psHandle, const char *pcMessage)
+{
+    LOOPRE_T *psBaseHandle = (LOOPRE_T *)psHandle;
+    MyMessage msg;
+
+    if (eMyMessageInit(&msg, psBaseHandle->u8Id, psBaseHandle->psVtab->eVType) != WRAP_OK_E)
+        return;
+
+    if (eMyMessageSetCStr(&msg, pcMessage) != WRAP_OK_E)
+        return;
+
+    eSend(&msg, false);
 }

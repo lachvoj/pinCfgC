@@ -1,7 +1,7 @@
 #ifndef LOOPRE_H
 #define LOOPRE_H
 
-#include "Types.h"
+#include "MySensorsWrapper.h"
 
 struct LOOPRE_T;
 
@@ -11,11 +11,8 @@ typedef struct
     void (*vLoop)(struct LOOPRE_T *psHandle, uint32_t u32ms);
     // presentable
     void (*vReceive)(struct LOOPRE_T *psHandle, const void *pvMessage);
-    void (*vPresent)(struct LOOPRE_T *psHandle);
-    void (*vPresentState)(struct LOOPRE_T *psHandle);
-    void (*vSendState)(struct LOOPRE_T *psHandle);
-    uint8_t u8VType;
-    uint8_t u8SType;
+    mysensors_data_t eVType;
+    mysensors_sensor_t eSType;
 } LOOPRE_VTAB_T;
 
 typedef struct LOOPRE_T

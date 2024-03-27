@@ -3,6 +3,7 @@
 #include "Globals.h"
 #include "Memory.h"
 #include "MySensorsPresent.h"
+#include "MySensorsWrapper.h"
 
 MYSENSORSPRESENT_RESULT_T MySensorsPresent_eInit(
     MYSENSORSPRESENT_HANDLE_T *psHandle,
@@ -35,7 +36,7 @@ void MySensorsPresent_vSetState(MYSENSORSPRESENT_HANDLE_T *psHandle, uint8_t u8S
     psHandle->bStateChanged = (psHandle->u8State != u8State);
     psHandle->u8State = u8State;
     if (psHandle->bStateChanged && bSendStatus)
-        ((LOOPRE_T *)psHandle)->psVtab->vSendState((LOOPRE_T *)psHandle);
+        MySensorsPresent_vSendState((LOOPRE_T *)psHandle);
 }
 
 uint8_t MySensorsPresent_u8GetState(MYSENSORSPRESENT_HANDLE_T *psHandle)
@@ -51,7 +52,7 @@ void MySensorsPresent_vToggle(MYSENSORSPRESENT_HANDLE_T *psHandle)
         psHandle->u8State = (uint8_t) false;
 
     psHandle->bStateChanged = true;
-    ((LOOPRE_T *)psHandle)->psVtab->vSendState((LOOPRE_T *)psHandle);
+    MySensorsPresent_vSendState((LOOPRE_T *)psHandle);
 }
 
 // IMySensorsPresentable
@@ -65,19 +66,23 @@ void MySensorsPresent_vRcvMessage(LOOPRE_T *psBaseHandle, const void *pvMessage)
 
 void MySensorsPresent_vPresent(LOOPRE_T *psBaseHandle)
 {
-    psGlobals->sPincfgIf.bPresent(psBaseHandle->u8Id, psBaseHandle->psVtab->u8SType, psBaseHandle->pcName);
+    ePresent(psBaseHandle->u8Id, psBaseHandle->psVtab->eSType, psBaseHandle->pcName, false);
 }
 
 void MySensorsPresent_vPresentState(LOOPRE_T *psBaseHandle)
 {
-    psBaseHandle->psVtab->vSendState(psBaseHandle);
-    psGlobals->sPincfgIf.bRequest(psBaseHandle->u8Id, psBaseHandle->psVtab->u8VType, GATEWAY_ADDRESS);
+    MySensorsPresent_vSendState(psBaseHandle);
+    eRequest(psBaseHandle->u8Id, psBaseHandle->psVtab->eVType, GATEWAY_ADDRESS);
 }
 
 void MySensorsPresent_vSendState(LOOPRE_T *psBaseHandle)
 {
-    psGlobals->sPincfgIf.bSend(
-        psBaseHandle->u8Id,
-        psBaseHandle->psVtab->u8VType,
-        (const void *)&(((MYSENSORSPRESENT_HANDLE_T *)psBaseHandle)->u8State));
+    MyMessage msg;
+    if (eMyMessageInit(&msg, psBaseHandle->u8Id, psBaseHandle->psVtab->eVType) != WRAP_OK_E)
+        return;
+
+    if (eMyMessageSetUInt8(&msg, ((MYSENSORSPRESENT_HANDLE_T *)psBaseHandle)->u8State) != WRAP_OK_E)
+        return;
+
+    eSend(&msg, false);
 }

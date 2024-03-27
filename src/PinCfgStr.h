@@ -31,6 +31,8 @@ PINCFG_STR_RESULT_T PinCfgStr_eAtoU8(const STRING_POINT_T *psStrPt, uint8_t *pu8
 
 PINCFG_STR_RESULT_T PinCfgStr_eAtoU32(const STRING_POINT_T *psStrPt, uint32_t *pu32Out);
 
+PINCFG_STR_RESULT_T PinCfgStr_eAtoFloat(const STRING_POINT_T *psStrPt, float *fOut);
+
 PINCFG_STR_RESULT_T PinCfgStr_eSplitStrPt(
     const STRING_POINT_T *psInStrPt,
     const char cDelimiter,
