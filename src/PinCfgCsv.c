@@ -6,7 +6,6 @@
 #include "Cli.h"
 #include "Globals.h"
 #include "InPin.h"
-#include "LinkedList.h"
 #include "Memory.h"
 #include "MySensorsWrapper.h"
 #include "PersistentConfigiration.h"
@@ -48,7 +47,6 @@ static const char *_s[] = {
     "SwitchImpulseDurationMs:",           // SWIDMS_E
     "SwitchFbOnDelayMs:",                 // SWFNDMS_E
     "SwitchFbOffDelayMs:",                // SWFFDMS_E
-    "SwitchTimedActionAdditionMs:",       // SWTAAMS_E
     "Out of memory.",                     // OOM_E
     "Init failed!",                       // INITF_E
     "Invalid pin number.",                // IPN_E
@@ -80,7 +78,6 @@ typedef enum PINCFG_PARSE_STRINGS_E
     SWIDMS_E,
     SWFNDMS_E,
     SWFFDMS_E,
-    SWTAAMS_E,
     OOM_E,
     INITF_E,
     IPN_E,
@@ -103,10 +100,6 @@ static inline PRESENTABLE_T *PinCfgCsv_psFindInPresentablesById(uint8_t u8Id);
 static PRESENTABLE_T *PinCfgCsv_psFindInTempPresentablesByName(const STRING_POINT_T *psName);
 static inline size_t szGetAllocatedSize(size_t szToAllocate);
 static inline size_t szGetSize(size_t a, size_t b);
-
-PINCFG_RESULT_T PinCfgCsv_eAddToTempLoopables(LOOPABLE_T *psLoopable);
-PINCFG_RESULT_T PinCfgCsv_eAddToTempPresentables(PRESENTABLE_T *psPresentable);
-PINCFG_RESULT_T PinCfgCsv_eLinkedListToArray(LINKEDLIST_ITEM_T **ppsFirst, uint8_t *u8Count);
 
 #ifdef MY_CONTROLLER_HA
 static bool bInitialValueSent = false;
@@ -438,10 +431,11 @@ static inline PINCFG_RESULT_T PinCfgCsv_CreateCli(PINCFG_PARSE_SUBFN_PARAMS_T *p
 static inline PINCFG_RESULT_T PinCfgCsv_ParseSwitch(PINCFG_PARSE_SUBFN_PARAMS_T *psPrms)
 {
     uint8_t u8Pin, u8FbPin, u8Count, u8Offset, u8SwItems, i;
+    uint32_t u32TimedPeriodMs = 0U;
     SWITCH_MODE_T eMode = SWITCH_CLASSIC_E;
     bool bIsDefinitionValid = true;
 
-    u8SwItems = 2;
+    u8SwItems = 2; // switch name and pin
     u8FbPin = 0U;
 
     if (psPrms == NULL)
@@ -466,15 +460,20 @@ static inline PINCFG_RESULT_T PinCfgCsv_ParseSwitch(PINCFG_PARSE_SUBFN_PARAMS_T 
     {
         if (psPrms->sTempStrPt.pcStrStart[1] == 'I')
             eMode = SWITCH_IMPULSE_E;
+        else if (psPrms->sTempStrPt.pcStrStart[1] == 'T')
+        {
+            eMode = SWITCH_TIMED_E;
+            u8SwItems = 3; // switch name, pin and delay
+        }
         else if ((psPrms->sTempStrPt.pcStrStart[1] == 'F'))
-            u8SwItems = 3;
+            u8SwItems = 3; // switch name, pin and feedback pin
         else
             bIsDefinitionValid = false;
 
         if (psPrms->sTempStrPt.szLen >= 3)
         {
             if (psPrms->sTempStrPt.pcStrStart[2] == 'F')
-                u8SwItems = 3;
+                u8SwItems++;
             else
                 bIsDefinitionValid = false;
         }
@@ -531,10 +530,15 @@ static inline PINCFG_RESULT_T PinCfgCsv_ParseSwitch(PINCFG_PARSE_SUBFN_PARAMS_T 
             continue;
         }
 
-        if (u8SwItems == 3)
+        // feedback pin
+        if ((eMode != SWITCH_TIMED_E && u8SwItems == 3) || (eMode == SWITCH_TIMED_E && u8SwItems == 4))
         {
+            uint8_t u8FbPinOffset = 2;
+            if (u8SwItems == 4)
+                u8FbPinOffset++;
+
             psPrms->sTempStrPt = psPrms->sLine;
-            PinCfgStr_vGetSplitElemByIndex(&(psPrms->sTempStrPt), PINCFG_VALUE_SEPARATOR_D, (u8Offset + 2));
+            PinCfgStr_vGetSplitElemByIndex(&(psPrms->sTempStrPt), PINCFG_VALUE_SEPARATOR_D, (u8Offset + u8FbPinOffset));
             if (PinCfgStr_eAtoU8(&(psPrms->sTempStrPt), &u8FbPin) != PINCFG_STR_OK_E)
             {
                 psPrms->pcOutStringLast += snprintf(
@@ -545,6 +549,28 @@ static inline PINCFG_RESULT_T PinCfgCsv_ParseSwitch(PINCFG_PARSE_SUBFN_PARAMS_T 
                     psPrms->u16LinesProcessed,
                     _s[SW_E],
                     _s[IPN_E]);
+                psPrms->szNumberOfWarnings++;
+                continue;
+            }
+        }
+
+        // time period
+        if (eMode == SWITCH_TIMED_E)
+        {
+            psPrms->sTempStrPt = psPrms->sLine;
+            PinCfgStr_vGetSplitElemByIndex(&(psPrms->sTempStrPt), PINCFG_VALUE_SEPARATOR_D, (u8Offset + 2));
+            if (PinCfgStr_eAtoU32(&(psPrms->sTempStrPt), &u32TimedPeriodMs) != PINCFG_STR_OK_E ||
+                u32TimedPeriodMs < PINCFG_TIMED_SWITCH_MIN_PERIOD_MS_D ||
+                u32TimedPeriodMs > PINCFG_TIMED_SWITCH_MAX_PERIOD_MS_D)
+            {
+                psPrms->pcOutStringLast += snprintf(
+                    (char *)(psPrms->psParsePrms->pcOutString + psPrms->pcOutStringLast),
+                    szGetSize(psPrms->psParsePrms->u16OutStrMaxLen, psPrms->pcOutStringLast),
+                    _s[FSDSS_E],
+                    _s[WL_E],
+                    psPrms->u16LinesProcessed,
+                    _s[SW_E],
+                    "Invalid time period.");
                 psPrms->szNumberOfWarnings++;
                 continue;
             }
@@ -576,8 +602,14 @@ static inline PINCFG_RESULT_T PinCfgCsv_ParseSwitch(PINCFG_PARSE_SUBFN_PARAMS_T 
             }
 
             bInitOk =
-                (Switch_eInit(psSwitchHnd, &(psPrms->sTempStrPt), psPrms->u8PresentablesCount, eMode, u8Pin, u8FbPin) ==
-                 SWITCH_OK_E);
+                (Switch_eInit(
+                     psSwitchHnd,
+                     &(psPrms->sTempStrPt),
+                     psPrms->u8PresentablesCount,
+                     eMode,
+                     u8Pin,
+                     u8FbPin,
+                     u32TimedPeriodMs) == SWITCH_OK_E);
         }
 
         if (bInitOk && psPrms->psParsePrms->eAddToPresentables != NULL)
@@ -801,7 +833,8 @@ static inline PINCFG_RESULT_T PinCfgCsv_ParseTriggers(PINCFG_PARSE_SUBFN_PARAMS_
 
     psPrms->sTempStrPt = psPrms->sLine;
     PinCfgStr_vGetSplitElemByIndex(&(psPrms->sTempStrPt), PINCFG_VALUE_SEPARATOR_D, 3);
-    if (PinCfgStr_eAtoU8(&(psPrms->sTempStrPt), &u8EventType) != PINCFG_STR_OK_E || u8EventType > (uint8_t)TRIGGER_LONG)
+    if (PinCfgStr_eAtoU8(&(psPrms->sTempStrPt), &u8EventType) != PINCFG_STR_OK_E ||
+        u8EventType > (uint8_t)TRIGGER_ALL_E)
     {
         psPrms->pcOutStringLast += snprintf(
             (char *)(psPrms->psParsePrms->pcOutString + psPrms->pcOutStringLast),
@@ -878,7 +911,8 @@ static inline PINCFG_RESULT_T PinCfgCsv_ParseTriggers(PINCFG_PARSE_SUBFN_PARAMS_
 
         psPrms->sTempStrPt = psPrms->sLine;
         PinCfgStr_vGetSplitElemByIndex(&(psPrms->sTempStrPt), PINCFG_VALUE_SEPARATOR_D, (u8Offset + 1));
-        if (PinCfgStr_eAtoU8(&(psPrms->sTempStrPt), &u8DrivenAction) != PINCFG_STR_OK_E || u8DrivenAction > 2)
+        if (PinCfgStr_eAtoU8(&(psPrms->sTempStrPt), &u8DrivenAction) != PINCFG_STR_OK_E ||
+            u8DrivenAction > (uint8_t)TRIGGER_A_FORWARD_E)
         {
             psPrms->pcOutStringLast += snprintf(
                 (char *)(psPrms->psParsePrms->pcOutString + psPrms->pcOutStringLast),
@@ -1146,7 +1180,6 @@ static inline PINCFG_RESULT_T PinCfgCsv_ParseGlobalConfigItems(PINCFG_PARSE_SUBF
     break;
     case 'N': eItem = SWFNDMS_E; break;
     case 'F': eItem = SWFFDMS_E; break;
-    case 'A': eItem = SWTAAMS_E; break;
     default:
     {
         psPrms->pcOutStringLast += snprintf(
@@ -1204,7 +1237,6 @@ static inline PINCFG_RESULT_T PinCfgCsv_ParseGlobalConfigItems(PINCFG_PARSE_SUBF
     case SWIDMS_E: Switch_SetImpulseDurationMs(u32ParsedNumber); break;
     case SWFNDMS_E: Switch_SetFbOnDelayMs(u32ParsedNumber); break;
     case SWFFDMS_E: Switch_SetFbOffDelayMs(u32ParsedNumber); break;
-    case SWTAAMS_E: Switch_vSetTimedActionAdditionMs(u32ParsedNumber); break;
     default: break;
     }
 

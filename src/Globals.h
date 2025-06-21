@@ -28,7 +28,6 @@ typedef struct
     uint32_t u32SwitchImpulseDurationMs;
     uint32_t u32SwitchFbOnDelayMs;
     uint32_t u32SwitchFbOffDelayMs;
-    uint32_t u32SwitchTimedActionAdditionMs;
 } GLOBALS_T;
 
 extern GLOBALS_T *psGlobals;

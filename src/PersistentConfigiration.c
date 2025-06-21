@@ -1,4 +1,9 @@
+#ifdef UNIT_TEST
+#include "EEPROMMock.h"
+#else
 #include <core/MyEepromAddresses.h>
+#endif
+
 #include <string.h>
 
 #include "PersistentConfigiration.h"

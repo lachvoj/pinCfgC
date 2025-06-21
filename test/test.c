@@ -1,9 +1,6 @@
 #include <stdio.h>
 #include <unity.h>
 
-#ifndef ARDUINO
-#include "ArduinoMock.h"
-#endif
 #include "Cli.h"
 #include "Globals.h"
 #include "InPin.h"
@@ -14,6 +11,9 @@
 #include "Presentable.h"
 #include "Switch.h"
 #include "Trigger.h"
+
+#include "MySensorsMock.h"
+#include "ArduinoMock.h"
 
 #ifndef MEMORY_SZ
 #define MEMORY_SZ 3003
@@ -31,10 +31,6 @@
 #define OUT_STR_MAX_LEN_D 250
 #endif
 
-extern PINCFG_RESULT_T PinCfgCsv_eAddToTempLoopables(LOOPABLE_T *psLoopable);
-extern PINCFG_RESULT_T PinCfgCsv_eAddToTempPresentables(PRESENTABLE_T *psPresentable);
-extern PINCFG_RESULT_T PinCfgCsv_eLinkedListToArray(LINKEDLIST_ITEM_T **ppsFirst, uint8_t *u8Count);
-
 static uint8_t testMemory[MEMORY_SZ];
 
 void setUp(void)
@@ -42,10 +38,7 @@ void setUp(void)
     PinCfgCsv_eInit(testMemory, MEMORY_SZ, NULL);
 
     init_MySensorsMock();
-
-#ifndef ARDUINO
     init_ArduinoMock();
-#endif
 }
 
 void tearDown(void)
@@ -338,14 +331,12 @@ void test_vInPin(void)
     TEST_ASSERT_EQUAL(INPIN_SUBINIT_ERROR_E, eResult);
     eResult = InPin_eInit(psInPinHandle, &sName, 2, 16);
     TEST_ASSERT_EQUAL(INPIN_OK_E, eResult);
-#ifndef ARDUINO
     TEST_ASSERT_EQUAL(16, mock_pinMode_u8Pin);
     TEST_ASSERT_EQUAL(INPUT_PULLUP, mock_pinMode_u8Mode);
     TEST_ASSERT_EQUAL(1, mock_pinMode_u32Called);
     TEST_ASSERT_EQUAL(16, mock_digitalWrite_u8Pin);
     TEST_ASSERT_EQUAL(HIGH, mock_digitalWrite_u8Value);
     TEST_ASSERT_EQUAL(1, mock_digitalWrite_u32Called);
-#endif
 
     // add subscirber
     PINSUBSCRIBER_IF_T *psPinSubscriber1 = (PINSUBSCRIBER_IF_T *)Memory_vpAlloc(sizeof(PINSUBSCRIBER_IF_T));
@@ -378,7 +369,8 @@ void test_vSwitch(void)
                         "CR,350/"
                         "SI,o5,9/"
                         "SF,o6,10,2/"
-                        "SIF,o7,11,3/";
+                        "SIF,o7,11,3/"
+                        "ST,o8,11,300000/";
 
     PINCFG_PARSE_PARAMS_T sParams = {
         .pcConfig = pcCfg,
@@ -395,12 +387,12 @@ void test_vSwitch(void)
     eParseResult =
         PinCfgCsv_eLinkedListToArray((LINKEDLIST_ITEM_T **)(&psGlobals->ppsLoopables), &psGlobals->u8LoopablesCount);
     TEST_ASSERT_EQUAL(PINCFG_OK_E, eParseResult);
-    TEST_ASSERT_EQUAL(5, psGlobals->u8LoopablesCount);
+    TEST_ASSERT_EQUAL(6, psGlobals->u8LoopablesCount);
 
     eParseResult = PinCfgCsv_eLinkedListToArray(
         (LINKEDLIST_ITEM_T **)(&psGlobals->ppsPresentables), &psGlobals->u8PresentablesCount);
     TEST_ASSERT_EQUAL(PINCFG_OK_E, eParseResult);
-    TEST_ASSERT_EQUAL(6, psGlobals->u8PresentablesCount);
+    TEST_ASSERT_EQUAL(7, psGlobals->u8PresentablesCount);
 
     PRESENTABLE_T *psPresentable = (PRESENTABLE_T *)psGlobals->ppsPresentables[0];
     TEST_ASSERT_EQUAL_STRING("CLI", psPresentable->pcName);
@@ -435,6 +427,12 @@ void test_vSwitch(void)
     TEST_ASSERT_EQUAL(3, psSwitchHnd->u8FbPin);
 
     TEST_ASSERT_EQUAL(350, psGlobals->u32SwitchImpulseDurationMs);
+
+    psSwitchHnd = (SWITCH_T *)psGlobals->ppsPresentables[6];
+    TEST_ASSERT_EQUAL_STRING("o8", psSwitchHnd->sPresentable.pcName);
+    TEST_ASSERT_EQUAL(SWITCH_TIMED_E, psSwitchHnd->eMode);
+    TEST_ASSERT_EQUAL(11, psSwitchHnd->u8OutPin);
+    TEST_ASSERT_EQUAL(300000, psSwitchHnd->u32TimedAdidtionalDelayMs);
 }
 
 void test_vPinCfgCsv(void)
@@ -603,8 +601,7 @@ void test_vGlobalConfig(void)
                        "CM,620/"
                        "CR,150/"
                        "CN,1000/"
-                       "CF,30000/"
-                       "CA,1966080/";
+                       "CF,30000/";
 
     eParseResult = PinCfgCsv_eParse(&sParams);
 
@@ -690,20 +687,270 @@ void test_vGlobalConfig(void)
 
     TEST_ASSERT_EQUAL_STRING("W:L:0:SwitchFbOffDelayMs:Invalid number.\nI: Configuration parsed.\n", acOutStr);
 
-    // Switch timed action time addition
-    memset(acOutStr, 0, OUT_STR_MAX_LEN_D);
-    sParams.pcConfig = "CA";
+}
 
-    eParseResult = PinCfgCsv_eParse(&sParams);
+void test_vFlow_timedSwitch(void)
+{
+    PINCFG_RESULT_T eResult;
+    char acOutStr[OUT_STR_MAX_LEN_D];
+    size_t szMemoryRequired;
+    GLOBALS_T *psGlobals = (GLOBALS_T *)testMemory;
 
-    TEST_ASSERT_EQUAL_STRING("W:L:0:Not defined or invalid format.\nI: Configuration parsed.\n", acOutStr);
+    // Configuration string: input pin -> trigger -> timed switch
+    const char *pcCfg = "I,i1,16/"           // Input pin on pin 16
+                        "ST,sw1,13,5000/"    // Timed switch on pin 13 with 5s timeout
+                        "T,t1,i1,4,1,sw1,3/"; // Trigger that connects i1 to sw1
+    
+    // To use this configuration disable loading stored one
+    uint16_t u16OverMaxCfgLenght = PINCFG_CONFIG_MAX_SZ_D + 1;
+    mock_hwReadConfigBlock_buf = (void*)&u16OverMaxCfgLenght;
 
-    memset(acOutStr, 0, OUT_STR_MAX_LEN_D);
-    sParams.pcConfig = "CA,abc";
+    eResult = PinCfgCsv_eInit(testMemory, MEMORY_SZ, pcCfg);
+    TEST_ASSERT_EQUAL(PINCFG_OK_E, eResult);
+    TEST_ASSERT_EQUAL(2, psGlobals->u8LoopablesCount);
 
-    eParseResult = PinCfgCsv_eParse(&sParams);
+    // Verify CLI setup
+    PRESENTABLE_T *psCLI = (PRESENTABLE_T *)psGlobals->ppsPresentables[0];
+    TEST_ASSERT_EQUAL_STRING("CLI", psCLI->pcName);
 
-    TEST_ASSERT_EQUAL_STRING("W:L:0:SwitchTimedActionAdditionMs:Invalid number.\nI: Configuration parsed.\n", acOutStr);
+    // Verify input pin setup
+    INPIN_T *psInPin = (INPIN_T *)psGlobals->ppsPresentables[1];
+    TEST_ASSERT_EQUAL_STRING("i1", psInPin->sPresentable.pcName);
+    TEST_ASSERT_EQUAL(16, psInPin->u8InPin);
+
+    // Verify switch setup
+    SWITCH_T *psSwitchHnd = (SWITCH_T *)psGlobals->ppsPresentables[2];
+    TEST_ASSERT_EQUAL_STRING("sw1", psSwitchHnd->sPresentable.pcName);
+    TEST_ASSERT_EQUAL(SWITCH_TIMED_E, psSwitchHnd->eMode);
+    TEST_ASSERT_EQUAL(13, psSwitchHnd->u8OutPin);
+    TEST_ASSERT_EQUAL(5000, psSwitchHnd->u32TimedAdidtionalDelayMs);
+
+    // One interval test
+    // Reset mock counters
+    mock_digitalWrite_u32Called = 0;
+    mock_MyMessage_set_uint8_t_value = 0;
+    mock_send_u32Called = 0;
+    uint32_t u32Time = 0;
+
+    // Simulate input pin activation
+    mock_digitalRead_u8Return = HIGH;
+    PinCfgCsv_vLoop(u32Time);
+    u32Time += psGlobals->u32InPinDebounceMs;
+    PinCfgCsv_vLoop(u32Time);
+    
+    // Verify switch was activated
+    TEST_ASSERT_EQUAL(1, mock_digitalWrite_u32Called);
+    TEST_ASSERT_EQUAL(HIGH, mock_digitalWrite_u8Value);
+    TEST_ASSERT_EQUAL(13, mock_digitalWrite_u8Pin);
+    TEST_ASSERT_EQUAL(2, mock_send_u32Called);
+
+    // Simulate input pin deactivation also with debounce
+    mock_digitalRead_u8Return = LOW;
+    u32Time += 200;
+    PinCfgCsv_vLoop(u32Time);
+    u32Time += psGlobals->u32InPinDebounceMs;
+    PinCfgCsv_vLoop(u32Time);
+
+    // Input pin sent state change
+    TEST_ASSERT_EQUAL(3, mock_send_u32Called);
+
+    // Verify switch remains on until timeout
+    TEST_ASSERT_EQUAL(1, mock_digitalWrite_u32Called);
+    TEST_ASSERT_EQUAL(HIGH, mock_digitalWrite_u8Value);
+
+    // Advance time to just before timeout
+    PinCfgCsv_vLoop(4999);
+    TEST_ASSERT_EQUAL(1, mock_digitalWrite_u32Called);
+    TEST_ASSERT_EQUAL(HIGH, mock_digitalWrite_u8Value);
+    TEST_ASSERT_EQUAL(3, mock_send_u32Called);
+
+    // Advance time past timeout
+    PinCfgCsv_vLoop(5101);
+    TEST_ASSERT_EQUAL(2, mock_digitalWrite_u32Called); // Switch turned off
+    TEST_ASSERT_EQUAL(LOW, mock_digitalWrite_u8Value);
+    TEST_ASSERT_EQUAL(13, mock_digitalWrite_u8Pin);
+    TEST_ASSERT_EQUAL(4, mock_send_u32Called); // State change message sent
+    // End of one interval test
+
+    // Three interval test
+    mock_digitalWrite_u32Called = 0;
+    mock_MyMessage_set_uint8_t_value = 0;
+    mock_send_u32Called = 0;
+    u32Time = 0;
+
+    // Simulate input pin activation 1
+    mock_digitalRead_u8Return = HIGH;
+    PinCfgCsv_vLoop(u32Time);
+    u32Time += psGlobals->u32InPinDebounceMs;
+    PinCfgCsv_vLoop(u32Time);
+    
+    // Verify switch was activated
+    TEST_ASSERT_EQUAL(1, mock_digitalWrite_u32Called);
+    TEST_ASSERT_EQUAL(HIGH, mock_digitalWrite_u8Value);
+    TEST_ASSERT_EQUAL(13, mock_digitalWrite_u8Pin);
+    TEST_ASSERT_EQUAL(2, mock_send_u32Called);
+    TEST_ASSERT_EQUAL(u32Time, psSwitchHnd->u32ImpulseStarted);
+    TEST_ASSERT_EQUAL(5000, psSwitchHnd->u32ImpulseDuration);
+
+    // Simulate input pin deactivation also with debounce 1
+    mock_digitalRead_u8Return = LOW;
+    u32Time += 200;
+    PinCfgCsv_vLoop(u32Time);
+    u32Time += psGlobals->u32InPinDebounceMs;
+    PinCfgCsv_vLoop(u32Time);
+
+    // Input pin sent state change
+    TEST_ASSERT_EQUAL(3, mock_send_u32Called);
+
+    // Simulate input pin activation 2
+    mock_digitalRead_u8Return = HIGH;
+    u32Time += 200;
+    PinCfgCsv_vLoop(u32Time);
+    u32Time += psGlobals->u32InPinDebounceMs;
+    PinCfgCsv_vLoop(u32Time);
+
+    // Input pin sent state change
+    TEST_ASSERT_EQUAL(4, mock_send_u32Called);
+    TEST_ASSERT_EQUAL(1, mock_digitalWrite_u32Called);
+    TEST_ASSERT_EQUAL(HIGH, mock_digitalWrite_u8Value);
+    TEST_ASSERT_EQUAL(10000, psSwitchHnd->u32ImpulseDuration);
+
+    // Simulate input pin deactivation also with debounce 2
+    mock_digitalRead_u8Return = LOW;
+    u32Time += 200;
+    PinCfgCsv_vLoop(u32Time);
+    u32Time += psGlobals->u32InPinDebounceMs;
+    PinCfgCsv_vLoop(u32Time);
+
+    // Input pin sent state change
+    TEST_ASSERT_EQUAL(5, mock_send_u32Called);
+
+    // Simulate input pin activation 3
+    mock_digitalRead_u8Return = HIGH;
+    u32Time += 200;
+    PinCfgCsv_vLoop(u32Time);
+    u32Time += psGlobals->u32InPinDebounceMs;
+    PinCfgCsv_vLoop(u32Time);
+
+    // Input pin sent state change
+    TEST_ASSERT_EQUAL(6, mock_send_u32Called);
+    TEST_ASSERT_EQUAL(1, mock_digitalWrite_u32Called);
+    TEST_ASSERT_EQUAL(HIGH, mock_digitalWrite_u8Value);
+    TEST_ASSERT_EQUAL(15000, psSwitchHnd->u32ImpulseDuration);
+
+    // Simulate input pin deactivation also with debounce 3
+    mock_digitalRead_u8Return = LOW;
+    u32Time += 200;
+    PinCfgCsv_vLoop(u32Time);
+    u32Time += psGlobals->u32InPinDebounceMs;
+    PinCfgCsv_vLoop(u32Time);
+
+    // Input pin sent state change
+    TEST_ASSERT_EQUAL(7, mock_send_u32Called);
+
+    // Advance to timeout
+    u32Time += psSwitchHnd->u32ImpulseStarted + psSwitchHnd->u32ImpulseDuration + 1;
+    PinCfgCsv_vLoop(20000);
+
+    // Verify switch is off
+    TEST_ASSERT_EQUAL(2, mock_digitalWrite_u32Called);
+    TEST_ASSERT_EQUAL(LOW, mock_digitalWrite_u8Value);
+    TEST_ASSERT_EQUAL(13, mock_digitalWrite_u8Pin);
+    TEST_ASSERT_EQUAL(8, mock_send_u32Called);
+    // End of three interval test
+
+    // Verify canceling V1
+    // reset mock counters
+    mock_digitalWrite_u32Called = 0;
+    mock_MyMessage_set_uint8_t_value = 0;
+    mock_send_u32Called = 0;
+    u32Time = 0;
+    // Simulate input pin activation
+    mock_digitalRead_u8Return = HIGH;
+    PinCfgCsv_vLoop(u32Time);
+    u32Time += psGlobals->u32InPinDebounceMs;
+    PinCfgCsv_vLoop(u32Time);
+
+    // Verify switch was activated
+    TEST_ASSERT_EQUAL(1, mock_digitalWrite_u32Called);
+    TEST_ASSERT_EQUAL(HIGH, mock_digitalWrite_u8Value);
+    TEST_ASSERT_EQUAL(13, mock_digitalWrite_u8Pin);
+    TEST_ASSERT_EQUAL(2, mock_send_u32Called);
+    TEST_ASSERT_EQUAL(u32Time, psSwitchHnd->u32ImpulseStarted);
+    TEST_ASSERT_EQUAL(5000, psSwitchHnd->u32ImpulseDuration);
+
+    // Simulate input pin deactivation also with debounce
+    mock_digitalRead_u8Return = LOW;
+    u32Time += 200;
+    PinCfgCsv_vLoop(u32Time);
+    u32Time += psGlobals->u32InPinDebounceMs;
+    PinCfgCsv_vLoop(u32Time);
+
+    // Input pin sent state change
+    TEST_ASSERT_EQUAL(3, mock_send_u32Called);
+
+    // Simulate longpress
+    mock_digitalRead_u8Return = HIGH;
+    u32Time += 200;
+    PinCfgCsv_vLoop(u32Time);
+    u32Time += psGlobals->u32InPinDebounceMs;
+    PinCfgCsv_vLoop(u32Time);
+
+    // Input pin sent state change
+    TEST_ASSERT_EQUAL(4, mock_send_u32Called);
+
+    // No switch changes
+    TEST_ASSERT_EQUAL(1, mock_digitalWrite_u32Called);
+    TEST_ASSERT_EQUAL(HIGH, mock_digitalWrite_u8Value);
+
+    u32Time += psInPin->u32timerMultiStarted + psGlobals->u32InPinMulticlickMaxDelayMs;
+    PinCfgCsv_vLoop(u32Time);
+
+    // Verify switch is off
+    TEST_ASSERT_EQUAL(2, mock_digitalWrite_u32Called);
+    TEST_ASSERT_EQUAL(LOW, mock_digitalWrite_u8Value);
+    TEST_ASSERT_EQUAL(13, mock_digitalWrite_u8Pin);
+    TEST_ASSERT_EQUAL(5, mock_send_u32Called);
+
+    // Clean input pin state
+    mock_digitalRead_u8Return = LOW;
+    u32Time += psGlobals->u32InPinDebounceMs;
+    PinCfgCsv_vLoop(u32Time);
+    u32Time += psGlobals->u32InPinDebounceMs;
+    PinCfgCsv_vLoop(u32Time);
+    // End of verify canceling V1
+
+    // Verify canceling V2
+    // reset mock counters
+    mock_digitalWrite_u32Called = 0;
+    mock_MyMessage_set_uint8_t_value = 0;
+    mock_send_u32Called = 0;
+    u32Time = 0;
+
+    // Simulate input pin activation
+    mock_digitalRead_u8Return = HIGH;
+    PinCfgCsv_vLoop(u32Time);
+    u32Time += psGlobals->u32InPinDebounceMs;
+    PinCfgCsv_vLoop(u32Time);
+
+    // Verify switch was activated
+    TEST_ASSERT_EQUAL(1, mock_digitalWrite_u32Called);
+    TEST_ASSERT_EQUAL(HIGH, mock_digitalWrite_u8Value);
+    TEST_ASSERT_EQUAL(13, mock_digitalWrite_u8Pin);
+    TEST_ASSERT_EQUAL(2, mock_send_u32Called);
+    TEST_ASSERT_EQUAL(u32Time, psSwitchHnd->u32ImpulseStarted);
+    TEST_ASSERT_EQUAL(5000, psSwitchHnd->u32ImpulseDuration);
+    TEST_ASSERT_EQUAL(u32Time, psInPin->u32timerMultiStarted);
+    
+    u32Time += psInPin->u32timerMultiStarted + psGlobals->u32InPinMulticlickMaxDelayMs;
+    PinCfgCsv_vLoop(u32Time);
+
+    // Verify switch is off
+    TEST_ASSERT_EQUAL(2, mock_digitalWrite_u32Called);
+    TEST_ASSERT_EQUAL(LOW, mock_digitalWrite_u8Value);
+    TEST_ASSERT_EQUAL(13, mock_digitalWrite_u8Pin);
+    TEST_ASSERT_EQUAL(3, mock_send_u32Called);
+    // End of verify canceling V2
 }
 
 #ifndef ARDUINO
@@ -714,6 +961,7 @@ int test_main(void)
 {
     // sizes
     printf("sizeof(GLOBALS_T): %ld\n", sizeof(GLOBALS_T));
+    printf("sizeof(PRESENTABLE_T): %ld\n", sizeof(PRESENTABLE_T));
     printf("sizeof(CLI_T): %ld\n", sizeof(CLI_T));
     printf("sizeof(SWITCH_T): %ld\n", sizeof(SWITCH_T));
     printf("sizeof(INPIN_T): %ld\n", sizeof(INPIN_T));
@@ -732,6 +980,7 @@ int test_main(void)
     RUN_TEST(test_vPinCfgCsv);
     RUN_TEST(test_vCLI);
     RUN_TEST(test_vGlobalConfig);
+    RUN_TEST(test_vFlow_timedSwitch);
 
     return UNITY_END();
 }

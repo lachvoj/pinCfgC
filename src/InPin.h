@@ -44,7 +44,7 @@ void InPin_vInitType(PRESENTABLE_VTAB_T *psVtab);
 
 INPIN_RESULT_T InPin_eInit(INPIN_T *psHandle, STRING_POINT_T *sName, uint8_t u8Id, uint8_t u8InPin);
 INPIN_RESULT_T InPin_eAddSubscriber(INPIN_T *psHandle, PINSUBSCRIBER_IF_T *psSubscriber);
-void InPin_vSendEvent(INPIN_T *psHandle, uint8_t u8EventType, uint32_t u32Data);
+void InPin_vSendEvent(INPIN_T *psHandle, uint8_t u8EventType, uint32_t u32Data, uint32_t u32ms);
 
 // loopable IF
 void InPin_vLoop(LOOPABLE_T *psLoopableHandle, uint32_t u32ms);

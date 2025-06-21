@@ -1,6 +1,14 @@
 #include <EEPROM.h>
+
+#ifdef UNIT_TEST
+extern "C"
+{
+#include "MySensorsMock.h"
+}
+#else
 #include <core/MySensorsCore.h>
 #include <hal/architecture/MyHwHAL.h>
+#endif
 
 #include "MySensorsWrapper.h"
 

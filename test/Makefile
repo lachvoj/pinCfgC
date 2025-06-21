@@ -1,9 +1,6 @@
 
 SHELL = /bin/sh
 
-MYSENSORDIR=../../MySensors
-ARDUINODIR=$(MYSENSORDIR)/hal/architecture/Linux/drivers/core
-MYSENSORSINC=-I$(MYSENSORDIR) -I$(MYSENSORDIR)/core -I$(MYSENSORDIR)/hal/architecture/Linux/drivers/core
 BUILDDIR=build
 OBJDIR=$(BUILDDIR)
 SRCDIR=../src
@@ -50,9 +47,9 @@ CFLAGS += -DUNIT_TEST
 all: $(EXE)
 
 echo:
-	@echo $(SRC)
+	@echo $(SRCCPP)
 	@echo 
-	@echo $(OBJ)
+	@echo $(OBJCPP)
 
 run: test
 	@echo "\n"
@@ -67,7 +64,7 @@ $(BUILDDIR):
 
 # link
 $(EXE): $(OBJC) $(OBJCPP) | $(BUILDDIR)
-	$(CC) $(CFLAGS) $(INCLUDES) -o $(OBJDIR)/$@ $(OBJC) $(OBJCPP) $(LIBS)
+	$(CPP) $(CFLAGS) $(INCLUDES) -o $(OBJDIR)/$@ $(OBJC) $(OBJCPP) $(LIBS)
 
 # compile
 $(OBJDIR)/%.o: $(SRCDIR)/%.c | $(BUILDDIR)

@@ -1,5 +1,3 @@
-#include <MyMessage.h>
-#include <MySensorsCore.h>
 #include <cstring>
 
 extern "C"

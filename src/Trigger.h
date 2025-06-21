@@ -17,7 +17,9 @@ typedef enum TRIGGER_EVENTTYPE_E
 {
     TRIGGER_DOWN_E = 0,
     TRIGGER_UP_E,
-    TRIGGER_LONG
+    TRIGGER_LONG_E,
+    TRIGGER_MULTI_E,
+    TRIGGER_ALL_E
 } TRIGGER_EVENTTYPE_T;
 
 typedef enum TRIGGER_ACTION_E
@@ -25,7 +27,7 @@ typedef enum TRIGGER_ACTION_E
     TRIGGER_A_TOGGLE_E = 0,
     TRIGGER_A_UP_E,
     TRIGGER_A_DOWN_E,
-    TRIGGER_A_TIMED,
+    TRIGGER_A_FORWARD_E
 } TRIGGER_ACTION_T;
 
 typedef struct TRIGGER_SWITCHACTION_S
@@ -50,6 +52,6 @@ TRIGGER_RESULT_T Trigger_eInit(
     TRIGGER_EVENTTYPE_T eEventType,
     uint8_t u8EventCount);
 
-void Trigger_vEventHandle(PINSUBSCRIBER_IF_T *psBaseHandle, uint8_t u8EventType, uint32_t u32Data);
+void Trigger_vEventHandle(PINSUBSCRIBER_IF_T *psBaseHandle, uint8_t u8EventType, uint32_t u32Data, uint32_t u32ms);
 
 #endif // TRIGGER_H

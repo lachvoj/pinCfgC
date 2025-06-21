@@ -5,15 +5,31 @@
 #include <stdint.h>
 
 #include "EEPROMMock.h"
-#include "GPIOMock.h"
-#include "MyMessageMock.h"
-#include "MySensorsMock.h"
 
+#ifndef OUTPUT
+#include "GPIOMock.h"
+#endif
+
+
+#ifndef OUTPUT
 #define OUTPUT 1
+#endif
+
+#ifndef INPUT
 #define INPUT 0
+#endif
+
+#ifndef HIGH
 #define HIGH 1
+#endif
+
+#ifndef LOW
 #define LOW 0
+#endif
+
+#ifndef INPUT_PULLUP
 #define INPUT_PULLUP 0x2
+#endif
 
 void _delay_milliseconds(unsigned int millis);
 

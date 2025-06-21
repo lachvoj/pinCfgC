@@ -2,6 +2,7 @@
 #define PINCFGCSV_H
 
 #include "ILoopable.h"
+#include "LinkedList.h"
 #include "Presentable.h"
 #include "Types.h"
 
@@ -45,5 +46,9 @@ PINCFG_RESULT_T PinCfgCsv_eValidate(
 PINCFG_RESULT_T PinCfgCsv_eInit(uint8_t *pu8Memory, size_t szMemorySize, const char *pcDefaultCfg);
 
 PINCFG_RESULT_T PinCfgCsv_eParse(PINCFG_PARSE_PARAMS_T *psParams);
+
+PINCFG_RESULT_T PinCfgCsv_eAddToTempLoopables(LOOPABLE_T *psLoopable);
+PINCFG_RESULT_T PinCfgCsv_eAddToTempPresentables(PRESENTABLE_T *psPresentable);
+PINCFG_RESULT_T PinCfgCsv_eLinkedListToArray(LINKEDLIST_ITEM_T **ppsFirst, uint8_t *u8Count);
 
 #endif // PINCFGCSV_H

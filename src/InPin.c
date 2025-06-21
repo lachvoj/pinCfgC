@@ -4,6 +4,7 @@
 #include "InPin.h"
 #include "MySensorsWrapper.h"
 #include "PinSubscriberIf.h"
+#include "PinCfgUtils.h"
 
 void InPin_SetDebounceMs(uint32_t u32Debounce)
 {
@@ -37,6 +38,9 @@ INPIN_RESULT_T InPin_eInit(INPIN_T *psHandle, STRING_POINT_T *sName, uint8_t u8I
 
     // vtab init
     psHandle->sPresentable.psVtab = &psGlobals->sInPinPrVTab;
+    
+    // loopable init
+    psHandle->sLoopable.vLoop = InPin_vLoop;
 
     psHandle->u8InPin = u8InPin;
     psHandle->u32TimerDebounceStarted--;
@@ -70,12 +74,12 @@ INPIN_RESULT_T InPin_eAddSubscriber(INPIN_T *psHandle, PINSUBSCRIBER_IF_T *psSub
     return INPIN_OK_E;
 }
 
-void InPin_vSendEvent(INPIN_T *psHandle, uint8_t u8EventType, uint32_t u32Data)
+void InPin_vSendEvent(INPIN_T *psHandle, uint8_t u8EventType, uint32_t u32Data, uint32_t u32ms)
 {
     PINSUBSCRIBER_IF_T *psCurrent = psHandle->psFirstSubscriber;
     while (psCurrent != NULL)
     {
-        psCurrent->vEventHandle(psCurrent, u8EventType, u32Data);
+        psCurrent->vEventHandle(psCurrent, u8EventType, u32Data, u32ms);
         psCurrent = psCurrent->psNext;
     }
 }
@@ -99,9 +103,9 @@ void InPin_vLoop(LOOPABLE_T *psLoopableHandle, uint32_t u32ms)
         if (bPinState != psHandle->bLastPinState)
         {
             if (bPinState)
-                eChange = INPIN_CHANGE_DOWN_E;
-            else
                 eChange = INPIN_CHANGE_UP_E;
+            else
+                eChange = INPIN_CHANGE_DOWN_E;
 
             psHandle->bLastPinState = bPinState;
         }
@@ -111,22 +115,23 @@ void InPin_vLoop(LOOPABLE_T *psLoopableHandle, uint32_t u32ms)
     {
     case INPIN_DEBOUNCEDOWN_E:
     {
-        if (u32ms - psHandle->u32TimerDebounceStarted < psGlobals->u32InPinDebounceMs)
+        if (PinCfg_u32GetElapsedTime(psHandle->u32TimerDebounceStarted, u32ms) < psGlobals->u32InPinDebounceMs)
             break;
 
         psHandle->ePinState = INPIN_DOWN_E;
-        InPin_vSendEvent(psHandle, (uint8_t)psHandle->ePinState, 0U);
+        InPin_vSendEvent(psHandle, (uint8_t)psHandle->ePinState, 0U, u32ms);
         Presentable_vSetState((PRESENTABLE_T *)psHandle, (uint8_t) false, true);
     }
     break;
     case INPIN_DOWN_E:
     {
         if (psHandle->u8PressCount > 0 &&
-            (u32ms - psHandle->u32timerMultiStarted) > psGlobals->u32InPinMulticlickMaxDelayMs)
+            PinCfg_u32GetElapsedTime(psHandle->u32timerMultiStarted, u32ms) > psGlobals->u32InPinMulticlickMaxDelayMs)
         {
-            InPin_vSendEvent(psHandle, (uint8_t)INPIN_MULTI_E, (uint32_t)psHandle->u8PressCount);
+            InPin_vSendEvent(psHandle, (uint8_t)INPIN_MULTI_E, (uint32_t)psHandle->u8PressCount, u32ms);
             psHandle->u8PressCount = 0U;
         }
+
         if (eChange == INPIN_CHANGE_UP_E)
         {
             psHandle->ePinState = INPIN_DEBOUNCEUP_E;
@@ -136,22 +141,22 @@ void InPin_vLoop(LOOPABLE_T *psLoopableHandle, uint32_t u32ms)
     break;
     case INPIN_DEBOUNCEUP_E:
     {
-        if (u32ms - psHandle->u32TimerDebounceStarted < psGlobals->u32InPinDebounceMs)
+        if (PinCfg_u32GetElapsedTime(psHandle->u32TimerDebounceStarted, u32ms) < psGlobals->u32InPinDebounceMs)
             break;
 
         psHandle->ePinState = INPIN_UP_E;
         psHandle->u32timerMultiStarted = u32ms;
         psHandle->u8PressCount++;
-        InPin_vSendEvent(psHandle, (uint8_t)psHandle->ePinState, (int)psHandle->u8PressCount);
+        InPin_vSendEvent(psHandle, (uint8_t)psHandle->ePinState, (int)psHandle->u8PressCount, u32ms);
         Presentable_vSetState((PRESENTABLE_T *)psHandle, (uint8_t) true, true);
     }
     break;
     case INPIN_UP_E:
     {
-        if (u32ms - psHandle->u32timerMultiStarted > psGlobals->u32InPinMulticlickMaxDelayMs)
+        if (PinCfg_u32GetElapsedTime(psHandle->u32timerMultiStarted, u32ms) > psGlobals->u32InPinMulticlickMaxDelayMs)
         {
             psHandle->ePinState = INPIN_LONG_E;
-            InPin_vSendEvent(psHandle, (uint8_t)psHandle->ePinState, 0U);
+            InPin_vSendEvent(psHandle, (uint8_t)psHandle->ePinState, 0U, u32ms);
             psHandle->u8PressCount = 0U;
         }
         else if (eChange == INPIN_CHANGE_DOWN_E)

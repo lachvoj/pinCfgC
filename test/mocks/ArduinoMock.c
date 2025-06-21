@@ -1,14 +1,19 @@
 #include <stddef.h>
 #include <stdlib.h>
 #include <string.h>
+#include <time.h>
 
 #include "ArduinoMock.h"
+#include "GPIOMock.h"
+#include "MySensorsMock.h"
 
+#ifndef __linux__
 void nanosleep(struct timespec *time, void *something)
 {
     (void)time;
     (void)something;
 }
+#endif // __linux__
 
 void _delay_milliseconds(unsigned int millis)
 {

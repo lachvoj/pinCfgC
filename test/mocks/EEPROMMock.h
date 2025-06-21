@@ -3,6 +3,9 @@
 
 #include <stdint.h>
 
+#define EEPROM_NODE_ID_ADDRESS 0x00
+#define EEPROM_LOCAL_CONFIG_ADDRESS 0x01
+
 extern int mock_EEPROM_read_idx;
 extern uint32_t mock_EEPROM_read_u32Called;
 extern uint8_t mock_EEPROM_read_return;

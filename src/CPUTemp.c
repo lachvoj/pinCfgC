@@ -2,6 +2,7 @@
 #include "Globals.h"
 #include "InPin.h"
 #include "MySensorsWrapper.h"
+#include "PinCfgUtils.h"
 
 void CPUTemp_vInitType(PRESENTABLE_VTAB_T *psVtab)
 {
@@ -42,8 +43,9 @@ CPUTEMP_RESULT_T CPUTemp_eInit(
 void CPUTemp_vLoop(LOOPABLE_T *psLoopableHandle, uint32_t u32ms)
 {
     CPUTEMP_T *psHandle = (CPUTEMP_T *)(((uint8_t *)psLoopableHandle) - sizeof(PRESENTABLE_T));
-    if ((u32ms - psHandle->u32MillisLast) > psHandle->u32ReportInterval)
+    if (PinCfg_u32GetElapsedTime(psHandle->u32MillisLast, u32ms) > psHandle->u32ReportInterval)
     {
+        psHandle->u32MillisLast = u32ms;  // Update last report time
         Presentable_vSetState((PRESENTABLE_T *)psHandle, (uint8_t)(i8HwCPUTemperature() + psHandle->fOffset), true);
     }
 }

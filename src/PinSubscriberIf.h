@@ -7,7 +7,7 @@ typedef struct PINSUBSCRIBER_IF_S PINSUBSCRIBER_IF_T;
 
 typedef struct PINSUBSCRIBER_IF_S
 {
-    void (*vEventHandle)(PINSUBSCRIBER_IF_T *psHandle, uint8_t u8EventType, uint32_t u32Data);
+    void (*vEventHandle)(PINSUBSCRIBER_IF_T *psHandle, uint8_t u8EventType, uint32_t u32Data, uint32_t u32ms);
     PINSUBSCRIBER_IF_T *psNext;
 } PINSUBSCRIBER_IF_T;
 

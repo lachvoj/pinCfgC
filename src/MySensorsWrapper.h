@@ -11,7 +11,11 @@
 #define AUTO (255u)
 #endif
 
+#ifdef UNIT_TEST
+#include "MyMessageMock.h"
+#else
 #include <core/MyMessage.h>
+#endif
 
 #ifdef __cplusplus
 extern "C"
