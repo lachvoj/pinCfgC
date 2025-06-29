@@ -1,51 +1,50 @@
 #include "CPUTemp.h"
 #include "Globals.h"
 #include "InPin.h"
+#include "Memory.h"
 #include "MySensorsWrapper.h"
 #include "PinCfgUtils.h"
 
-void CPUTemp_vInitType(PRESENTABLE_VTAB_T *psVtab)
-{
-    psVtab->eVType = V_TEMP;
-    psVtab->eSType = S_TEMP;
-    psVtab->vReceive = InPin_vRcvMessage;
-}
+
+static SENSOR_RESULT_T CPUTemp_eMeasure(SENSOR_T *psHandle, float *pfValue);
 
 CPUTEMP_RESULT_T CPUTemp_eInit(
     CPUTEMP_T *psHandle,
     STRING_POINT_T *sName,
     uint8_t u8Id,
+    uint8_t u8Enableable,
+    SENSOR_MODE_T eMode,
+    uint32_t u32SamplingInterval,
     uint32_t u32ReportInterval,
     float fOffset)
 {
-    if (psHandle == NULL)
+    if (psHandle == NULL || sName == NULL)
         return CPUTEMP_NULLPTR_ERROR_E;
 
-    if (Presentable_eInit(&psHandle->sPresentable, sName, u8Id) != PRESENTABLE_OK_E)
+    // sensor init
+    if (Sensor_eInit(
+            &psHandle->sSensor,
+            sName,
+            V_TEMP,
+            S_TEMP,
+            InPin_vRcvMessage,
+            CPUTemp_eMeasure,
+            u8Id,
+            u8Enableable,
+            u32SamplingInterval,
+            u32ReportInterval,
+            fOffset,
+            eMode) != SENSOR_OK_E)
     {
         return CPUTEMP_SUBINIT_ERROR_E;
     }
 
-    // vtab init
-    psHandle->sPresentable.psVtab = &psGlobals->sCpuTempPrVTab;
-
-    // loopable init
-    psHandle->sLoopable.vLoop = CPUTemp_vLoop;
-
-    psHandle->u32ReportInterval = u32ReportInterval;
-    psHandle->fOffset = fOffset;
-    psHandle->u32MillisLast = 0;
-
     return CPUTEMP_OK_E;
 }
 
-// loopable IF
-void CPUTemp_vLoop(LOOPABLE_T *psLoopableHandle, uint32_t u32ms)
+static SENSOR_RESULT_T CPUTemp_eMeasure(SENSOR_T *psHandle, float *pfValue)
 {
-    CPUTEMP_T *psHandle = (CPUTEMP_T *)(((uint8_t *)psLoopableHandle) - sizeof(PRESENTABLE_T));
-    if (PinCfg_u32GetElapsedTime(psHandle->u32MillisLast, u32ms) > psHandle->u32ReportInterval)
-    {
-        psHandle->u32MillisLast = u32ms;  // Update last report time
-        Presentable_vSetState((PRESENTABLE_T *)psHandle, (uint8_t)(i8HwCPUTemperature() + psHandle->fOffset), true);
-    }
+    *pfValue = i8HwCPUTemperature() + psHandle->fOffset;
+
+    return SENSOR_OK_E;
 }

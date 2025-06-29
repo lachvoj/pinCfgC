@@ -171,6 +171,8 @@ static inline void Switch_vHandleTimed(SWITCH_T *psHandle, uint32_t u32ms)
 
 void Switch_vLoopClassic(LOOPABLE_T *psLoopableHandle, uint32_t u32ms)
 {
+    (void)u32ms; // unused parameter
+
     SWITCH_T *psHandle = (SWITCH_T *)(((uint8_t *)psLoopableHandle) - sizeof(PRESENTABLE_T));
 
     if (psHandle->sPresentable.bStateChanged != true)
@@ -237,6 +239,8 @@ void Switch_vLoopTimedFeedback(LOOPABLE_T *psLoopableHandle, uint32_t u32ms)
 
 void Switch_vEventHandle(SWITCH_T *psHandle, uint8_t u8EventType, uint32_t u32Data, uint32_t u32ms)
 {
+    (void)u32Data; // unused parameter
+
     if (psHandle == NULL)
         return;
 

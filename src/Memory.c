@@ -64,9 +64,9 @@ void *Memory_vpAlloc(size_t szSize)
         return pvResult;
     }
 
-    size_t szToAlloc = (szSize + sizeof(void *) - 1) / sizeof(void *);
+    size_t szToAlloc = ((szSize + sizeof(void *) - 1) / sizeof(void *)) * sizeof(void *);
 
-    char *pvNextAfterAllocation = (char *)((char **)psGlobals->pvMemNext + szToAlloc);
+    char *pvNextAfterAllocation = psGlobals->pvMemNext + szToAlloc;
     if (pvNextAfterAllocation > psGlobals->pvMemTempEnd || pvNextAfterAllocation < psGlobals->pvMemNext)
     {
         errno = ENOMEM;
@@ -87,9 +87,9 @@ void *Memory_vpTempAlloc(size_t szSize)
         return NULL;
     }
 
-    size_t szToAlloc = (szSize + sizeof(MEMORY_TEMP_ITEM_T) + sizeof(void *) - 1) / sizeof(void *);
+    size_t szToAlloc = ((szSize + sizeof(MEMORY_TEMP_ITEM_T) + sizeof(void *) - 1) / sizeof(void *)) * sizeof(void *);
 
-    char *pvTempEndAfterAllocation = (char *)((char **)psGlobals->pvMemTempEnd - szToAlloc);
+    char *pvTempEndAfterAllocation = psGlobals->pvMemTempEnd - szToAlloc;
     if (pvTempEndAfterAllocation < psGlobals->pvMemNext || pvTempEndAfterAllocation >= psGlobals->pvMemTempEnd)
     {
         errno = ENOMEM;
@@ -97,7 +97,7 @@ void *Memory_vpTempAlloc(size_t szSize)
     }
 
     psGlobals->pvMemTempEnd = pvTempEndAfterAllocation;
-    ((MEMORY_TEMP_ITEM_T *)pvTempEndAfterAllocation)->u16AlocatedSize = szToAlloc * sizeof(void *);
+    ((MEMORY_TEMP_ITEM_T *)pvTempEndAfterAllocation)->u16AlocatedSize = szToAlloc;
     ((MEMORY_TEMP_ITEM_T *)pvTempEndAfterAllocation)->bFree = false;
 
     return (void *)((char *)pvTempEndAfterAllocation + sizeof(MEMORY_TEMP_ITEM_T));
@@ -143,4 +143,9 @@ void Memory_vTempFreePt(void *pvToFree)
 size_t Memory_szGetFree(void)
 {
     return (size_t)(psGlobals->pvMemTempEnd - psGlobals->pvMemNext);
+}
+
+size_t Memory_szGetAllocatedSize(size_t szSize)
+{
+    return (size_t)(((szSize + sizeof(void *) - 1) / sizeof(void *)) * sizeof(void *));
 }

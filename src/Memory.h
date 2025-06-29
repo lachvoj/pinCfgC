@@ -3,7 +3,7 @@
 
 #include "Types.h"
 
-typedef enum
+typedef enum MEMORY_RESULT_E
 {
     MEMORY_OK_E,
     MEMORY_INSUFFICIENT_SIZE_ERROR_E,
@@ -17,5 +17,6 @@ void *Memory_vpTempAlloc(size_t szSize);
 void Memory_vTempFree(void);
 void Memory_vTempFreePt(void *pvToFree);
 size_t Memory_szGetFree(void);
+size_t Memory_szGetAllocatedSize(size_t szSize);
 
 #endif // MEMORY_H

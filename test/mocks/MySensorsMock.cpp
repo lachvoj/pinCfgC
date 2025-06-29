@@ -117,6 +117,7 @@ extern "C"
         mock_wait_u32Called = 0;
         mock_hwWriteConfigBlock_u32Called = 0;
         mock_hwReadConfigBlock_u32Called = 0;
+        mock_hwReadConfigBlock_buf = NULL;
 
         mock_hwCPUTemperature_i8Return = 0;
         mock_hwCPUTemperature_u32Called = 0;

@@ -1,19 +1,20 @@
 #include <stdio.h>
 #include <unity.h>
 
+#include "ArduinoMock.h"
+#include "CPUTemp.h"
 #include "Cli.h"
 #include "Globals.h"
 #include "InPin.h"
 #include "LinkedList.h"
 #include "Memory.h"
+#include "MySensorsMock.h"
 #include "PinCfgCsv.h"
 #include "PinCfgStr.h"
 #include "Presentable.h"
+#include "Sensor.h"
 #include "Switch.h"
 #include "Trigger.h"
-
-#include "MySensorsMock.h"
-#include "ArduinoMock.h"
 
 #ifndef MEMORY_SZ
 #define MEMORY_SZ 3003
@@ -359,6 +360,7 @@ void test_vInPin(void)
 void test_vSwitch(void)
 {
     PINCFG_RESULT_T eParseResult;
+    LINKEDLIST_RESULT_T eLinkedListResult;
     char acOutStr[OUT_STR_MAX_LEN_D];
     size_t szMemoryRequired;
     GLOBALS_T *psGlobals = (GLOBALS_T *)testMemory;
@@ -384,14 +386,14 @@ void test_vSwitch(void)
     eParseResult = PinCfgCsv_eParse(&sParams);
     TEST_ASSERT_EQUAL(PINCFG_OK_E, eParseResult);
 
-    eParseResult =
-        PinCfgCsv_eLinkedListToArray((LINKEDLIST_ITEM_T **)(&psGlobals->ppsLoopables), &psGlobals->u8LoopablesCount);
-    TEST_ASSERT_EQUAL(PINCFG_OK_E, eParseResult);
+    eLinkedListResult =
+        LinkedList_eLinkedListToArray((LINKEDLIST_ITEM_T **)(&psGlobals->ppsLoopables), &psGlobals->u8LoopablesCount);
+    TEST_ASSERT_EQUAL(LINKEDLIST_OK_E, eLinkedListResult);
     TEST_ASSERT_EQUAL(6, psGlobals->u8LoopablesCount);
 
-    eParseResult = PinCfgCsv_eLinkedListToArray(
+    eLinkedListResult = LinkedList_eLinkedListToArray(
         (LINKEDLIST_ITEM_T **)(&psGlobals->ppsPresentables), &psGlobals->u8PresentablesCount);
-    TEST_ASSERT_EQUAL(PINCFG_OK_E, eParseResult);
+    TEST_ASSERT_EQUAL(LINKEDLIST_OK_E, eLinkedListResult);
     TEST_ASSERT_EQUAL(7, psGlobals->u8PresentablesCount);
 
     PRESENTABLE_T *psPresentable = (PRESENTABLE_T *)psGlobals->ppsPresentables[0];
@@ -440,6 +442,7 @@ void test_vPinCfgCsv(void)
     PINCFG_RESULT_T eParseResult;
     char acOutStr[OUT_STR_MAX_LEN_D];
     size_t szMemoryRequired;
+    size_t szRequiredMem;
 
     PINCFG_PARSE_PARAMS_T sParams = {
         .eAddToLoopables = PinCfgCsv_eAddToTempLoopables,
@@ -451,48 +454,69 @@ void test_vPinCfgCsv(void)
 
     Memory_vpAlloc((size_t)(psGlobals->pvMemTempEnd - psGlobals->pvMemNext - sizeof(char *)));
     eParseResult = PinCfgCsv_eParse(&sParams);
-    TEST_ASSERT_EQUAL(0, szMemoryRequired);
+    szRequiredMem = Memory_szGetAllocatedSize(sizeof(GLOBALS_T));
+    szRequiredMem += Memory_szGetAllocatedSize(sizeof(CLI_T));
+    szRequiredMem += Memory_szGetAllocatedSize(sizeof(LINKEDLIST_ITEM_T) + sizeof(void *));
+    TEST_ASSERT_EQUAL(szRequiredMem, szMemoryRequired);
     TEST_ASSERT_EQUAL(PINCFG_OUTOFMEMORY_ERROR_E, eParseResult);
     TEST_ASSERT_EQUAL_STRING("E:CLI:Out of memory.\n", acOutStr);
     Memory_eReset();
 
     eParseResult = PinCfgCsv_eParse(&sParams);
-    TEST_ASSERT_EQUAL(sizeof(CLI_T), szMemoryRequired);
+    szRequiredMem = Memory_szGetAllocatedSize(sizeof(GLOBALS_T));
+    szRequiredMem += Memory_szGetAllocatedSize(sizeof(CLI_T));
+    szRequiredMem += Memory_szGetAllocatedSize(sizeof(LINKEDLIST_ITEM_T) + sizeof(void *));
+    TEST_ASSERT_EQUAL(szRequiredMem, szMemoryRequired);
     TEST_ASSERT_EQUAL(PINCFG_NULLPTR_ERROR_E, eParseResult);
     TEST_ASSERT_EQUAL_STRING("E:Invalid format. NULL configuration.\n", acOutStr);
     Memory_eReset();
 
     sParams.pcConfig = "";
     eParseResult = PinCfgCsv_eParse(&sParams);
-    TEST_ASSERT_EQUAL(sizeof(CLI_T), szMemoryRequired);
+    szRequiredMem = Memory_szGetAllocatedSize(sizeof(GLOBALS_T));
+    szRequiredMem += Memory_szGetAllocatedSize(sizeof(CLI_T));
+    szRequiredMem += Memory_szGetAllocatedSize(sizeof(LINKEDLIST_ITEM_T) + sizeof(void *));
+    TEST_ASSERT_EQUAL(szRequiredMem, szMemoryRequired);
     TEST_ASSERT_EQUAL(PINCFG_ERROR_E, eParseResult);
     TEST_ASSERT_EQUAL_STRING("E:Invalid format. Empty configuration.\n", acOutStr);
     Memory_eReset();
 
     sParams.pcConfig = "S";
     eParseResult = PinCfgCsv_eParse(&sParams);
-    TEST_ASSERT_EQUAL(sizeof(CLI_T), szMemoryRequired);
+    szRequiredMem = Memory_szGetAllocatedSize(sizeof(GLOBALS_T));
+    szRequiredMem += Memory_szGetAllocatedSize(sizeof(CLI_T));
+    szRequiredMem += Memory_szGetAllocatedSize(sizeof(LINKEDLIST_ITEM_T) + sizeof(void *));
+    TEST_ASSERT_EQUAL(szRequiredMem, szMemoryRequired);
     TEST_ASSERT_EQUAL(PINCFG_WARNINGS_E, eParseResult);
     TEST_ASSERT_EQUAL_STRING("W:L:0:Not defined or invalid format.\nI: Configuration parsed.\n", acOutStr);
     Memory_eReset();
 
     sParams.pcConfig = "S,o1";
     eParseResult = PinCfgCsv_eParse(&sParams);
-    TEST_ASSERT_EQUAL(sizeof(CLI_T), szMemoryRequired);
+    szRequiredMem = Memory_szGetAllocatedSize(sizeof(GLOBALS_T));
+    szRequiredMem += Memory_szGetAllocatedSize(sizeof(CLI_T));
+    szRequiredMem += Memory_szGetAllocatedSize(sizeof(LINKEDLIST_ITEM_T) + sizeof(void *));
+    TEST_ASSERT_EQUAL(szRequiredMem, szMemoryRequired);
     TEST_ASSERT_EQUAL(PINCFG_WARNINGS_E, eParseResult);
     TEST_ASSERT_EQUAL_STRING("W:L:0:Switch:Invalid number of arguments.\nI: Configuration parsed.\n", acOutStr);
     Memory_eReset();
 
     sParams.pcConfig = "S,o1,afsd";
     eParseResult = PinCfgCsv_eParse(&sParams);
-    TEST_ASSERT_EQUAL(sizeof(CLI_T), szMemoryRequired);
+    szRequiredMem = Memory_szGetAllocatedSize(sizeof(GLOBALS_T));
+    szRequiredMem += Memory_szGetAllocatedSize(sizeof(CLI_T));
+    szRequiredMem += Memory_szGetAllocatedSize(sizeof(LINKEDLIST_ITEM_T) + sizeof(void *));
+    TEST_ASSERT_EQUAL(szRequiredMem, szMemoryRequired);
     TEST_ASSERT_EQUAL(PINCFG_WARNINGS_E, eParseResult);
     TEST_ASSERT_EQUAL_STRING("W:L:0:Switch:Invalid pin number.\nI: Configuration parsed.\n", acOutStr);
     Memory_eReset();
 
     sParams.pcConfig = "S,o1,afsd,o2";
     eParseResult = PinCfgCsv_eParse(&sParams);
-    TEST_ASSERT_EQUAL(sizeof(CLI_T), szMemoryRequired);
+    szRequiredMem = Memory_szGetAllocatedSize(sizeof(GLOBALS_T));
+    szRequiredMem += Memory_szGetAllocatedSize(sizeof(CLI_T));
+    szRequiredMem += Memory_szGetAllocatedSize(sizeof(LINKEDLIST_ITEM_T) + sizeof(void *));
+    TEST_ASSERT_EQUAL(szRequiredMem, szMemoryRequired);
     TEST_ASSERT_EQUAL(PINCFG_WARNINGS_E, eParseResult);
     TEST_ASSERT_EQUAL_STRING(
         "W:L:0:Switch:Invalid number of items defining names and pins.\nI: Configuration parsed.\n", acOutStr);
@@ -501,7 +525,14 @@ void test_vPinCfgCsv(void)
     Memory_vpAlloc((size_t)(psGlobals->pvMemTempEnd - psGlobals->pvMemNext - sizeof(char *) - sizeof(CLI_T)));
     sParams.pcConfig = "S,o1,2";
     eParseResult = PinCfgCsv_eParse(&sParams);
-    TEST_ASSERT_EQUAL(sizeof(CLI_T), szMemoryRequired);
+    szRequiredMem = Memory_szGetAllocatedSize(sizeof(GLOBALS_T));
+    szRequiredMem += Memory_szGetAllocatedSize(sizeof(CLI_T));
+    szRequiredMem += Memory_szGetAllocatedSize(sizeof(LINKEDLIST_ITEM_T) + sizeof(void *));
+    szRequiredMem += Memory_szGetAllocatedSize(sizeof(SWITCH_T));
+    szRequiredMem += Memory_szGetAllocatedSize(sizeof(char) * 3);
+    szRequiredMem +=
+        Memory_szGetAllocatedSize(sizeof(LINKEDLIST_ITEM_T) + sizeof(void *)) * 2; /* loopables, presentables */
+    TEST_ASSERT_EQUAL(szRequiredMem, szMemoryRequired);
     TEST_ASSERT_EQUAL(PINCFG_OUTOFMEMORY_ERROR_E, eParseResult);
     TEST_ASSERT_EQUAL_STRING("E:L:0:Switch:Out of memory.\n", acOutStr);
     Memory_eReset();
@@ -513,27 +544,50 @@ void test_vPinCfgCsv(void)
 
     sParams.pcConfig = "# (bluePill)/";
     eParseResult = PinCfgCsv_eParse(&sParams);
-    TEST_ASSERT_EQUAL(sizeof(CLI_T), szMemoryRequired);
+    szRequiredMem = Memory_szGetAllocatedSize(sizeof(GLOBALS_T));
+    szRequiredMem += Memory_szGetAllocatedSize(sizeof(CLI_T));
+    szRequiredMem += Memory_szGetAllocatedSize(sizeof(LINKEDLIST_ITEM_T) + sizeof(void *));
+    TEST_ASSERT_EQUAL(szRequiredMem, szMemoryRequired);
     Memory_eReset();
 
     sParams.pcConfig = "S,o1,13,o2,12/";
     eParseResult = PinCfgCsv_eParse(&sParams);
-    TEST_ASSERT_EQUAL(sizeof(CLI_T) + (2 * sizeof(SWITCH_T) + 2 * sizeof(char *)), szMemoryRequired);
+    szRequiredMem = Memory_szGetAllocatedSize(sizeof(GLOBALS_T));
+    szRequiredMem += Memory_szGetAllocatedSize(sizeof(CLI_T));
+    szRequiredMem += Memory_szGetAllocatedSize(sizeof(LINKEDLIST_ITEM_T) + sizeof(void *));
+    szRequiredMem += Memory_szGetAllocatedSize(sizeof(SWITCH_T)) * 2;
+    szRequiredMem += Memory_szGetAllocatedSize(sizeof(char) * 3) * 2;
+    szRequiredMem += Memory_szGetAllocatedSize(sizeof(LINKEDLIST_ITEM_T) + sizeof(void *)) * 4;
+    TEST_ASSERT_EQUAL(szRequiredMem, szMemoryRequired);
     Memory_eReset();
 
     sParams.pcConfig = "I,i1,16/";
     eParseResult = PinCfgCsv_eParse(&sParams);
-    TEST_ASSERT_EQUAL(sizeof(CLI_T) + (1 * sizeof(INPIN_T) + 1 * sizeof(char *)), szMemoryRequired);
+    szRequiredMem = Memory_szGetAllocatedSize(sizeof(GLOBALS_T));
+    szRequiredMem += Memory_szGetAllocatedSize(sizeof(CLI_T));
+    szRequiredMem += Memory_szGetAllocatedSize(sizeof(LINKEDLIST_ITEM_T) + sizeof(void *));
+    szRequiredMem += Memory_szGetAllocatedSize(sizeof(INPIN_T));
+    szRequiredMem += Memory_szGetAllocatedSize(sizeof(char) * 3);
+    szRequiredMem += Memory_szGetAllocatedSize(sizeof(LINKEDLIST_ITEM_T) + sizeof(void *)) * 2;
+    TEST_ASSERT_EQUAL(szRequiredMem, szMemoryRequired);
     Memory_eReset();
 
     sParams.pcConfig = "S,o1,13,o2,12/"
                        "I,i1,16/"
                        "T,vtl12,i1,0,1,o1,2,o2,2/";
     eParseResult = PinCfgCsv_eParse(&sParams);
-    TEST_ASSERT_EQUAL(
-        sizeof(CLI_T) + (2 * sizeof(SWITCH_T) + 2 * sizeof(char *)) + (1 * sizeof(INPIN_T) + 1 * sizeof(char *)) +
-            (1 * sizeof(TRIGGER_T)) + (2 * sizeof(TRIGGER_SWITCHACTION_T)),
-        szMemoryRequired);
+    szRequiredMem = Memory_szGetAllocatedSize(sizeof(GLOBALS_T));
+    szRequiredMem += Memory_szGetAllocatedSize(sizeof(CLI_T));
+    szRequiredMem += Memory_szGetAllocatedSize(sizeof(LINKEDLIST_ITEM_T) + sizeof(void *));
+    szRequiredMem += Memory_szGetAllocatedSize(sizeof(SWITCH_T)) * 2;
+    szRequiredMem += Memory_szGetAllocatedSize(sizeof(char) * 3) * 2;
+    szRequiredMem += Memory_szGetAllocatedSize(sizeof(LINKEDLIST_ITEM_T) + sizeof(void *)) * 4;
+    szRequiredMem += Memory_szGetAllocatedSize(sizeof(INPIN_T));
+    szRequiredMem += Memory_szGetAllocatedSize(sizeof(char) * 3);
+    szRequiredMem += Memory_szGetAllocatedSize(sizeof(LINKEDLIST_ITEM_T) + sizeof(void *)) * 2;
+    szRequiredMem += Memory_szGetAllocatedSize(sizeof(TRIGGER_T));
+    szRequiredMem += Memory_szGetAllocatedSize(sizeof(TRIGGER_SWITCHACTION_T)) * 2;
+    TEST_ASSERT_EQUAL(szRequiredMem, szMemoryRequired);
     Memory_eReset();
 
     sParams.pcConfig = "# (bluePill)/"
@@ -543,10 +597,21 @@ void test_vPinCfgCsv(void)
                        "T,vtl11,i1,0,1,o2,2/"
                        "T,vtl12,i1,0,1,o2,2,o5,2";
     eParseResult = PinCfgCsv_eParse(&sParams);
-    TEST_ASSERT_EQUAL(
-        sizeof(CLI_T) + (10 * sizeof(SWITCH_T) + 10 * sizeof(char *)) + (12 * sizeof(INPIN_T) + 12 * sizeof(char *)) +
-            (2 * sizeof(TRIGGER_T)) + (3 * sizeof(TRIGGER_SWITCHACTION_T)),
-        szMemoryRequired);
+
+    szRequiredMem = Memory_szGetAllocatedSize(sizeof(GLOBALS_T));
+    szRequiredMem += Memory_szGetAllocatedSize(sizeof(CLI_T));
+    szRequiredMem += Memory_szGetAllocatedSize(sizeof(LINKEDLIST_ITEM_T) + sizeof(void *));
+    szRequiredMem += Memory_szGetAllocatedSize(sizeof(SWITCH_T)) * 10;
+    szRequiredMem += Memory_szGetAllocatedSize(sizeof(char) * 3) * 7;
+    szRequiredMem += Memory_szGetAllocatedSize(sizeof(char) * 4) * 3;
+    szRequiredMem += Memory_szGetAllocatedSize(sizeof(LINKEDLIST_ITEM_T) + sizeof(void *)) * 20;
+    szRequiredMem += Memory_szGetAllocatedSize(sizeof(INPIN_T)) * 12;
+    szRequiredMem += Memory_szGetAllocatedSize(sizeof(char) * 3) * 9;
+    szRequiredMem += Memory_szGetAllocatedSize(sizeof(char) * 4) * 3;
+    szRequiredMem += Memory_szGetAllocatedSize(sizeof(LINKEDLIST_ITEM_T) + sizeof(void *)) * 24;
+    szRequiredMem += Memory_szGetAllocatedSize(sizeof(TRIGGER_T)) * 2;
+    szRequiredMem += Memory_szGetAllocatedSize(sizeof(TRIGGER_SWITCHACTION_T)) * 3;
+    TEST_ASSERT_EQUAL(szRequiredMem, szMemoryRequired);
     TEST_ASSERT_EQUAL(PINCFG_OK_E, eParseResult);
     TEST_ASSERT_EQUAL_STRING("I: Configuration parsed.\n", acOutStr);
     // Memory_eReset();
@@ -686,24 +751,160 @@ void test_vGlobalConfig(void)
     eParseResult = PinCfgCsv_eParse(&sParams);
 
     TEST_ASSERT_EQUAL_STRING("W:L:0:SwitchFbOffDelayMs:Invalid number.\nI: Configuration parsed.\n", acOutStr);
+}
 
+void test_vCPUTemp(void)
+{
+    PINCFG_RESULT_T eResult;
+    LINKEDLIST_RESULT_T eLinkedListResult;
+    char acOutStr[OUT_STR_MAX_LEN_D];
+    size_t szMemoryRequired;
+    size_t szRequiredMem;
+    GLOBALS_T *psGlobals = (GLOBALS_T *)testMemory;
+    CPUTEMP_T *psCPUTempHnd;
+    ENABLEABLE_T *psEnableableHnd;
+
+    const char *pcCfg = "TI,CPUTemp0,0/"
+                        "TI,CPUTemp1,1,0/"
+                        "TI,CPUTemp2,1,1/"
+                        "TI,CPUTemp3,1,1,1500/"
+                        "TI,CPUTemp4,1,1,1500,200000/"
+                        "TI,CPUTemp5,1,1,1500,200000,-2.1/";
+
+    PINCFG_PARSE_PARAMS_T sParams = {
+        .pcConfig = pcCfg,
+        .eAddToLoopables = PinCfgCsv_eAddToTempLoopables,
+        .eAddToPresentables = PinCfgCsv_eAddToTempPresentables,
+        .pszMemoryRequired = &szMemoryRequired,
+        .pcOutString = acOutStr,
+        .u16OutStrMaxLen = (uint16_t)OUT_STR_MAX_LEN_D,
+        .bValidate = false};
+
+    eResult = PinCfgCsv_eParse(&sParams);
+    TEST_ASSERT_EQUAL(PINCFG_OK_E, eResult);
+    TEST_ASSERT_EQUAL(szMemoryRequired, MEMORY_SZ - (MEMORY_SZ % sizeof(void *)) - Memory_szGetFree());
+
+    eLinkedListResult =
+        LinkedList_eLinkedListToArray((LINKEDLIST_ITEM_T **)(&psGlobals->ppsLoopables), &psGlobals->u8LoopablesCount);
+    TEST_ASSERT_EQUAL(LINKEDLIST_OK_E, eLinkedListResult);
+    TEST_ASSERT_EQUAL(6, psGlobals->u8LoopablesCount);
+
+    eLinkedListResult = LinkedList_eLinkedListToArray(
+        (LINKEDLIST_ITEM_T **)(&psGlobals->ppsPresentables), &psGlobals->u8PresentablesCount);
+    TEST_ASSERT_EQUAL(LINKEDLIST_OK_E, eLinkedListResult);
+    TEST_ASSERT_EQUAL(12, psGlobals->u8PresentablesCount);
+
+    psCPUTempHnd = (CPUTEMP_T *)psGlobals->ppsPresentables[1];
+    TEST_ASSERT_EQUAL(V_TEMP, psCPUTempHnd->sSensor.sVtab.eVType);
+    TEST_ASSERT_EQUAL(S_TEMP, psCPUTempHnd->sSensor.sVtab.eSType);
+    TEST_ASSERT_EQUAL(InPin_vRcvMessage, psCPUTempHnd->sSensor.sVtab.vReceive);
+    TEST_ASSERT_EQUAL(SENSOR_MODE_STANDARD_E, psCPUTempHnd->sSensor.eMode);
+    TEST_ASSERT_EQUAL(PINCFG_CPUTEMP_SAMPLING_INTV_MS_D, psCPUTempHnd->sSensor.u32SamplingInterval);
+    TEST_ASSERT_EQUAL(PINCFG_CPUTEMP_REPORTING_INTV_MS_D, psCPUTempHnd->sSensor.u32ReportInterval);
+    TEST_ASSERT_EQUAL(PINCFG_CPUTEMP_OFFSET_D, psCPUTempHnd->sSensor.fOffset);
+    TEST_ASSERT_EQUAL(1, psCPUTempHnd->sSensor.sPresentable.u8Id);
+    TEST_ASSERT_EQUAL_STRING("CPUTemp0", psCPUTempHnd->sSensor.sPresentable.pcName);
+    TEST_ASSERT_EQUAL(InPin_vRcvMessage, psCPUTempHnd->sSensor.sPresentable.psVtab->vReceive);
+    TEST_ASSERT_NULL(psCPUTempHnd->sSensor.psEnableable);
+
+    psCPUTempHnd = (CPUTEMP_T *)psGlobals->ppsPresentables[2];
+    TEST_ASSERT_EQUAL(V_TEMP, psCPUTempHnd->sSensor.sVtab.eVType);
+    TEST_ASSERT_EQUAL(S_TEMP, psCPUTempHnd->sSensor.sVtab.eSType);
+    TEST_ASSERT_EQUAL(InPin_vRcvMessage, psCPUTempHnd->sSensor.sVtab.vReceive);
+    TEST_ASSERT_EQUAL(SENSOR_MODE_STANDARD_E, psCPUTempHnd->sSensor.eMode);
+    TEST_ASSERT_EQUAL(PINCFG_CPUTEMP_SAMPLING_INTV_MS_D, psCPUTempHnd->sSensor.u32SamplingInterval);
+    TEST_ASSERT_EQUAL(PINCFG_CPUTEMP_REPORTING_INTV_MS_D, psCPUTempHnd->sSensor.u32ReportInterval);
+    TEST_ASSERT_EQUAL(PINCFG_CPUTEMP_OFFSET_D, psCPUTempHnd->sSensor.fOffset);
+    TEST_ASSERT_EQUAL(2, psCPUTempHnd->sSensor.sPresentable.u8Id);
+    TEST_ASSERT_EQUAL_STRING("CPUTemp1", psCPUTempHnd->sSensor.sPresentable.pcName);
+    TEST_ASSERT_EQUAL(InPin_vRcvMessage, psCPUTempHnd->sSensor.sPresentable.psVtab->vReceive);
+    TEST_ASSERT_NOT_NULL(psCPUTempHnd->sSensor.psEnableable);
+    psEnableableHnd = psCPUTempHnd->sSensor.psEnableable;
+    TEST_ASSERT_EQUAL(psGlobals->ppsPresentables[3], psEnableableHnd);
+    TEST_ASSERT_EQUAL(3, psEnableableHnd->sPresentable.u8Id);
+    TEST_ASSERT_EQUAL_STRING("CPUTemp1_enable", psEnableableHnd->sPresentable.pcName);
+
+    psCPUTempHnd = (CPUTEMP_T *)psGlobals->ppsPresentables[4];
+    TEST_ASSERT_EQUAL(V_TEMP, psCPUTempHnd->sSensor.sVtab.eVType);
+    TEST_ASSERT_EQUAL(S_TEMP, psCPUTempHnd->sSensor.sVtab.eSType);
+    TEST_ASSERT_EQUAL(InPin_vRcvMessage, psCPUTempHnd->sSensor.sVtab.vReceive);
+    TEST_ASSERT_EQUAL(SENSOR_MODE_CUMULATIVE_E, psCPUTempHnd->sSensor.eMode);
+    TEST_ASSERT_EQUAL(PINCFG_CPUTEMP_SAMPLING_INTV_MS_D, psCPUTempHnd->sSensor.u32SamplingInterval);
+    TEST_ASSERT_EQUAL(PINCFG_CPUTEMP_REPORTING_INTV_MS_D, psCPUTempHnd->sSensor.u32ReportInterval);
+    TEST_ASSERT_EQUAL(PINCFG_CPUTEMP_OFFSET_D, psCPUTempHnd->sSensor.fOffset);
+    TEST_ASSERT_EQUAL(4, psCPUTempHnd->sSensor.sPresentable.u8Id);
+    TEST_ASSERT_EQUAL_STRING("CPUTemp2", psCPUTempHnd->sSensor.sPresentable.pcName);
+    TEST_ASSERT_EQUAL(InPin_vRcvMessage, psCPUTempHnd->sSensor.sPresentable.psVtab->vReceive);
+    TEST_ASSERT_NOT_NULL(psCPUTempHnd->sSensor.psEnableable);
+    psEnableableHnd = psCPUTempHnd->sSensor.psEnableable;
+    TEST_ASSERT_EQUAL(psGlobals->ppsPresentables[5], psEnableableHnd);
+    TEST_ASSERT_EQUAL(5, psEnableableHnd->sPresentable.u8Id);
+    TEST_ASSERT_EQUAL_STRING("CPUTemp2_enable", psEnableableHnd->sPresentable.pcName);
+
+    psCPUTempHnd = (CPUTEMP_T *)psGlobals->ppsPresentables[6];
+    TEST_ASSERT_EQUAL(V_TEMP, psCPUTempHnd->sSensor.sVtab.eVType);
+    TEST_ASSERT_EQUAL(S_TEMP, psCPUTempHnd->sSensor.sVtab.eSType);
+    TEST_ASSERT_EQUAL(InPin_vRcvMessage, psCPUTempHnd->sSensor.sVtab.vReceive);
+    TEST_ASSERT_EQUAL(SENSOR_MODE_CUMULATIVE_E, psCPUTempHnd->sSensor.eMode);
+    TEST_ASSERT_EQUAL(1500, psCPUTempHnd->sSensor.u32SamplingInterval);
+    TEST_ASSERT_EQUAL(PINCFG_CPUTEMP_REPORTING_INTV_MS_D, psCPUTempHnd->sSensor.u32ReportInterval);
+    TEST_ASSERT_EQUAL(PINCFG_CPUTEMP_OFFSET_D, psCPUTempHnd->sSensor.fOffset);
+    TEST_ASSERT_EQUAL(6, psCPUTempHnd->sSensor.sPresentable.u8Id);
+    TEST_ASSERT_EQUAL_STRING("CPUTemp3", psCPUTempHnd->sSensor.sPresentable.pcName);
+    TEST_ASSERT_EQUAL(InPin_vRcvMessage, psCPUTempHnd->sSensor.sPresentable.psVtab->vReceive);
+    TEST_ASSERT_NOT_NULL(psCPUTempHnd->sSensor.psEnableable);
+    psEnableableHnd = psCPUTempHnd->sSensor.psEnableable;
+    TEST_ASSERT_EQUAL(psGlobals->ppsPresentables[7], psEnableableHnd);
+    TEST_ASSERT_EQUAL(7, psEnableableHnd->sPresentable.u8Id);
+    TEST_ASSERT_EQUAL_STRING("CPUTemp3_enable", psEnableableHnd->sPresentable.pcName);
+
+    psCPUTempHnd = (CPUTEMP_T *)psGlobals->ppsPresentables[8];
+    TEST_ASSERT_EQUAL(V_TEMP, psCPUTempHnd->sSensor.sVtab.eVType);
+    TEST_ASSERT_EQUAL(S_TEMP, psCPUTempHnd->sSensor.sVtab.eSType);
+    TEST_ASSERT_EQUAL(InPin_vRcvMessage, psCPUTempHnd->sSensor.sVtab.vReceive);
+    TEST_ASSERT_EQUAL(SENSOR_MODE_CUMULATIVE_E, psCPUTempHnd->sSensor.eMode);
+    TEST_ASSERT_EQUAL(1500, psCPUTempHnd->sSensor.u32SamplingInterval);
+    TEST_ASSERT_EQUAL(200000, psCPUTempHnd->sSensor.u32ReportInterval);
+    TEST_ASSERT_EQUAL(PINCFG_CPUTEMP_OFFSET_D, psCPUTempHnd->sSensor.fOffset);
+    TEST_ASSERT_EQUAL(8, psCPUTempHnd->sSensor.sPresentable.u8Id);
+    TEST_ASSERT_EQUAL_STRING("CPUTemp4", psCPUTempHnd->sSensor.sPresentable.pcName);
+    TEST_ASSERT_EQUAL(InPin_vRcvMessage, psCPUTempHnd->sSensor.sPresentable.psVtab->vReceive);
+    TEST_ASSERT_NOT_NULL(psCPUTempHnd->sSensor.psEnableable);
+    psEnableableHnd = psCPUTempHnd->sSensor.psEnableable;
+    TEST_ASSERT_EQUAL(psGlobals->ppsPresentables[9], psEnableableHnd);
+    TEST_ASSERT_EQUAL(9, psEnableableHnd->sPresentable.u8Id);
+    TEST_ASSERT_EQUAL_STRING("CPUTemp4_enable", psEnableableHnd->sPresentable.pcName);
+
+    psCPUTempHnd = (CPUTEMP_T *)psGlobals->ppsPresentables[10];
+    TEST_ASSERT_EQUAL(V_TEMP, psCPUTempHnd->sSensor.sVtab.eVType);
+    TEST_ASSERT_EQUAL(S_TEMP, psCPUTempHnd->sSensor.sVtab.eSType);
+    TEST_ASSERT_EQUAL(InPin_vRcvMessage, psCPUTempHnd->sSensor.sVtab.vReceive);
+    TEST_ASSERT_EQUAL(SENSOR_MODE_CUMULATIVE_E, psCPUTempHnd->sSensor.eMode);
+    TEST_ASSERT_EQUAL(1500, psCPUTempHnd->sSensor.u32SamplingInterval);
+    TEST_ASSERT_EQUAL(200000, psCPUTempHnd->sSensor.u32ReportInterval);
+    TEST_ASSERT_EQUAL_FLOAT(-2.1f, psCPUTempHnd->sSensor.fOffset);
+    TEST_ASSERT_EQUAL(10, psCPUTempHnd->sSensor.sPresentable.u8Id);
+    TEST_ASSERT_EQUAL_STRING("CPUTemp5", psCPUTempHnd->sSensor.sPresentable.pcName);
+    TEST_ASSERT_EQUAL(InPin_vRcvMessage, psCPUTempHnd->sSensor.sPresentable.psVtab->vReceive);
+    TEST_ASSERT_NOT_NULL(psCPUTempHnd->sSensor.psEnableable);
+    psEnableableHnd = psCPUTempHnd->sSensor.psEnableable;
+    TEST_ASSERT_EQUAL(psGlobals->ppsPresentables[11], psEnableableHnd);
+    TEST_ASSERT_EQUAL(11, psEnableableHnd->sPresentable.u8Id);
+    TEST_ASSERT_EQUAL_STRING("CPUTemp5_enable", psEnableableHnd->sPresentable.pcName);
 }
 
 void test_vFlow_timedSwitch(void)
 {
     PINCFG_RESULT_T eResult;
-    char acOutStr[OUT_STR_MAX_LEN_D];
-    size_t szMemoryRequired;
-    GLOBALS_T *psGlobals = (GLOBALS_T *)testMemory;
 
     // Configuration string: input pin -> trigger -> timed switch
-    const char *pcCfg = "I,i1,16/"           // Input pin on pin 16
-                        "ST,sw1,13,5000/"    // Timed switch on pin 13 with 5s timeout
+    const char *pcCfg = "I,i1,16/"            // Input pin on pin 16
+                        "ST,sw1,13,5000/"     // Timed switch on pin 13 with 5s timeout
                         "T,t1,i1,4,1,sw1,3/"; // Trigger that connects i1 to sw1
-    
+
     // To use this configuration disable loading stored one
     uint16_t u16OverMaxCfgLenght = PINCFG_CONFIG_MAX_SZ_D + 1;
-    mock_hwReadConfigBlock_buf = (void*)&u16OverMaxCfgLenght;
+    mock_hwReadConfigBlock_buf = (void *)&u16OverMaxCfgLenght;
 
     eResult = PinCfgCsv_eInit(testMemory, MEMORY_SZ, pcCfg);
     TEST_ASSERT_EQUAL(PINCFG_OK_E, eResult);
@@ -737,7 +938,7 @@ void test_vFlow_timedSwitch(void)
     PinCfgCsv_vLoop(u32Time);
     u32Time += psGlobals->u32InPinDebounceMs;
     PinCfgCsv_vLoop(u32Time);
-    
+
     // Verify switch was activated
     TEST_ASSERT_EQUAL(1, mock_digitalWrite_u32Called);
     TEST_ASSERT_EQUAL(HIGH, mock_digitalWrite_u8Value);
@@ -783,7 +984,7 @@ void test_vFlow_timedSwitch(void)
     PinCfgCsv_vLoop(u32Time);
     u32Time += psGlobals->u32InPinDebounceMs;
     PinCfgCsv_vLoop(u32Time);
-    
+
     // Verify switch was activated
     TEST_ASSERT_EQUAL(1, mock_digitalWrite_u32Called);
     TEST_ASSERT_EQUAL(HIGH, mock_digitalWrite_u8Value);
@@ -941,7 +1142,7 @@ void test_vFlow_timedSwitch(void)
     TEST_ASSERT_EQUAL(u32Time, psSwitchHnd->u32ImpulseStarted);
     TEST_ASSERT_EQUAL(5000, psSwitchHnd->u32ImpulseDuration);
     TEST_ASSERT_EQUAL(u32Time, psInPin->u32timerMultiStarted);
-    
+
     u32Time += psInPin->u32timerMultiStarted + psGlobals->u32InPinMulticlickMaxDelayMs;
     PinCfgCsv_vLoop(u32Time);
 
@@ -967,6 +1168,8 @@ int test_main(void)
     printf("sizeof(INPIN_T): %ld\n", sizeof(INPIN_T));
     printf("sizeof(TRIGGER_T): %ld\n", sizeof(TRIGGER_T));
     printf("sizeof(TRIGGER_SWITCHACTION_T): %ld\n", sizeof(TRIGGER_SWITCHACTION_T));
+    printf("sizeof(SENSOR_T): %ld\n", sizeof(SENSOR_T));
+    printf("sizeof(CPUTEMP_T): %ld\n", sizeof(CPUTEMP_T));
     printf("\n\n");
 
     UNITY_BEGIN();
@@ -980,6 +1183,8 @@ int test_main(void)
     RUN_TEST(test_vPinCfgCsv);
     RUN_TEST(test_vCLI);
     RUN_TEST(test_vGlobalConfig);
+    RUN_TEST(test_vCPUTemp);
+
     RUN_TEST(test_vFlow_timedSwitch);
 
     return UNITY_END();

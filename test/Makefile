@@ -27,7 +27,7 @@ EXE = test
 INCLUDES = -I. -I../include -I$(MOCKDIR) -I$(UNITY_ROOT)/src -I$(SRCDIR) $(MYSENSORSINC)
 LIBS = -lm
 
-CFLAGS = -g -Wstack-usage=200 #-D'F(x)=((const char*)x)'
+CFLAGS = -g 
 CFLAGS += -Wall
 CFLAGS += -Wextra
 CFLAGS += -Wpointer-arith
@@ -40,6 +40,7 @@ CFLAGS += -Wmissing-field-initializers
 CFLAGS += -Wno-unknown-pragmas
 CFLAGS += -Wno-misleading-indentation
 CFLAGS += -DUNIT_TEST
+#CFLAGS += -Wstack-usage=200 #-D'F(x)=((const char*)x)'
 #CFLAGS += -fsanitize=vptr -fsanitize=address -static-libasan
 
 .PHONY: all

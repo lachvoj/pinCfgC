@@ -20,7 +20,6 @@ typedef struct
     PRESENTABLE_VTAB_T sSwitchPrVTab;
     PRESENTABLE_VTAB_T sInPinPrVTab;
     PRESENTABLE_VTAB_T sCliPrVTab;
-    PRESENTABLE_VTAB_T sCpuTempPrVTab;
     // InPin
     uint32_t u32InPinDebounceMs;
     uint32_t u32InPinMulticlickMaxDelayMs;

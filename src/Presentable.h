@@ -35,6 +35,7 @@ typedef enum
     PRESENTABLE_ERROR_E
 } PRESENTABLE_RESULT_T;
 
+PRESENTABLE_RESULT_T Presentable_eInitReuseName(PRESENTABLE_T *psHandle, const char *pcName, uint8_t u8Id);
 PRESENTABLE_RESULT_T Presentable_eInit(PRESENTABLE_T *psHandle, STRING_POINT_T *psName, uint8_t u8Id);
 
 uint8_t Presentable_u8GetId(PRESENTABLE_T *psHandle);

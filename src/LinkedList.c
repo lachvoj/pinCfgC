@@ -86,3 +86,25 @@ void *LinkedList_pvGetStoredItem(LINKEDLIST_ITEM_T *psLLItem)
 
     return psLLItem->pvItem;
 }
+
+LINKEDLIST_RESULT_T LinkedList_eLinkedListToArray(LINKEDLIST_ITEM_T **ppsFirst, uint8_t *u8Count)
+{
+    void *pvNewFirst = NULL;
+    void *pvItem = LinkedList_pvPopFront(ppsFirst);
+    while (pvItem != NULL)
+    {
+        void **pvArrayItem = (void **)Memory_vpAlloc(sizeof(void **));
+        if (pvArrayItem == NULL)
+            return LINKEDLIST_OUTOFMEMORY_ERROR_E;
+
+        if (pvNewFirst == NULL)
+            pvNewFirst = pvArrayItem;
+
+        *pvArrayItem = pvItem;
+        (*u8Count)++;
+        pvItem = LinkedList_pvPopFront(ppsFirst);
+    }
+    *ppsFirst = pvNewFirst;
+
+    return LINKEDLIST_OK_E;
+}

@@ -5,6 +5,20 @@
 #include "MySensorsWrapper.h"
 #include "Presentable.h"
 
+PRESENTABLE_RESULT_T Presentable_eInitReuseName(PRESENTABLE_T *psHandle, const char *pcName, uint8_t u8Id)
+{
+    if (psHandle == NULL || pcName == NULL)
+        return PRESENTABLE_NULLPTR_ERROR_E;
+
+    psHandle->pcName = pcName;
+    psHandle->u8Id = u8Id;
+#ifdef MY_CONTROLLER_HA
+    psHandle->bStatePresented = false;
+#endif
+
+    return PRESENTABLE_OK_E;
+}
+
 PRESENTABLE_RESULT_T Presentable_eInit(PRESENTABLE_T *psHandle, STRING_POINT_T *psName, uint8_t u8Id)
 {
     if (psHandle == NULL || psName == NULL)
@@ -19,13 +33,7 @@ PRESENTABLE_RESULT_T Presentable_eInit(PRESENTABLE_T *psHandle, STRING_POINT_T *
     memcpy((void *)pcName, (const void *)psName->pcStrStart, (size_t)psName->szLen);
     pcName[psName->szLen] = '\0';
 
-    psHandle->pcName = pcName;
-    psHandle->u8Id = u8Id;
-#ifdef MY_CONTROLLER_HA
-    psHandle->bStatePresented = false;
-#endif
-
-    return PRESENTABLE_OK_E;
+    return Presentable_eInitReuseName(psHandle, pcName, u8Id);
 }
 
 uint8_t Presentable_u8GetId(PRESENTABLE_T *psHandle)

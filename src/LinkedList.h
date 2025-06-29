@@ -19,7 +19,10 @@ typedef struct LINKEDLIST_ITEM_S
 
 LINKEDLIST_RESULT_T LinkedList_eAddToLinkedList(LINKEDLIST_ITEM_T **ppsFirst, void *pvNew);
 LINKEDLIST_RESULT_T LinkedList_eGetLength(LINKEDLIST_ITEM_T **ppsFirst, size_t *szSize);
-LINKEDLIST_ITEM_T *LinkedList_psGetNext(LINKEDLIST_ITEM_T* pvItem);
+LINKEDLIST_ITEM_T *LinkedList_psGetNext(LINKEDLIST_ITEM_T *pvItem);
 void *LinkedList_pvPopFront(LINKEDLIST_ITEM_T **ppsFirst);
 void *LinkedList_pvGetStoredItem(LINKEDLIST_ITEM_T *psLLItem);
+
+LINKEDLIST_RESULT_T LinkedList_eLinkedListToArray(LINKEDLIST_ITEM_T **ppsFirst, uint8_t *u8Count);
+
 #endif // LINKEDLIST_H

@@ -1,0 +1,22 @@
+#ifndef ENABLEABLE_H
+#define ENABLEABLE_H
+
+#include "Presentable.h"
+#include "Types.h"
+
+typedef struct ENABLEABLE_S
+{
+    PRESENTABLE_T sPresentable;
+} ENABLEABLE_T;
+
+typedef enum ENABLEABLE_RESULT_E
+{
+    ENABLEABLE_OK_E = 0,
+    ENABLEABLE_NULLPTR_ERROR_E,
+    ENABLEABLE_MEMORY_ALLOCATION_ERROR_E,
+    ENABLEABLE_ERROR_E
+} ENABLEABLE_RESULT_T;
+
+ENABLEABLE_RESULT_T Enableable_eInit(ENABLEABLE_T *psHandle, STRING_POINT_T *sName, uint8_t u8Id);
+
+#endif // ENABLEABLE_H
