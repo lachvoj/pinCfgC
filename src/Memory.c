@@ -5,6 +5,9 @@
 #include "Memory.h"
 #include "Types.h"
 
+GLOBALS_T *psGlobals = NULL;
+
+#ifndef USE_MALLOC
 typedef struct MEMORY_TEMP_ITEM_S
 {
     union
@@ -17,8 +20,6 @@ typedef struct MEMORY_TEMP_ITEM_S
         void *pvAligment;
     };
 } MEMORY_TEMP_ITEM_T;
-
-GLOBALS_T *psGlobals;
 
 MEMORY_RESULT_T Memory_eInit(uint8_t *pu8Memory, size_t szSize)
 {
@@ -117,26 +118,25 @@ void Memory_vTempFree(void)
 
 void Memory_vTempFreePt(void *pvToFree)
 {
-    if (psGlobals->bMemIsInitialized)
+    if (!psGlobals || !psGlobals->bMemIsInitialized || pvToFree == NULL)
+        return;
+
+    MEMORY_TEMP_ITEM_T *psTempItem = (MEMORY_TEMP_ITEM_T *)((char *)pvToFree - sizeof(MEMORY_TEMP_ITEM_T));
+    psTempItem->bFree = true;
+
+    // Only coalesce/free from the temp end if this block is at the temp end
+    while ((char *)psTempItem == psGlobals->pvMemTempEnd && psTempItem->bFree)
     {
-        MEMORY_TEMP_ITEM_T *psTempItem = (MEMORY_TEMP_ITEM_T *)((char *)pvToFree - sizeof(MEMORY_TEMP_ITEM_T));
-        // memset(pvToFree, 0x00U, psTempItem->u16AlocatedSize - sizeof(MEMORY_TEMP_ITEM_T));
-        psTempItem->bFree = true;
-        if (psGlobals->pvMemTempEnd == (char *)psTempItem)
+        size_t szTmp = (size_t)(psTempItem->u16AlocatedSize & 0xFFFFU);
+        memset(psGlobals->pvMemTempEnd, 0x00U, szTmp);
+        psGlobals->pvMemTempEnd += szTmp;
+
+        if (psGlobals->pvMemTempEnd >= psGlobals->pvMemEnd)
         {
-            while (psTempItem->bFree == true)
-            {
-                size_t szTmp = (size_t)(0x0000FFFFU & psTempItem->u16AlocatedSize);
-                memset(psGlobals->pvMemTempEnd, 0x00U, szTmp);
-                psGlobals->pvMemTempEnd = psGlobals->pvMemTempEnd + szTmp;
-                if (psGlobals->pvMemTempEnd >= psGlobals->pvMemEnd)
-                {
-                    psGlobals->pvMemTempEnd = psGlobals->pvMemEnd;
-                    break;
-                }
-                psTempItem = (MEMORY_TEMP_ITEM_T *)psGlobals->pvMemTempEnd;
-            }
+            psGlobals->pvMemTempEnd = psGlobals->pvMemEnd;
+            break;
         }
+        psTempItem = (MEMORY_TEMP_ITEM_T *)psGlobals->pvMemTempEnd;
     }
 }
 
@@ -149,3 +149,73 @@ size_t Memory_szGetAllocatedSize(size_t szSize)
 {
     return (size_t)(((szSize + sizeof(void *) - 1) / sizeof(void *)) * sizeof(void *));
 }
+#else                         // USE_MALLOC
+#include <stdlib.h>
+
+#define SIZE_MAX ((size_t)-1) // Define SIZE_MAX for malloc mode
+#define MEMORY_SZ SIZE_MAX    // Use a large value to indicate "unlimited" memory in malloc mode
+
+MEMORY_RESULT_T Memory_eInit(uint8_t *pu8Memory, size_t szSize)
+{
+    (void)pu8Memory; // Unused in malloc mode
+    (void)szSize;    // Unused in malloc mode
+    if (psGlobals != NULL)
+        memset(psGlobals, 0, sizeof(GLOBALS_T));
+    else
+    {
+        psGlobals = (GLOBALS_T *)malloc(sizeof(GLOBALS_T));
+        if (psGlobals == NULL)
+            return MEMORY_INSUFFICIENT_SIZE_ERROR_E;
+    }
+
+    return MEMORY_OK_E;
+}
+
+MEMORY_RESULT_T Memory_eReset(void)
+{
+    if (psGlobals == NULL)
+    {
+        return MEMORY_ERROR_E;
+    }
+    memset(psGlobals, 0, sizeof(GLOBALS_T));
+
+    return MEMORY_OK_E;
+}
+
+void *Memory_vpAlloc(size_t szSize)
+{
+    void *pvResult = malloc(szSize);
+    if (pvResult == NULL)
+    {
+        errno = ENOMEM;
+    }
+    return pvResult;
+}
+
+void *Memory_vpTempAlloc(size_t szSize)
+{
+    return Memory_vpAlloc(szSize);
+}
+
+void Memory_vTempFree(void)
+{
+}
+
+void Memory_vTempFreePt(void *pvToFree)
+{
+    if (pvToFree != NULL)
+        free(pvToFree);
+}
+
+size_t Memory_szGetFree(void)
+{
+    // In malloc mode, we cannot determine free memory size reliably
+    return SIZE_MAX; // Return a large value to indicate "unlimited" free memory
+}
+
+size_t Memory_szGetAllocatedSize(size_t szSize)
+{
+    // In malloc mode, we return the size as is
+    return szSize;
+}
+#endif                        // USE_MALLOC

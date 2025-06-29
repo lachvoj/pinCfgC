@@ -49,7 +49,10 @@ void tearDown(void)
 
 void test_vMemory(void)
 {
-    MEMORY_RESULT_T eMemRes = Memory_eInit(NULL, sizeof(GLOBALS_T) - 1);
+    MEMORY_RESULT_T eMemRes;
+
+#ifndef USE_MALLOC
+    eMemRes = Memory_eInit(NULL, sizeof(GLOBALS_T) - 1);
     TEST_ASSERT_EQUAL(MEMORY_ERROR_E, eMemRes);
 
     eMemRes = Memory_eInit(testMemory, sizeof(GLOBALS_T) - 1);
@@ -143,6 +146,7 @@ void test_vMemory(void)
 
     Memory_vTempFreePt(pvTmp2);
     TEST_ASSERT_EQUAL(psGlobals->pvMemTempEnd, psGlobals->pvMemEnd);
+#endif // USE_MALLOC
 }
 
 void test_vStringPoint(void)
@@ -279,10 +283,12 @@ void test_vMySenosrsPresent(void)
     TEST_ASSERT_EQUAL(PRESENTABLE_NULLPTR_ERROR_E, eResult);
     eResult = Presentable_eInit(NULL, NULL, 1);
     TEST_ASSERT_EQUAL(PRESENTABLE_NULLPTR_ERROR_E, eResult);
+#ifndef USE_MALLOC
     Memory_vpTempAlloc((size_t)(psGlobals->pvMemTempEnd - psGlobals->pvMemNext - sizeof(char *)));
     eResult = Presentable_eInit(psPresentHandle, &sName, 1);
     Memory_vTempFree();
     TEST_ASSERT_EQUAL(PRESENTABLE_ALLOCATION_ERROR_E, eResult);
+#endif // USE_MALLOC
     eResult = Presentable_eInit(psPresentHandle, &sName, 1);
     TEST_ASSERT_EQUAL_STRING(acName, psPresentHandle->pcName);
     TEST_ASSERT_EQUAL_UINT8(1, psPresentHandle->u8Id);
@@ -363,7 +369,6 @@ void test_vSwitch(void)
     LINKEDLIST_RESULT_T eLinkedListResult;
     char acOutStr[OUT_STR_MAX_LEN_D];
     size_t szMemoryRequired;
-    GLOBALS_T *psGlobals = (GLOBALS_T *)testMemory;
 
     const char *pcCfg = "S,o1,13/"
                         "CR,120/"
@@ -452,6 +457,7 @@ void test_vPinCfgCsv(void)
         .u16OutStrMaxLen = (uint16_t)OUT_STR_MAX_LEN_D,
         .bValidate = false};
 
+#ifndef USE_MALLOC
     Memory_vpAlloc((size_t)(psGlobals->pvMemTempEnd - psGlobals->pvMemNext - sizeof(char *)));
     eParseResult = PinCfgCsv_eParse(&sParams);
     szRequiredMem = Memory_szGetAllocatedSize(sizeof(GLOBALS_T));
@@ -461,6 +467,7 @@ void test_vPinCfgCsv(void)
     TEST_ASSERT_EQUAL(PINCFG_OUTOFMEMORY_ERROR_E, eParseResult);
     TEST_ASSERT_EQUAL_STRING("E:CLI:Out of memory.\n", acOutStr);
     Memory_eReset();
+#endif // USE_MALLOC
 
     eParseResult = PinCfgCsv_eParse(&sParams);
     szRequiredMem = Memory_szGetAllocatedSize(sizeof(GLOBALS_T));
@@ -522,6 +529,7 @@ void test_vPinCfgCsv(void)
         "W:L:0:Switch:Invalid number of items defining names and pins.\nI: Configuration parsed.\n", acOutStr);
     Memory_eReset();
 
+#ifndef USE_MALLOC
     Memory_vpAlloc((size_t)(psGlobals->pvMemTempEnd - psGlobals->pvMemNext - sizeof(char *) - sizeof(CLI_T)));
     sParams.pcConfig = "S,o1,2";
     eParseResult = PinCfgCsv_eParse(&sParams);
@@ -539,6 +547,7 @@ void test_vPinCfgCsv(void)
 
     TEST_ASSERT_EQUAL(
         (MEMORY_SZ - sizeof(GLOBALS_T) - (MEMORY_SZ - sizeof(GLOBALS_T)) % sizeof(char *)), Memory_szGetFree());
+#endif // USE_MALLOC
 
     // pins o3,11,o4,10 removed due to emulator uses them for serial output
 
@@ -672,7 +681,6 @@ void test_vGlobalConfig(void)
 
     TEST_ASSERT_EQUAL(PINCFG_OK_E, eParseResult);
 
-    GLOBALS_T *psGlobals = (GLOBALS_T *)testMemory;
     TEST_ASSERT_EQUAL(330, psGlobals->u32InPinDebounceMs);
     TEST_ASSERT_EQUAL(620, psGlobals->u32InPinMulticlickMaxDelayMs);
     TEST_ASSERT_EQUAL(150, psGlobals->u32SwitchImpulseDurationMs);
@@ -760,7 +768,6 @@ void test_vCPUTemp(void)
     char acOutStr[OUT_STR_MAX_LEN_D];
     size_t szMemoryRequired;
     size_t szRequiredMem;
-    GLOBALS_T *psGlobals = (GLOBALS_T *)testMemory;
     CPUTEMP_T *psCPUTempHnd;
     ENABLEABLE_T *psEnableableHnd;
 
@@ -782,7 +789,10 @@ void test_vCPUTemp(void)
 
     eResult = PinCfgCsv_eParse(&sParams);
     TEST_ASSERT_EQUAL(PINCFG_OK_E, eResult);
+
+#ifndef USE_MALLOC
     TEST_ASSERT_EQUAL(szMemoryRequired, MEMORY_SZ - (MEMORY_SZ % sizeof(void *)) - Memory_szGetFree());
+#endif // USE_MALLOC
 
     eLinkedListResult =
         LinkedList_eLinkedListToArray((LINKEDLIST_ITEM_T **)(&psGlobals->ppsLoopables), &psGlobals->u8LoopablesCount);

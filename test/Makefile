@@ -40,6 +40,7 @@ CFLAGS += -Wmissing-field-initializers
 CFLAGS += -Wno-unknown-pragmas
 CFLAGS += -Wno-misleading-indentation
 CFLAGS += -DUNIT_TEST
+CFLAGS += -DUSE_MALLOC
 #CFLAGS += -Wstack-usage=200 #-D'F(x)=((const char*)x)'
 #CFLAGS += -fsanitize=vptr -fsanitize=address -static-libasan
 

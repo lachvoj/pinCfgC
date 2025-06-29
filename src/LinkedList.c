@@ -6,32 +6,21 @@ LINKEDLIST_RESULT_T LinkedList_eAddToLinkedList(LINKEDLIST_ITEM_T **ppsFirst, vo
     if (ppsFirst == NULL || pvNew == NULL)
         return LINKEDLIST_NULLPTR_ERROR_E;
 
-    LINKEDLIST_ITEM_T *psLl = NULL;
+    LINKEDLIST_ITEM_T *psNew = (LINKEDLIST_ITEM_T *)Memory_vpTempAlloc(sizeof(LINKEDLIST_ITEM_T));
+    if (psNew == NULL)
+        return LINKEDLIST_OUTOFMEMORY_ERROR_E;
+
+    psNew->pvItem = pvNew;
+    psNew->pvNext = NULL;
+
     if (*ppsFirst == NULL)
-    {
-        psLl = (LINKEDLIST_ITEM_T *)Memory_vpTempAlloc(sizeof(LINKEDLIST_ITEM_T));
-        if (psLl == NULL)
-            return LINKEDLIST_OUTOFMEMORY_ERROR_E;
-
-        psLl->pvItem = pvNew;
-        psLl->pvNext = NULL;
-        *ppsFirst = psLl;
-    }
+        *ppsFirst = psNew;
     else
-    {
-        psLl = *ppsFirst;
+     {
+        LINKEDLIST_ITEM_T *psLl = *ppsFirst;
         while (psLl->pvNext != NULL)
-        {
             psLl = psLl->pvNext;
-        }
-
-        LINKEDLIST_ITEM_T *psLlNew = NULL;
-        psLlNew = (LINKEDLIST_ITEM_T *)Memory_vpTempAlloc(sizeof(LINKEDLIST_ITEM_T));
-        if (psLlNew == NULL)
-            return LINKEDLIST_OUTOFMEMORY_ERROR_E;
-        psLlNew->pvItem = pvNew;
-        psLlNew->pvNext = NULL;
-        psLl->pvNext = psLlNew;
+        psLl->pvNext = psNew;
     }
 
     return LINKEDLIST_OK_E;
@@ -89,22 +78,27 @@ void *LinkedList_pvGetStoredItem(LINKEDLIST_ITEM_T *psLLItem)
 
 LINKEDLIST_RESULT_T LinkedList_eLinkedListToArray(LINKEDLIST_ITEM_T **ppsFirst, uint8_t *u8Count)
 {
-    void *pvNewFirst = NULL;
+    if (ppsFirst == NULL || u8Count == NULL)
+        return LINKEDLIST_NULLPTR_ERROR_E;
+
+    size_t szCount = 0;
+    LINKEDLIST_RESULT_T eResult = LinkedList_eGetLength(ppsFirst, &szCount);
+    if (eResult != LINKEDLIST_OK_E)
+        return eResult;
+
+    void **pvArray = (void **)Memory_vpAlloc(sizeof(void *) * szCount);
+    if (pvArray == NULL)
+            return LINKEDLIST_OUTOFMEMORY_ERROR_E;
+
+    *u8Count = 0U;
     void *pvItem = LinkedList_pvPopFront(ppsFirst);
     while (pvItem != NULL)
     {
-        void **pvArrayItem = (void **)Memory_vpAlloc(sizeof(void **));
-        if (pvArrayItem == NULL)
-            return LINKEDLIST_OUTOFMEMORY_ERROR_E;
-
-        if (pvNewFirst == NULL)
-            pvNewFirst = pvArrayItem;
-
-        *pvArrayItem = pvItem;
+        pvArray[*u8Count] = pvItem;
         (*u8Count)++;
         pvItem = LinkedList_pvPopFront(ppsFirst);
     }
-    *ppsFirst = pvNewFirst;
+    *ppsFirst = pvArray;
 
     return LINKEDLIST_OK_E;
 }

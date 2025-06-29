@@ -7,11 +7,14 @@
 
 typedef struct
 {
+#ifndef USE_MALLOC
     // memory
     char *pvMemEnd;
     char *pvMemNext;
     char *pvMemTempEnd;
     bool bMemIsInitialized;
+#endif // USE_MALLOC
+
     // pincfgcsv
     uint8_t u8LoopablesCount;
     uint8_t u8PresentablesCount;

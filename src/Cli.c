@@ -162,7 +162,7 @@ void Cli_vRcvMessage(PRESENTABLE_T *psBaseHandle, const void *pvMessage)
             bCopied = true;
             psHandle->pcCfgBuf[psHandle->u16CfgNext + szLen] = '\0';
             Cli_vConfigurationReceived(psHandle);
-            Memory_vTempFree();
+            Memory_vTempFreePt(psHandle->pcCfgBuf);
         }
         if (!bCopied)
         {
@@ -177,7 +177,11 @@ static void Cli_vConfigurationReceived(CLI_T *psHandle)
 {
     PINCFG_RESULT_T eValidationResult;
     size_t szMemoryRequired;
-    const size_t szFreeMemory = Memory_szGetFree() - (10 * sizeof(char *)); // leave some space
+#ifdef USE_MALLOC
+    const size_t szFreeMemory = PINCFG_CONFIG_MAX_SZ_D;
+#else
+    const size_t szFreeMemory =  Memory_szGetFree() - (10 * sizeof(char *)); // leave some space for other allocations
+#endif // USE_MALLOC
     char *pcOut = (char *)Memory_vpTempAlloc(szFreeMemory);
     if (pcOut != NULL)
     {
@@ -199,8 +203,7 @@ static void Cli_vConfigurationReceived(CLI_T *psHandle)
     }
     else
     {
-        size_t szOutSize = strlen(pcOut);
-        if (szOutSize > 0)
+        if (pcOut != NULL && strlen(pcOut) > 0)
         {
             Cli_vSendBigMessage(psHandle, pcOut);
         }
@@ -242,7 +245,7 @@ static void Cli_vCommandFunction(CLI_T *psHandle, char *cmd)
         }
 
         Cli_vSendBigMessage(psHandle, pcCfgBuf);
-        Memory_vTempFree();
+        Memory_vTempFreePt(pcCfgBuf);
         Cli_vSetState(psHandle, CLI_LISTENING_E, NULL, true);
     }
     else if (strcmp("RESET", cmd) == 0)
