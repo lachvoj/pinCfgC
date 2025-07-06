@@ -152,7 +152,6 @@ size_t Memory_szGetAllocatedSize(size_t szSize)
 #else                         // USE_MALLOC
 #include <stdlib.h>
 
-#define SIZE_MAX ((size_t)-1) // Define SIZE_MAX for malloc mode
 #define MEMORY_SZ SIZE_MAX    // Use a large value to indicate "unlimited" memory in malloc mode
 
 MEMORY_RESULT_T Memory_eInit(uint8_t *pu8Memory, size_t szSize)

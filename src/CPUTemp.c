@@ -5,15 +5,16 @@
 #include "MySensorsWrapper.h"
 #include "PinCfgUtils.h"
 
-
-static SENSOR_RESULT_T CPUTemp_eMeasure(SENSOR_T *psHandle, float *pfValue);
+static SENSOR_RESULT_T CPUTemp_eMeasure(float *pfValue, const float fOffset);
 
 CPUTEMP_RESULT_T CPUTemp_eInit(
     CPUTEMP_T *psHandle,
-    STRING_POINT_T *sName,
-    uint8_t u8Id,
-    uint8_t u8Enableable,
+    PINCFG_RESULT_T (*eAddToLoopables)(LOOPABLE_T *psLoopable),
+    PINCFG_RESULT_T (*eAddToPresentables)(PRESENTABLE_T *psPresentable),
+    uint8_t *pu8PresentablesCount,
     SENSOR_MODE_T eMode,
+    uint8_t u8Enableable,
+    STRING_POINT_T *sName,
     uint32_t u32SamplingInterval,
     uint32_t u32ReportInterval,
     float fOffset)
@@ -21,20 +22,28 @@ CPUTEMP_RESULT_T CPUTemp_eInit(
     if (psHandle == NULL || sName == NULL)
         return CPUTEMP_NULLPTR_ERROR_E;
 
+    // Allocate memory for the sensor handle
+    size_t szSensorSize = Sensor_szGetTypeSize(eMode, u8Enableable);
+    SENSOR_T *psSensorHandle = (SENSOR_T *)Memory_vpAlloc(szSensorSize);
+    if (psSensorHandle == NULL)
+        return CPUTEMP_MEMORY_ALLOCATION_ERROR_E;
+
     // sensor init
     if (Sensor_eInit(
-            &psHandle->sSensor,
+            psSensorHandle,
+            eAddToLoopables,
+            eAddToPresentables,
+            pu8PresentablesCount,
+            eMode,
+            u8Enableable,
             sName,
             V_TEMP,
             S_TEMP,
             InPin_vRcvMessage,
             CPUTemp_eMeasure,
-            u8Id,
-            u8Enableable,
             u32SamplingInterval,
             u32ReportInterval,
-            fOffset,
-            eMode) != SENSOR_OK_E)
+            fOffset) != SENSOR_OK_E)
     {
         return CPUTEMP_SUBINIT_ERROR_E;
     }
@@ -42,9 +51,9 @@ CPUTEMP_RESULT_T CPUTemp_eInit(
     return CPUTEMP_OK_E;
 }
 
-static SENSOR_RESULT_T CPUTemp_eMeasure(SENSOR_T *psHandle, float *pfValue)
+static SENSOR_RESULT_T CPUTemp_eMeasure(float *pfValue, const float fOffset)
 {
-    *pfValue = i8HwCPUTemperature() + psHandle->fOffset;
+    *pfValue = i8HwCPUTemperature() + fOffset;
 
     return SENSOR_OK_E;
 }

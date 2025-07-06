@@ -782,11 +782,9 @@ static inline PINCFG_RESULT_T PinCfgCsv_ParseInpins(PINCFG_PARSE_SUBFN_PARAMS_T 
 
 static inline PINCFG_RESULT_T PinCfgCsv_ParseTriggers(PINCFG_PARSE_SUBFN_PARAMS_T *psPrms)
 {
-    uint8_t u8Count, u8EventType, u8EventCount, u8DrivesCountReal, u8Offset, u8DrivenAction, i;
+    uint8_t u8Count, u8EventType, u8EventCount, u8DrivesCountReal, u8Offset, u8DrivenAction;
     INPIN_T *psInPinEmiterHnd;
     SWITCH_T *psSwitchHnd;
-    TRIGGER_SWITCHACTION_T *pasSwActs;
-    TRIGGER_SWITCHACTION_T *psSwAct;
 
     if (psPrms == NULL)
         return PINCFG_NULLPTR_ERROR_E;
@@ -884,14 +882,21 @@ static inline PINCFG_RESULT_T PinCfgCsv_ParseTriggers(PINCFG_PARSE_SUBFN_PARAMS_
     psPrms->sTempStrPt = psPrms->sLine;
     u8Count = (uint8_t)((psPrms->u8LineItemsLen - 5) / 2);
     u8DrivesCountReal = 0;
-    pasSwActs = NULL;
-    for (i = 0; i < u8Count; i++)
+
+    if (psPrms->psParsePrms->pszMemoryRequired != NULL)
     {
-        u8Offset = 5 + i * 2;
-        psPrms->sTempStrPt = psPrms->sLine;
-        PinCfgStr_vGetSplitElemByIndex(&(psPrms->sTempStrPt), PINCFG_VALUE_SEPARATOR_D, u8Offset);
-        if (psPrms->psParsePrms->bValidate)
+        *(psPrms->psParsePrms->pszMemoryRequired) +=
+            Memory_szGetAllocatedSize(sizeof(TRIGGER_SWITCHACTION_T) * u8Count) +
+            Memory_szGetAllocatedSize(sizeof(TRIGGER_T));
+    }
+
+    if (psPrms->psParsePrms->bValidate)
+    {
+        for (uint8_t i = 0; i < u8Count; i++)
         {
+            u8Offset = 5 + i * 2;
+            psPrms->sTempStrPt = psPrms->sLine;
+            PinCfgStr_vGetSplitElemByIndex(&(psPrms->sTempStrPt), PINCFG_VALUE_SEPARATOR_D, u8Offset);
             if (PinCfgCsv_pcStrstrpt(psPrms->psParsePrms->pcConfig, &(psPrms->sTempStrPt)) == NULL)
             {
                 psPrms->pcOutStringLast += snprintf(
@@ -906,22 +911,45 @@ static inline PINCFG_RESULT_T PinCfgCsv_ParseTriggers(PINCFG_PARSE_SUBFN_PARAMS_
                 continue;
             }
         }
-        else
+        return PINCFG_OK_E;
+    }
+
+    // allocate memory for switch actions
+    TRIGGER_SWITCHACTION_T *pasSwActs =
+        (TRIGGER_SWITCHACTION_T *)Memory_vpAlloc(sizeof(TRIGGER_SWITCHACTION_T) * u8Count);
+    if (pasSwActs == NULL)
+    {
+        Memory_eReset();
+        psPrms->pcOutStringLast += snprintf(
+            (char *)(psPrms->psParsePrms->pcOutString + psPrms->pcOutStringLast),
+            szGetSize(psPrms->psParsePrms->u16OutStrMaxLen, psPrms->pcOutStringLast),
+            _s[FSDSSS_E],
+            _s[EL_E],
+            psPrms->u16LinesProcessed,
+            _s[TRG_E],
+            "Switchaction:",
+            _s[OOM_E]);
+
+        return PINCFG_OUTOFMEMORY_ERROR_E;
+    }
+    for (uint8_t i = 0; i < u8Count; i++)
+    {
+        u8Offset = 5 + i * 2;
+        psPrms->sTempStrPt = psPrms->sLine;
+        PinCfgStr_vGetSplitElemByIndex(&(psPrms->sTempStrPt), PINCFG_VALUE_SEPARATOR_D, u8Offset);
+        psSwitchHnd = (SWITCH_T *)PinCfgCsv_psFindInTempPresentablesByName(&(psPrms->sTempStrPt));
+        if (psSwitchHnd == NULL)
         {
-            psSwitchHnd = (SWITCH_T *)PinCfgCsv_psFindInTempPresentablesByName(&(psPrms->sTempStrPt));
-            if (psSwitchHnd == NULL)
-            {
-                psPrms->pcOutStringLast += snprintf(
-                    (char *)(psPrms->psParsePrms->pcOutString + psPrms->pcOutStringLast),
-                    szGetSize(psPrms->psParsePrms->u16OutStrMaxLen, psPrms->pcOutStringLast),
-                    _s[FSDSS_E],
-                    _s[WL_E],
-                    psPrms->u16LinesProcessed,
-                    _s[TRG_E],
-                    "Invalid switch name.");
-                psPrms->szNumberOfWarnings++;
-                continue;
-            }
+            psPrms->pcOutStringLast += snprintf(
+                (char *)(psPrms->psParsePrms->pcOutString + psPrms->pcOutStringLast),
+                szGetSize(psPrms->psParsePrms->u16OutStrMaxLen, psPrms->pcOutStringLast),
+                _s[FSDSS_E],
+                _s[WL_E],
+                psPrms->u16LinesProcessed,
+                _s[TRG_E],
+                "Invalid switch name.");
+            psPrms->szNumberOfWarnings++;
+            continue;
         }
 
         psPrms->sTempStrPt = psPrms->sLine;
@@ -940,45 +968,14 @@ static inline PINCFG_RESULT_T PinCfgCsv_ParseTriggers(PINCFG_PARSE_SUBFN_PARAMS_
             psPrms->szNumberOfWarnings++;
             continue;
         }
+
+        pasSwActs[u8DrivesCountReal].psSwitchHnd = psSwitchHnd;
+        pasSwActs[u8DrivesCountReal].eAction = (TRIGGER_ACTION_T)u8DrivenAction;
+
         u8DrivesCountReal++;
-
-        if (psPrms->psParsePrms->pszMemoryRequired != NULL)
-            *(psPrms->psParsePrms->pszMemoryRequired) += Memory_szGetAllocatedSize(sizeof(TRIGGER_SWITCHACTION_T));
-
-        if (psPrms->psParsePrms->bValidate)
-            continue;
-
-        psSwAct = (TRIGGER_SWITCHACTION_T *)Memory_vpAlloc(sizeof(TRIGGER_SWITCHACTION_T));
-        if (psSwAct == NULL)
-        {
-            Memory_eReset();
-            psPrms->pcOutStringLast += snprintf(
-                (char *)(psPrms->psParsePrms->pcOutString + psPrms->pcOutStringLast),
-                szGetSize(psPrms->psParsePrms->u16OutStrMaxLen, psPrms->pcOutStringLast),
-                _s[FSDSSS_E],
-                _s[EL_E],
-                psPrms->u16LinesProcessed,
-                _s[TRG_E],
-                "Switchaction:",
-                _s[OOM_E]);
-
-            return PINCFG_OUTOFMEMORY_ERROR_E;
-        }
-        psSwAct->psSwitchHnd = psSwitchHnd;
-        psSwAct->eAction = (TRIGGER_ACTION_T)u8DrivenAction;
-        if (pasSwActs == NULL)
-        {
-            pasSwActs = psSwAct;
-        }
     }
 
-    if (psPrms->psParsePrms->pszMemoryRequired != NULL)
-        *(psPrms->psParsePrms->pszMemoryRequired) += Memory_szGetAllocatedSize(sizeof(TRIGGER_T));
-
-    if (psPrms->psParsePrms->bValidate)
-        return PINCFG_OK_E;
-
-    if ((u8DrivesCountReal == 0U || pasSwActs == NULL))
+    if (u8DrivesCountReal == 0U)
     {
         psPrms->pcOutStringLast += snprintf(
             (char *)(psPrms->psParsePrms->pcOutString + psPrms->pcOutStringLast),
@@ -1188,10 +1185,13 @@ static inline PINCFG_RESULT_T PinCfgCsv_ParseCPUTemperatureSensor(PINCFG_PARSE_S
     psPrms->sTempStrPt = psPrms->sLine;
     PinCfgStr_vGetSplitElemByIndex(&(psPrms->sTempStrPt), PINCFG_VALUE_SEPARATOR_D, 1);
 
+    size_t szSensorSize = Sensor_szGetTypeSize(eMode, u8Enableable);
     if (psPrms->psParsePrms->pszMemoryRequired != NULL)
     {
         *(psPrms->psParsePrms->pszMemoryRequired) +=
-            Memory_szGetAllocatedSize(sizeof(CPUTEMP_T)) + Memory_szGetAllocatedSize(psPrms->sTempStrPt.szLen + 1);
+            Memory_szGetAllocatedSize(szSensorSize) +
+            Memory_szGetAllocatedSize(psPrms->sTempStrPt.szLen + 1) +
+            Memory_szGetAllocatedSize(sizeof(CPUTEMP_T));
 
         if (psPrms->psParsePrms->eAddToPresentables != NULL)
             *(psPrms->psParsePrms->pszMemoryRequired) +=
@@ -1199,23 +1199,12 @@ static inline PINCFG_RESULT_T PinCfgCsv_ParseCPUTemperatureSensor(PINCFG_PARSE_S
         if (psPrms->psParsePrms->eAddToLoopables != NULL)
             *(psPrms->psParsePrms->pszMemoryRequired) +=
                 Memory_szGetAllocatedSize(sizeof(LINKEDLIST_ITEM_T) + sizeof(void *));
-
-        if (u8Enableable == 1U)
-        {
-            *(psPrms->psParsePrms->pszMemoryRequired) +=
-                Memory_szGetAllocatedSize(sizeof(ENABLEABLE_T)) +
-                Memory_szGetAllocatedSize(psPrms->sTempStrPt.szLen + 1 + 7 /*_enable*/);
-
-            if (psPrms->psParsePrms->eAddToPresentables != NULL)
-                *(psPrms->psParsePrms->pszMemoryRequired) +=
-                    Memory_szGetAllocatedSize(sizeof(LINKEDLIST_ITEM_T) + sizeof(void *));
-        }
     }
 
     if (psPrms->psParsePrms->bValidate)
         return PINCFG_OK_E;
 
-    CPUTEMP_T *psTempHnd = (CPUTEMP_T *)Memory_vpAlloc(sizeof(CPUTEMP_T));
+    CPUTEMP_T *psTempHnd = (CPUTEMP_T *)Memory_vpAlloc(szSensorSize);
     if (psTempHnd == NULL)
     {
         Memory_eReset();
@@ -1231,38 +1220,17 @@ static inline PINCFG_RESULT_T PinCfgCsv_ParseCPUTemperatureSensor(PINCFG_PARSE_S
         return PINCFG_OUTOFMEMORY_ERROR_E;
     }
 
-    bool bInitOk =
-        (CPUTemp_eInit(
+    if (CPUTemp_eInit(
              psTempHnd,
-             &(psPrms->sTempStrPt),
-             psPrms->u8PresentablesCount,
-             u8Enableable,
+             psPrms->psParsePrms->eAddToLoopables,
+             psPrms->psParsePrms->eAddToPresentables,
+             &psPrms->u8PresentablesCount,
              eMode,
+             u8Enableable,
+             &(psPrms->sTempStrPt),
              u32SamplingInterval,
              u32ReportInterval,
-             fOffset) == CPUTEMP_OK_E);
-
-    if (bInitOk && psPrms->psParsePrms->eAddToPresentables != NULL)
-    {
-        bInitOk = (psPrms->psParsePrms->eAddToPresentables((PRESENTABLE_T *)psTempHnd) == PINCFG_OK_E);
-        if (bInitOk)
-            psPrms->u8PresentablesCount++;
-
-        if (u8Enableable == 1U)
-        {
-            bInitOk = bInitOk && (psPrms->psParsePrms->eAddToPresentables(
-                                      &(psTempHnd->sSensor.psEnableable->sPresentable)) == PINCFG_OK_E);
-            if (bInitOk)
-                psPrms->u8PresentablesCount++;
-        }
-    }
-
-    if (bInitOk && psPrms->psParsePrms->eAddToLoopables != NULL)
-    {
-        bInitOk = (psPrms->psParsePrms->eAddToLoopables(&(psTempHnd->sSensor.sLoopable)) == PINCFG_OK_E);
-    }
-
-    if (!bInitOk)
+             fOffset) != SENSOR_OK_E)
     {
         psPrms->pcOutStringLast += snprintf(
             (char *)(psPrms->psParsePrms->pcOutString + psPrms->pcOutStringLast),

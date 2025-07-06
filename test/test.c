@@ -442,6 +442,87 @@ void test_vSwitch(void)
     TEST_ASSERT_EQUAL(300000, psSwitchHnd->u32TimedAdidtionalDelayMs);
 }
 
+void test_vTrigger(void)
+{
+    PINCFG_RESULT_T eParseResult;
+    LINKEDLIST_RESULT_T eLinkedListResult;
+    char acOutStr[OUT_STR_MAX_LEN_D];
+    size_t szMemoryRequired;
+
+    const char *pcCfg = "I,i1,16/"
+                        "S,o1,13/"
+                        "T,t1,i1,0,1,o1,2/";
+
+    // Setup parse params
+    PINCFG_PARSE_PARAMS_T sParams = {
+        .pcConfig = pcCfg,
+        .eAddToLoopables = PinCfgCsv_eAddToTempLoopables,
+        .eAddToPresentables = PinCfgCsv_eAddToTempPresentables,
+        .pszMemoryRequired = &szMemoryRequired,
+        .pcOutString = acOutStr,
+        .u16OutStrMaxLen = (uint16_t)OUT_STR_MAX_LEN_D,
+        .bValidate = false
+    };
+
+    eParseResult = PinCfgCsv_eParse(&sParams);
+    TEST_ASSERT_EQUAL(PINCFG_OK_E, eParseResult);
+
+    eLinkedListResult =
+        LinkedList_eLinkedListToArray((LINKEDLIST_ITEM_T **)(&psGlobals->ppsLoopables), &psGlobals->u8LoopablesCount);
+    TEST_ASSERT_EQUAL(LINKEDLIST_OK_E, eLinkedListResult);
+    TEST_ASSERT_EQUAL(2, psGlobals->u8LoopablesCount);
+
+    eLinkedListResult = LinkedList_eLinkedListToArray(
+        (LINKEDLIST_ITEM_T **)(&psGlobals->ppsPresentables), &psGlobals->u8PresentablesCount);
+    TEST_ASSERT_EQUAL(LINKEDLIST_OK_E, eLinkedListResult);
+    TEST_ASSERT_EQUAL(3, psGlobals->u8PresentablesCount);
+
+    INPIN_T *psInPin = (INPIN_T *)psGlobals->ppsPresentables[1];
+    SWITCH_T *psSwitch = (SWITCH_T *)psGlobals->ppsPresentables[2];
+    TRIGGER_T *psTrigger = (TRIGGER_T *)psInPin->psFirstSubscriber; // Assuming trigger is registered as first subscriber
+
+    // Check trigger presentable
+    TEST_ASSERT_NOT_NULL(psTrigger);
+    TEST_ASSERT_EQUAL(1, psTrigger->u8SwActCount);
+    TEST_ASSERT_EQUAL(TRIGGER_A_TOGGLE_E, psTrigger->eEventType);
+    TEST_ASSERT_EQUAL(1, psTrigger->u8EventCount);
+
+    // Check trigger actions
+    TRIGGER_SWITCHACTION_T *psAction1 = &psTrigger->pasSwAct[0];
+    TEST_ASSERT_EQUAL_STRING("o1", psAction1->psSwitchHnd->sPresentable.pcName);
+    TEST_ASSERT_EQUAL(TRIGGER_LONG_E, psAction1->eAction);
+
+    // Simulate trigger activation
+
+    // // Set input pin to 0, trigger should set switch to 1
+    // psInPin->u8LastValue = 0;
+    // psTrigger->asActions[0].psInPin = psInPin;
+    // psTrigger->asActions[0].psSwitch = psSwitch;
+    // psTrigger->asActions[1].psInPin = psInPin;
+    // psTrigger->asActions[1].psSwitch = psSwitch;
+
+    // // Simulate trigger logic
+    // psInPin->u8LastValue = 0;
+    // psSwitch->u8State = 0;
+    // psTrigger->asActions[0].psSwitch->u8State = 0;
+    // psTrigger->asActions[1].psSwitch->u8State = 0;
+    // psTrigger->asActions[0].psInPin->u8LastValue = 0;
+    // psTrigger->asActions[1].psInPin->u8LastValue = 0;
+
+    // // Call trigger logic (assuming function exists, e.g. Trigger_vProcess)
+    // if (psTrigger->asActions[0].psInPin->u8LastValue == psTrigger->asActions[0].u8InValue) {
+    //     psTrigger->asActions[0].psSwitch->u8State = psTrigger->asActions[0].u8OutValue;
+    // }
+    // TEST_ASSERT_EQUAL(1, psSwitch->u8State);
+
+    // // Set input pin to 1, trigger should set switch to 2
+    // psInPin->u8LastValue = 1;
+    // if (psTrigger->asActions[1].psInPin->u8LastValue == psTrigger->asActions[1].u8InValue) {
+    //     psTrigger->asActions[1].psSwitch->u8State = psTrigger->asActions[1].u8OutValue;
+    // }
+    // TEST_ASSERT_EQUAL(2, psSwitch->u8State);
+}
+
 void test_vPinCfgCsv(void)
 {
     PINCFG_RESULT_T eParseResult;
@@ -768,15 +849,15 @@ void test_vCPUTemp(void)
     char acOutStr[OUT_STR_MAX_LEN_D];
     size_t szMemoryRequired;
     size_t szRequiredMem;
-    CPUTEMP_T *psCPUTempHnd;
     ENABLEABLE_T *psEnableableHnd;
 
     const char *pcCfg = "TI,CPUTemp0,0/"
-                        "TI,CPUTemp1,1,0/"
-                        "TI,CPUTemp2,1,1/"
-                        "TI,CPUTemp3,1,1,1500/"
-                        "TI,CPUTemp4,1,1,1500,200000/"
-                        "TI,CPUTemp5,1,1,1500,200000,-2.1/";
+                        "TI,CPUTemp1,0,1/"
+                        "TI,CPUTemp2,1,0/"
+                        "TI,CPUTemp3,1,1/"
+                        "TI,CPUTemp4,1,1,1500/"
+                        "TI,CPUTemp5,1,1,1500,200000/"
+                        "TI,CPUTemp6,1,1,1500,200000,-2.1/";
 
     PINCFG_PARSE_PARAMS_T sParams = {
         .pcConfig = pcCfg,
@@ -797,110 +878,128 @@ void test_vCPUTemp(void)
     eLinkedListResult =
         LinkedList_eLinkedListToArray((LINKEDLIST_ITEM_T **)(&psGlobals->ppsLoopables), &psGlobals->u8LoopablesCount);
     TEST_ASSERT_EQUAL(LINKEDLIST_OK_E, eLinkedListResult);
-    TEST_ASSERT_EQUAL(6, psGlobals->u8LoopablesCount);
+    TEST_ASSERT_EQUAL(7, psGlobals->u8LoopablesCount);
 
     eLinkedListResult = LinkedList_eLinkedListToArray(
         (LINKEDLIST_ITEM_T **)(&psGlobals->ppsPresentables), &psGlobals->u8PresentablesCount);
     TEST_ASSERT_EQUAL(LINKEDLIST_OK_E, eLinkedListResult);
-    TEST_ASSERT_EQUAL(12, psGlobals->u8PresentablesCount);
+    TEST_ASSERT_EQUAL(13, psGlobals->u8PresentablesCount);
 
-    psCPUTempHnd = (CPUTEMP_T *)psGlobals->ppsPresentables[1];
-    TEST_ASSERT_EQUAL(V_TEMP, psCPUTempHnd->sSensor.sVtab.eVType);
-    TEST_ASSERT_EQUAL(S_TEMP, psCPUTempHnd->sSensor.sVtab.eSType);
-    TEST_ASSERT_EQUAL(InPin_vRcvMessage, psCPUTempHnd->sSensor.sVtab.vReceive);
-    TEST_ASSERT_EQUAL(SENSOR_MODE_STANDARD_E, psCPUTempHnd->sSensor.eMode);
-    TEST_ASSERT_EQUAL(PINCFG_CPUTEMP_SAMPLING_INTV_MS_D, psCPUTempHnd->sSensor.u32SamplingInterval);
-    TEST_ASSERT_EQUAL(PINCFG_CPUTEMP_REPORTING_INTV_MS_D, psCPUTempHnd->sSensor.u32ReportInterval);
-    TEST_ASSERT_EQUAL(PINCFG_CPUTEMP_OFFSET_D, psCPUTempHnd->sSensor.fOffset);
-    TEST_ASSERT_EQUAL(1, psCPUTempHnd->sSensor.sPresentable.u8Id);
-    TEST_ASSERT_EQUAL_STRING("CPUTemp0", psCPUTempHnd->sSensor.sPresentable.pcName);
-    TEST_ASSERT_EQUAL(InPin_vRcvMessage, psCPUTempHnd->sSensor.sPresentable.psVtab->vReceive);
-    TEST_ASSERT_NULL(psCPUTempHnd->sSensor.psEnableable);
+    SENSOR_T *psSensor = (SENSOR_T *)psGlobals->ppsPresentables[1];
+    TEST_ASSERT_EQUAL(V_TEMP, psSensor->sVtab.eVType);
+    TEST_ASSERT_EQUAL(S_TEMP, psSensor->sVtab.eSType);
+    TEST_ASSERT_EQUAL(InPin_vRcvMessage, psSensor->sVtab.vReceive);
+    TEST_ASSERT_EQUAL(PINCFG_CPUTEMP_REPORTING_INTV_MS_D, psSensor->u32ReportInterval);
+    TEST_ASSERT_EQUAL(0, psSensor->u32LastReportMs);
+    TEST_ASSERT_EQUAL(PINCFG_CPUTEMP_OFFSET_D, psSensor->fOffset);
+    TEST_ASSERT_EQUAL(1, psSensor->sPresentable.u8Id);
+    TEST_ASSERT_EQUAL_STRING("CPUTemp0", psSensor->sPresentable.pcName);
+    TEST_ASSERT_EQUAL(InPin_vRcvMessage, psSensor->sPresentable.psVtab->vReceive);
 
-    psCPUTempHnd = (CPUTEMP_T *)psGlobals->ppsPresentables[2];
-    TEST_ASSERT_EQUAL(V_TEMP, psCPUTempHnd->sSensor.sVtab.eVType);
-    TEST_ASSERT_EQUAL(S_TEMP, psCPUTempHnd->sSensor.sVtab.eSType);
-    TEST_ASSERT_EQUAL(InPin_vRcvMessage, psCPUTempHnd->sSensor.sVtab.vReceive);
-    TEST_ASSERT_EQUAL(SENSOR_MODE_STANDARD_E, psCPUTempHnd->sSensor.eMode);
-    TEST_ASSERT_EQUAL(PINCFG_CPUTEMP_SAMPLING_INTV_MS_D, psCPUTempHnd->sSensor.u32SamplingInterval);
-    TEST_ASSERT_EQUAL(PINCFG_CPUTEMP_REPORTING_INTV_MS_D, psCPUTempHnd->sSensor.u32ReportInterval);
-    TEST_ASSERT_EQUAL(PINCFG_CPUTEMP_OFFSET_D, psCPUTempHnd->sSensor.fOffset);
-    TEST_ASSERT_EQUAL(2, psCPUTempHnd->sSensor.sPresentable.u8Id);
-    TEST_ASSERT_EQUAL_STRING("CPUTemp1", psCPUTempHnd->sSensor.sPresentable.pcName);
-    TEST_ASSERT_EQUAL(InPin_vRcvMessage, psCPUTempHnd->sSensor.sPresentable.psVtab->vReceive);
-    TEST_ASSERT_NOT_NULL(psCPUTempHnd->sSensor.psEnableable);
-    psEnableableHnd = psCPUTempHnd->sSensor.psEnableable;
-    TEST_ASSERT_EQUAL(psGlobals->ppsPresentables[3], psEnableableHnd);
-    TEST_ASSERT_EQUAL(3, psEnableableHnd->sPresentable.u8Id);
-    TEST_ASSERT_EQUAL_STRING("CPUTemp1_enable", psEnableableHnd->sPresentable.pcName);
+    SENSOR_CUMULATIVE_T *psSensorC = (SENSOR_CUMULATIVE_T *)psGlobals->ppsPresentables[2];
+    TEST_ASSERT_EQUAL(V_TEMP, psSensorC->sSensor.sVtab.eVType);
+    TEST_ASSERT_EQUAL(S_TEMP, psSensorC->sSensor.sVtab.eSType);
+    TEST_ASSERT_EQUAL(InPin_vRcvMessage, psSensorC->sSensor.sVtab.vReceive);
+    TEST_ASSERT_EQUAL(PINCFG_CPUTEMP_REPORTING_INTV_MS_D, psSensorC->sSensor.u32ReportInterval);
+    TEST_ASSERT_EQUAL(0, psSensorC->sSensor.u32LastReportMs);
+    TEST_ASSERT_EQUAL(PINCFG_CPUTEMP_OFFSET_D, psSensorC->sSensor.fOffset);
+    TEST_ASSERT_EQUAL(PINCFG_CPUTEMP_SAMPLING_INTV_MS_D, psSensorC->u32SamplingInterval);
+    TEST_ASSERT_EQUAL(0, psSensorC->u32LastSamplingMs);
+    TEST_ASSERT_EQUAL(0, psSensorC->u32SamplesCount);
+    TEST_ASSERT_EQUAL(0, psSensorC->fCumulatedValue);
+    TEST_ASSERT_EQUAL_STRING("CPUTemp1", psSensorC->sSensor.sPresentable.pcName);
+    TEST_ASSERT_EQUAL(InPin_vRcvMessage, psSensorC->sSensor.sPresentable.psVtab->vReceive);
 
-    psCPUTempHnd = (CPUTEMP_T *)psGlobals->ppsPresentables[4];
-    TEST_ASSERT_EQUAL(V_TEMP, psCPUTempHnd->sSensor.sVtab.eVType);
-    TEST_ASSERT_EQUAL(S_TEMP, psCPUTempHnd->sSensor.sVtab.eSType);
-    TEST_ASSERT_EQUAL(InPin_vRcvMessage, psCPUTempHnd->sSensor.sVtab.vReceive);
-    TEST_ASSERT_EQUAL(SENSOR_MODE_CUMULATIVE_E, psCPUTempHnd->sSensor.eMode);
-    TEST_ASSERT_EQUAL(PINCFG_CPUTEMP_SAMPLING_INTV_MS_D, psCPUTempHnd->sSensor.u32SamplingInterval);
-    TEST_ASSERT_EQUAL(PINCFG_CPUTEMP_REPORTING_INTV_MS_D, psCPUTempHnd->sSensor.u32ReportInterval);
-    TEST_ASSERT_EQUAL(PINCFG_CPUTEMP_OFFSET_D, psCPUTempHnd->sSensor.fOffset);
-    TEST_ASSERT_EQUAL(4, psCPUTempHnd->sSensor.sPresentable.u8Id);
-    TEST_ASSERT_EQUAL_STRING("CPUTemp2", psCPUTempHnd->sSensor.sPresentable.pcName);
-    TEST_ASSERT_EQUAL(InPin_vRcvMessage, psCPUTempHnd->sSensor.sPresentable.psVtab->vReceive);
-    TEST_ASSERT_NOT_NULL(psCPUTempHnd->sSensor.psEnableable);
-    psEnableableHnd = psCPUTempHnd->sSensor.psEnableable;
-    TEST_ASSERT_EQUAL(psGlobals->ppsPresentables[5], psEnableableHnd);
-    TEST_ASSERT_EQUAL(5, psEnableableHnd->sPresentable.u8Id);
+    SENSOR_ENABLEABLE_T *psSensorE = (SENSOR_ENABLEABLE_T *)psGlobals->ppsPresentables[3];
+    TEST_ASSERT_EQUAL(V_TEMP, psSensorE->sSensor.sVtab.eVType);
+    TEST_ASSERT_EQUAL(S_TEMP, psSensorE->sSensor.sVtab.eSType);
+    TEST_ASSERT_EQUAL(InPin_vRcvMessage, psSensorE->sSensor.sVtab.vReceive);
+    TEST_ASSERT_EQUAL(PINCFG_CPUTEMP_REPORTING_INTV_MS_D, psSensorE->sSensor.u32ReportInterval);
+    TEST_ASSERT_EQUAL(0, psSensorE->sSensor.u32LastReportMs);
+    TEST_ASSERT_EQUAL(PINCFG_CPUTEMP_OFFSET_D, psSensorE->sSensor.fOffset);
+    TEST_ASSERT_EQUAL(3, psSensorE->sSensor.sPresentable.u8Id);
+    TEST_ASSERT_EQUAL_STRING("CPUTemp2", psSensorE->sSensor.sPresentable.pcName);
+    TEST_ASSERT_EQUAL(InPin_vRcvMessage, psSensorE->sSensor.sPresentable.psVtab->vReceive);
+    psEnableableHnd = &psSensorE->sEnableable;
+    TEST_ASSERT_EQUAL(psGlobals->ppsPresentables[4], psEnableableHnd);
+    TEST_ASSERT_EQUAL(4, psEnableableHnd->sPresentable.u8Id);
     TEST_ASSERT_EQUAL_STRING("CPUTemp2_enable", psEnableableHnd->sPresentable.pcName);
 
-    psCPUTempHnd = (CPUTEMP_T *)psGlobals->ppsPresentables[6];
-    TEST_ASSERT_EQUAL(V_TEMP, psCPUTempHnd->sSensor.sVtab.eVType);
-    TEST_ASSERT_EQUAL(S_TEMP, psCPUTempHnd->sSensor.sVtab.eSType);
-    TEST_ASSERT_EQUAL(InPin_vRcvMessage, psCPUTempHnd->sSensor.sVtab.vReceive);
-    TEST_ASSERT_EQUAL(SENSOR_MODE_CUMULATIVE_E, psCPUTempHnd->sSensor.eMode);
-    TEST_ASSERT_EQUAL(1500, psCPUTempHnd->sSensor.u32SamplingInterval);
-    TEST_ASSERT_EQUAL(PINCFG_CPUTEMP_REPORTING_INTV_MS_D, psCPUTempHnd->sSensor.u32ReportInterval);
-    TEST_ASSERT_EQUAL(PINCFG_CPUTEMP_OFFSET_D, psCPUTempHnd->sSensor.fOffset);
-    TEST_ASSERT_EQUAL(6, psCPUTempHnd->sSensor.sPresentable.u8Id);
-    TEST_ASSERT_EQUAL_STRING("CPUTemp3", psCPUTempHnd->sSensor.sPresentable.pcName);
-    TEST_ASSERT_EQUAL(InPin_vRcvMessage, psCPUTempHnd->sSensor.sPresentable.psVtab->vReceive);
-    TEST_ASSERT_NOT_NULL(psCPUTempHnd->sSensor.psEnableable);
-    psEnableableHnd = psCPUTempHnd->sSensor.psEnableable;
-    TEST_ASSERT_EQUAL(psGlobals->ppsPresentables[7], psEnableableHnd);
-    TEST_ASSERT_EQUAL(7, psEnableableHnd->sPresentable.u8Id);
+    SENSOR_CUMULATIVE_ENABLEABLE_T *psSensorCE = (SENSOR_CUMULATIVE_ENABLEABLE_T *)psGlobals->ppsPresentables[5];
+    TEST_ASSERT_EQUAL(V_TEMP, psSensorCE->sSensorCumulative.sSensor.sVtab.eVType);
+    TEST_ASSERT_EQUAL(S_TEMP, psSensorCE->sSensorCumulative.sSensor.sVtab.eSType);
+    TEST_ASSERT_EQUAL(InPin_vRcvMessage, psSensorCE->sSensorCumulative.sSensor.sVtab.vReceive);
+    TEST_ASSERT_EQUAL(PINCFG_CPUTEMP_REPORTING_INTV_MS_D, psSensorCE->sSensorCumulative.sSensor.u32ReportInterval);
+    TEST_ASSERT_EQUAL(0, psSensorCE->sSensorCumulative.sSensor.u32LastReportMs);
+    TEST_ASSERT_EQUAL(PINCFG_CPUTEMP_OFFSET_D, psSensorCE->sSensorCumulative.sSensor.fOffset);
+    TEST_ASSERT_EQUAL(PINCFG_CPUTEMP_SAMPLING_INTV_MS_D, psSensorCE->sSensorCumulative.u32SamplingInterval);
+    TEST_ASSERT_EQUAL(0, psSensorCE->sSensorCumulative.u32LastSamplingMs);
+    TEST_ASSERT_EQUAL(0, psSensorCE->sSensorCumulative.u32SamplesCount);
+    TEST_ASSERT_EQUAL(0, psSensorCE->sSensorCumulative.fCumulatedValue);
+    TEST_ASSERT_EQUAL(5, psSensorCE->sSensorCumulative.sSensor.sPresentable.u8Id);
+    TEST_ASSERT_EQUAL_STRING("CPUTemp3", psSensorCE->sSensorCumulative.sSensor.sPresentable.pcName);
+    TEST_ASSERT_EQUAL(InPin_vRcvMessage, psSensorCE->sSensorCumulative.sSensor.sPresentable.psVtab->vReceive);
+    psEnableableHnd = &psSensorCE->sEnableable;
+    TEST_ASSERT_EQUAL(psGlobals->ppsPresentables[6], psEnableableHnd);
+    TEST_ASSERT_EQUAL(6, psEnableableHnd->sPresentable.u8Id);
     TEST_ASSERT_EQUAL_STRING("CPUTemp3_enable", psEnableableHnd->sPresentable.pcName);
 
-    psCPUTempHnd = (CPUTEMP_T *)psGlobals->ppsPresentables[8];
-    TEST_ASSERT_EQUAL(V_TEMP, psCPUTempHnd->sSensor.sVtab.eVType);
-    TEST_ASSERT_EQUAL(S_TEMP, psCPUTempHnd->sSensor.sVtab.eSType);
-    TEST_ASSERT_EQUAL(InPin_vRcvMessage, psCPUTempHnd->sSensor.sVtab.vReceive);
-    TEST_ASSERT_EQUAL(SENSOR_MODE_CUMULATIVE_E, psCPUTempHnd->sSensor.eMode);
-    TEST_ASSERT_EQUAL(1500, psCPUTempHnd->sSensor.u32SamplingInterval);
-    TEST_ASSERT_EQUAL(200000, psCPUTempHnd->sSensor.u32ReportInterval);
-    TEST_ASSERT_EQUAL(PINCFG_CPUTEMP_OFFSET_D, psCPUTempHnd->sSensor.fOffset);
-    TEST_ASSERT_EQUAL(8, psCPUTempHnd->sSensor.sPresentable.u8Id);
-    TEST_ASSERT_EQUAL_STRING("CPUTemp4", psCPUTempHnd->sSensor.sPresentable.pcName);
-    TEST_ASSERT_EQUAL(InPin_vRcvMessage, psCPUTempHnd->sSensor.sPresentable.psVtab->vReceive);
-    TEST_ASSERT_NOT_NULL(psCPUTempHnd->sSensor.psEnableable);
-    psEnableableHnd = psCPUTempHnd->sSensor.psEnableable;
-    TEST_ASSERT_EQUAL(psGlobals->ppsPresentables[9], psEnableableHnd);
-    TEST_ASSERT_EQUAL(9, psEnableableHnd->sPresentable.u8Id);
+    psSensorCE = (SENSOR_CUMULATIVE_ENABLEABLE_T *)psGlobals->ppsPresentables[7];
+    TEST_ASSERT_EQUAL(V_TEMP, psSensorCE->sSensorCumulative.sSensor.sVtab.eVType);
+    TEST_ASSERT_EQUAL(S_TEMP, psSensorCE->sSensorCumulative.sSensor.sVtab.eSType);
+    TEST_ASSERT_EQUAL(InPin_vRcvMessage, psSensorCE->sSensorCumulative.sSensor.sVtab.vReceive);
+    TEST_ASSERT_EQUAL(PINCFG_CPUTEMP_REPORTING_INTV_MS_D, psSensorCE->sSensorCumulative.sSensor.u32ReportInterval);
+    TEST_ASSERT_EQUAL(0, psSensorCE->sSensorCumulative.sSensor.u32LastReportMs);
+    TEST_ASSERT_EQUAL(PINCFG_CPUTEMP_OFFSET_D, psSensorCE->sSensorCumulative.sSensor.fOffset);
+    TEST_ASSERT_EQUAL(1500, psSensorCE->sSensorCumulative.u32SamplingInterval);
+    TEST_ASSERT_EQUAL(0, psSensorCE->sSensorCumulative.u32LastSamplingMs);
+    TEST_ASSERT_EQUAL(0, psSensorCE->sSensorCumulative.u32SamplesCount);
+    TEST_ASSERT_EQUAL(0, psSensorCE->sSensorCumulative.fCumulatedValue);
+    TEST_ASSERT_EQUAL(7, psSensorCE->sSensorCumulative.sSensor.sPresentable.u8Id);
+    TEST_ASSERT_EQUAL_STRING("CPUTemp4", psSensorCE->sSensorCumulative.sSensor.sPresentable.pcName);
+    TEST_ASSERT_EQUAL(InPin_vRcvMessage, psSensorCE->sSensorCumulative.sSensor.sPresentable.psVtab->vReceive);
+    psEnableableHnd = &psSensorCE->sEnableable;
+    TEST_ASSERT_EQUAL(psGlobals->ppsPresentables[8], psEnableableHnd);
+    TEST_ASSERT_EQUAL(8, psEnableableHnd->sPresentable.u8Id);
     TEST_ASSERT_EQUAL_STRING("CPUTemp4_enable", psEnableableHnd->sPresentable.pcName);
 
-    psCPUTempHnd = (CPUTEMP_T *)psGlobals->ppsPresentables[10];
-    TEST_ASSERT_EQUAL(V_TEMP, psCPUTempHnd->sSensor.sVtab.eVType);
-    TEST_ASSERT_EQUAL(S_TEMP, psCPUTempHnd->sSensor.sVtab.eSType);
-    TEST_ASSERT_EQUAL(InPin_vRcvMessage, psCPUTempHnd->sSensor.sVtab.vReceive);
-    TEST_ASSERT_EQUAL(SENSOR_MODE_CUMULATIVE_E, psCPUTempHnd->sSensor.eMode);
-    TEST_ASSERT_EQUAL(1500, psCPUTempHnd->sSensor.u32SamplingInterval);
-    TEST_ASSERT_EQUAL(200000, psCPUTempHnd->sSensor.u32ReportInterval);
-    TEST_ASSERT_EQUAL_FLOAT(-2.1f, psCPUTempHnd->sSensor.fOffset);
-    TEST_ASSERT_EQUAL(10, psCPUTempHnd->sSensor.sPresentable.u8Id);
-    TEST_ASSERT_EQUAL_STRING("CPUTemp5", psCPUTempHnd->sSensor.sPresentable.pcName);
-    TEST_ASSERT_EQUAL(InPin_vRcvMessage, psCPUTempHnd->sSensor.sPresentable.psVtab->vReceive);
-    TEST_ASSERT_NOT_NULL(psCPUTempHnd->sSensor.psEnableable);
-    psEnableableHnd = psCPUTempHnd->sSensor.psEnableable;
-    TEST_ASSERT_EQUAL(psGlobals->ppsPresentables[11], psEnableableHnd);
-    TEST_ASSERT_EQUAL(11, psEnableableHnd->sPresentable.u8Id);
+    psSensorCE = (SENSOR_CUMULATIVE_ENABLEABLE_T *)psGlobals->ppsPresentables[9];
+    TEST_ASSERT_EQUAL(V_TEMP, psSensorCE->sSensorCumulative.sSensor.sVtab.eVType);
+    TEST_ASSERT_EQUAL(S_TEMP, psSensorCE->sSensorCumulative.sSensor.sVtab.eSType);
+    TEST_ASSERT_EQUAL(InPin_vRcvMessage, psSensorCE->sSensorCumulative.sSensor.sVtab.vReceive);
+    TEST_ASSERT_EQUAL(200000, psSensorCE->sSensorCumulative.sSensor.u32ReportInterval);
+    TEST_ASSERT_EQUAL(0, psSensorCE->sSensorCumulative.sSensor.u32LastReportMs);
+    TEST_ASSERT_EQUAL(PINCFG_CPUTEMP_OFFSET_D, psSensorCE->sSensorCumulative.sSensor.fOffset);
+    TEST_ASSERT_EQUAL(1500, psSensorCE->sSensorCumulative.u32SamplingInterval);
+    TEST_ASSERT_EQUAL(0, psSensorCE->sSensorCumulative.u32LastSamplingMs);
+    TEST_ASSERT_EQUAL(0, psSensorCE->sSensorCumulative.u32SamplesCount);
+    TEST_ASSERT_EQUAL(0, psSensorCE->sSensorCumulative.fCumulatedValue);
+    TEST_ASSERT_EQUAL(9, psSensorCE->sSensorCumulative.sSensor.sPresentable.u8Id);
+    TEST_ASSERT_EQUAL_STRING("CPUTemp5", psSensorCE->sSensorCumulative.sSensor.sPresentable.pcName);
+    TEST_ASSERT_EQUAL(InPin_vRcvMessage, psSensorCE->sSensorCumulative.sSensor.sPresentable.psVtab->vReceive);
+    psEnableableHnd = &psSensorCE->sEnableable;
+    TEST_ASSERT_EQUAL(psGlobals->ppsPresentables[10], psEnableableHnd);
+    TEST_ASSERT_EQUAL(10, psEnableableHnd->sPresentable.u8Id);
     TEST_ASSERT_EQUAL_STRING("CPUTemp5_enable", psEnableableHnd->sPresentable.pcName);
+
+    psSensorCE = (SENSOR_CUMULATIVE_ENABLEABLE_T *)psGlobals->ppsPresentables[11];
+    TEST_ASSERT_EQUAL(V_TEMP, psSensorCE->sSensorCumulative.sSensor.sVtab.eVType);
+    TEST_ASSERT_EQUAL(S_TEMP, psSensorCE->sSensorCumulative.sSensor.sVtab.eSType);
+    TEST_ASSERT_EQUAL(InPin_vRcvMessage, psSensorCE->sSensorCumulative.sSensor.sVtab.vReceive);
+    TEST_ASSERT_EQUAL(200000, psSensorCE->sSensorCumulative.sSensor.u32ReportInterval);
+    TEST_ASSERT_EQUAL(0, psSensorCE->sSensorCumulative.sSensor.u32LastReportMs);
+    TEST_ASSERT_EQUAL_FLOAT(-2.1f, psSensorCE->sSensorCumulative.sSensor.fOffset);
+    TEST_ASSERT_EQUAL(1500, psSensorCE->sSensorCumulative.u32SamplingInterval);
+    TEST_ASSERT_EQUAL(0, psSensorCE->sSensorCumulative.u32LastSamplingMs);
+    TEST_ASSERT_EQUAL(0, psSensorCE->sSensorCumulative.u32SamplesCount);
+    TEST_ASSERT_EQUAL(0, psSensorCE->sSensorCumulative.fCumulatedValue);
+    TEST_ASSERT_EQUAL(11, psSensorCE->sSensorCumulative.sSensor.sPresentable.u8Id);
+    TEST_ASSERT_EQUAL_STRING("CPUTemp6", psSensorCE->sSensorCumulative.sSensor.sPresentable.pcName);
+    TEST_ASSERT_EQUAL(InPin_vRcvMessage, psSensorCE->sSensorCumulative.sSensor.sPresentable.psVtab->vReceive);
+    psEnableableHnd = &psSensorCE->sEnableable;
+    TEST_ASSERT_EQUAL(psGlobals->ppsPresentables[12], psEnableableHnd);
+    TEST_ASSERT_EQUAL(12, psEnableableHnd->sPresentable.u8Id);
+    TEST_ASSERT_EQUAL_STRING("CPUTemp6_enable", psEnableableHnd->sPresentable.pcName);
 }
 
 void test_vFlow_timedSwitch(void)
@@ -1179,6 +1278,9 @@ int test_main(void)
     printf("sizeof(TRIGGER_T): %ld\n", sizeof(TRIGGER_T));
     printf("sizeof(TRIGGER_SWITCHACTION_T): %ld\n", sizeof(TRIGGER_SWITCHACTION_T));
     printf("sizeof(SENSOR_T): %ld\n", sizeof(SENSOR_T));
+    printf("sizeof(SENSOR_CUMULATIVE_T): %ld\n", sizeof(SENSOR_CUMULATIVE_T));
+    printf("sizeof(SENSOR_ENABLEABLE_T): %ld\n", sizeof(SENSOR_ENABLEABLE_T));
+    printf("sizeof(SENSOR_CUMULATIVE_ENABLEABLE_T): %ld\n", sizeof(SENSOR_CUMULATIVE_ENABLEABLE_T));
     printf("sizeof(CPUTEMP_T): %ld\n", sizeof(CPUTEMP_T));
     printf("\n\n");
 
@@ -1190,6 +1292,7 @@ int test_main(void)
     RUN_TEST(test_vMySenosrsPresent);
     RUN_TEST(test_vInPin);
     RUN_TEST(test_vSwitch);
+    RUN_TEST(test_vTrigger);
     RUN_TEST(test_vPinCfgCsv);
     RUN_TEST(test_vCLI);
     RUN_TEST(test_vGlobalConfig);

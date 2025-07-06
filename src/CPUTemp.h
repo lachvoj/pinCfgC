@@ -3,6 +3,7 @@
 
 #include "Enableable.h"
 #include "ILoopable.h"
+#include "ISensorMeasure.h"
 #include "Presentable.h"
 #include "Sensor.h"
 #include "Types.h"
@@ -18,15 +19,18 @@ typedef enum CPUTEMP_RESULT_E
 
 typedef struct CPUTEMP_S
 {
-    SENSOR_T sSensor;
+    ISENSORMEASURE_T sSensorMeasure;
+    // SENSOR_T *psSensor;
 } CPUTEMP_T;
 
 CPUTEMP_RESULT_T CPUTemp_eInit(
     CPUTEMP_T *psHandle,
-    STRING_POINT_T *sName,
-    uint8_t u8Id,
-    uint8_t u8Enableable,
+    PINCFG_RESULT_T (*eAddToLoopables)(LOOPABLE_T *psLoopable),
+    PINCFG_RESULT_T (*eAddToPresentables)(PRESENTABLE_T *psPresentable),
+    uint8_t *u8PresentablesCount,
     SENSOR_MODE_T eMode,
+    uint8_t u8Enableable,
+    STRING_POINT_T *sName,
     uint32_t u32SamplingInterval,
     uint32_t u32ReportInterval,
     float fOffset);
