@@ -15,6 +15,14 @@ void nanosleep(struct timespec *time, void *something)
 }
 #endif // __linux__
 
+uint32_t mock_millis_u32Called;
+uint32_t mock_millis_u32Return;
+uint32_t millis()
+{
+    mock_millis_u32Called++;
+    return mock_millis_u32Return;
+}
+
 void _delay_milliseconds(unsigned int millis)
 {
     struct timespec sleeper;

@@ -7,6 +7,19 @@ extern "C"
 #include "MyMessageMock.h"
 #include "MySensorsMock.h"
 
+    char mock_sendSketchInfo_name[50];
+    char mock_sendSketchInfo_version[50];
+    uint32_t mock_sendSketchInfo_u32Called;
+    bool mock_endSketchInfo_bReturn;
+    bool sendSketchInfo(const char *name, const char *version)
+    {
+        (void)strcpy(mock_sendSketchInfo_name, name);
+        (void)strcpy(mock_sendSketchInfo_version, version);
+        mock_sendSketchInfo_u32Called++;
+
+        return mock_endSketchInfo_bReturn;
+    }
+
     uint8_t mock_bRequest_u8Id;
     uint8_t mock_bRequest_u8VariableType;
     uint8_t mock_bRequest_u8Destination;
@@ -55,6 +68,12 @@ extern "C"
         // mock_send_message = (MyMessageMock)msg;
         mock_send_u32Called++;
         return mock_send_bReturn;
+    }
+
+    uint8_t mock_transportGetNodeId_u8Return;
+    uint8_t transportGetNodeId(void)
+    {
+        return mock_transportGetNodeId_u8Return;
     }
 
     uint32_t mock_wait_u32WaitMS;
@@ -110,9 +129,14 @@ extern "C"
         mock_bPresent_u32Called = 0;
         mock_bPresent_bReturn = false;
 
+        mock_sendSketchInfo_u32Called = 0;
+        mock_endSketchInfo_bReturn = true;
+
         mock_send_u32Called = 0;
         mock_send_bReturn = false;
         (void)memset((void *)mock_send_message, 0u, sizeof(mock_send_message));
+
+        mock_transportGetNodeId_u8Return = 0;
 
         mock_wait_u32Called = 0;
         mock_hwWriteConfigBlock_u32Called = 0;

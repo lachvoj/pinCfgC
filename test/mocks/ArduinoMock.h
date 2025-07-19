@@ -10,6 +10,9 @@
 #include "GPIOMock.h"
 #endif
 
+// HAL
+#define PROGMEM
+
 
 #ifndef OUTPUT
 #define OUTPUT 1
@@ -40,6 +43,10 @@ void _delay_milliseconds(unsigned int millis);
 extern uint32_t mock_wait_u32ms;
 extern uint32_t mock_wait_u32Called;
 void wait(uint32_t u32ms);
+
+extern uint32_t mock_millis_u32Called;
+extern uint32_t mock_millis_u32Return;
+uint32_t millis();
 
 void init_ArduinoMock(void);
 

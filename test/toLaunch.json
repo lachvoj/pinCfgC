@@ -1,44 +1,43 @@
-
-{
-    "name": "qemu debug",
-    "type": "cppdbg",
-    "request": "launch",
-    "miDebuggerServerAddress": "localhost:9000",
-    // "preLaunchTask": "test_qemu_pre-debug",
-    "cwd": "${workspaceFolder}/test",
-    "program": "${workspaceFolder}/.pio/build/bluepill_f103c8_qemu_test/firmware.elf",
-    "stopAtEntry": true,
-    "miDebuggerPath": "/home/test/.platformio/packages/toolchain-gccarmnoneeabi/bin/arm-none-eabi-gdb",
-    "MIMode": "gdb",
-    "setupCommands": [
         {
-            "description": "Enable pretty-printing for gdb",
-            "text": "-enable-pretty-printing",
-            "ignoreFailures": true,
-        }
-    ]
-},
-{
-    "name": "(gdb) pincfgC_test",
-    "type": "cppdbg",
-    "request": "launch",
-    "program": "${workspaceFolder}/lib/pinCfgC/test/build/test",
-    "args": [],
-    "stopAtEntry": false,
-    "cwd": ".",
-    "environment": [],
-    "externalConsole": false,
-    "MIMode": "gdb",
-    "setupCommands": [
-        {
-            "description": "Enable pretty-printing for gdb",
-            "text": "-enable-pretty-printing",
-            "ignoreFailures": true
+            "name": "qemu debug",
+            "type": "cppdbg",
+            "request": "launch",
+            "miDebuggerServerAddress": "localhost:1234",
+            "preLaunchTask": "test_qemu_pre-debug",
+            "cwd": "${workspaceFolder}/test",
+            "program": "${workspaceFolder}/.pio/build/bluepill_f103c8_qemu_debug/firmware.elf",
+            "stopAtEntry": true,
+            "miDebuggerPath": "/home/test/.platformio/packages/toolchain-gccarmnoneeabi/bin/arm-none-eabi-gdb",
+            "MIMode": "gdb",
+            "setupCommands": [
+                {
+                    "description": "Enable pretty-printing for gdb",
+                    "text": "-enable-pretty-printing",
+                    "ignoreFailures": true,
+                }
+            ]
         },
         {
-            "description":  "Set Disassembly Flavor to Intel",
-            "text": "-gdb-set disassembly-flavor intel",
-            "ignoreFailures": true
+            "name": "(gdb) pincfgC_test",
+            "type": "cppdbg",
+            "request": "launch",
+            "program": "${workspaceFolder}/lib/pinCfgC/test/build/test",
+            "args": [],
+            "stopAtEntry": false,
+            "cwd": ".",
+            "environment": [],
+            "externalConsole": false,
+            "MIMode": "gdb",
+            "setupCommands": [
+                {
+                    "description": "Enable pretty-printing for gdb",
+                    "text": "-enable-pretty-printing",
+                    "ignoreFailures": true
+                },
+                {
+                    "description":  "Set Disassembly Flavor to Intel",
+                    "text": "-gdb-set disassembly-flavor intel",
+                    "ignoreFailures": true
+                }
+            ]
         }
-    ]
-}

@@ -98,7 +98,7 @@ LINKEDLIST_RESULT_T LinkedList_eLinkedListToArray(LINKEDLIST_ITEM_T **ppsFirst, 
         (*u8Count)++;
         pvItem = LinkedList_pvPopFront(ppsFirst);
     }
-    *ppsFirst = pvArray;
+    *ppsFirst = (LINKEDLIST_ITEM_T *)pvArray;
 
     return LINKEDLIST_OK_E;
 }

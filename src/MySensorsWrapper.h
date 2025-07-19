@@ -13,6 +13,8 @@
 
 #ifdef UNIT_TEST
 #include "MyMessageMock.h"
+#include "MySensorsMock.h"
+#include "ArduinoMock.h"
 #else
 #include <core/MyMessage.h>
 #endif

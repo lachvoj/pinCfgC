@@ -40,7 +40,7 @@ CPUTEMP_RESULT_T CPUTemp_eInit(
             V_TEMP,
             S_TEMP,
             InPin_vRcvMessage,
-            CPUTemp_eMeasure,
+            &(psHandle->sSensorMeasure),
             u32SamplingInterval,
             u32ReportInterval,
             fOffset) != SENSOR_OK_E)

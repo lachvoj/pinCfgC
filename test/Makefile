@@ -24,7 +24,7 @@ OBJCPP += $(patsubst $(MOCKDIR)/%.cpp, $(OBJDIR)/%.o, $(MOCKSCPP))
 
 EXE = test
 
-INCLUDES = -I. -I../include -I$(MOCKDIR) -I$(UNITY_ROOT)/src -I$(SRCDIR) $(MYSENSORSINC)
+INCLUDES = -I. -I../include -I$(MOCKDIR) -I$(UNITY_ROOT)/src -I$(SRCDIR)
 LIBS = -lm
 
 CFLAGS = -g 
