@@ -2,7 +2,7 @@
 #include <unity.h>
 
 #include "ArduinoMock.h"
-#include "CPUTemp.h"
+#include "CPUTempMeasure.h"
 #include "Cli.h"
 #include "Globals.h"
 #include "InPin.h"

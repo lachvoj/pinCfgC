@@ -2,6 +2,7 @@
 #define GLOBALS_H
 
 #include "ILoopable.h"
+#include "ISensorMeasure.h"
 #include "PinSubscriberIf.h"
 #include "Presentable.h"
 
@@ -18,8 +19,10 @@ typedef struct
     // pincfgcsv
     uint8_t u8LoopablesCount;
     uint8_t u8PresentablesCount;
+    uint8_t u8MeasurementsCount;
     LOOPABLE_T **ppsLoopables;
     PRESENTABLE_T **ppsPresentables;
+    ISENSORMEASURE_T **ppsMeasurements;  // Registry of measurement sources
     PRESENTABLE_VTAB_T sSwitchPrVTab;
     PRESENTABLE_VTAB_T sInPinPrVTab;
     PRESENTABLE_VTAB_T sCliPrVTab;

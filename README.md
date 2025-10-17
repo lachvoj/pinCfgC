@@ -15,8 +15,9 @@ The goal of this library is to provide a CSV-based configuration that specifies 
    5. [Timed Output Switch](#timed-output-switch)
 6. [Inputs](#inputs)
 7. [Triggers](#triggers)
-8. [Temperature Sensors](#temperature-sensors)
-   1. [CPU Temperature Sensor](#cpu-temperature-sensor)
+8. [Measurement Sources](#measurement-sources)
+   1. [CPU Temperature Measurement](#cpu-temperature-measurement)
+9. [Sensor Reporters](#sensor-reporters)
 
 ## Format Overview
 ```
@@ -44,7 +45,8 @@ T,t07,i07,1,1,o07,0/
 T,t08,i08,1,1,o08,0/
 T,t09,i09,1,1,o09,0/
 T,t10,i10,1,1,o10,0/
-TI,CPUTemp,300000,-2.1/
+MS,0,cpu_temp/
+SR,CPUTemp,cpu_temp,0,0,1000,300,-2.1/
 ```
 ## Comments
 Lines starting with **#** will be ignored by the parsing function and can be used as comments.
@@ -251,39 +253,102 @@ Switch actions can be:
 * **2 - off**: Set the switch state to OFF.
 * **3 - forward**: Forward the input event to the switch.
 
-## Temperature Sensors
+## Measurement Sources
+Measurement sources define hardware reading logic without timing or reporting behavior. This allows multiple sensors to share the same measurement source.
 
-### CPU Temperature Sensor
-This configuration item specifies if the internal CPU temperature sensor value should be reported.
+Lines starting with **'MS'** are parsed as measurement source definitions.
+
+### CPU Temperature Measurement
+Defines a CPU temperature measurement source that can be used by one or more sensor reporters.
+
 #### Line Format
 ```
-1. TI,      (temperature sensor type definition)
-2. CPUTemp, (name)
-3. 0,       (optional enableable 0/1)
-3. 0,       (optional mode 0 - standard, 1 - cumulative)
-4. 100,     (optional sampling interval in ms used only in cumulative mode)
-3. 300000,  (optional reporting interval in ms)
-4. 0.0/     (optional offset)
+1. MS,  (measurement source type definition)
+2. 0,   (measurement type enum: 0 = CPU temperature)
+3. cpu/ (unique name for this measurement)
 ```
+
 #### Parameters
-1. **Name** (`char[]`) mandatory name parameter
-2. **Enableable (optional) default 0**
-    * **0** CPU temperature will be allways reported.
-    * **1** It add toggle possibility for reporting CPU temperature (this increases runtime memory consumption).
-3. **Mode (optional) default 0**
-    * **0** (standard) temperature is measured once per report interval and send
-    * **1** (cumulative) temperature is measured in sampling intervals and after report interval average value is send
-4. **Sampling interval (optional)** (`uint32_t`) default 1000 ms (1s) or `PINCFG_CPUTEMP_SAMPLING_INTV_MS_D`. Valid values 100-5000 (100ms - 1s)
-5. **Report interval (optional)** (`uint32_t`), default 300000 ms (5 min) or `PINCFG_CPUTEMP_REPORTING_INTV_MS_D` Valid values 1000-3600000 (1s-1h)
-6. **Offset (optional)** (`float`), default 0.0 or `PINCFG_CPUTEMP_OFFSET_D`.
+1. **Type** (`uint8_t`) - Measurement type enum value
+   * **0** = `MEASUREMENT_TYPE_CPUTEMP_E` - CPU temperature sensor
+   * **1** = `MEASUREMENT_TYPE_ANALOG_E` - Analog input (Phase 3)
+   * **2** = `MEASUREMENT_TYPE_DIGITAL_E` - Digital input (Phase 3)
+   * **3** = `MEASUREMENT_TYPE_I2C_E` - I2C sensor (Phase 3)
+   * **4** = `MEASUREMENT_TYPE_CALCULATED_E` - Calculated (Phase 3)
+2. **Name** (`char[]`) - Unique name for this measurement source (used by sensor reporters)
 
 #### Examples
 ```
-TI,CPUTemp,/
-TI,CPUTemp,0/
-TI,CPUTemp,1,0/
-TI,CPUTemp,1,1/
-TI,CPUTemp,1,1,1000/
-TI,CPUTemp,1,1,1000,300000/
-TI,CPUTemp,1,1,1000,300000,-2.1/
+MS,0,cpu/                 # CPU temp measurement (type 0)
+MS,0,basement_temp/       # Named measurement for basement
+MS,0,external_sensor/     # Another measurement source
 ```
+
+**Note:** Using numeric type enum instead of string for compact CSV format.
+
+## Sensor Reporters
+Sensor reporters define timing, averaging, and MySensors reporting behavior. They reference measurement sources by name.
+
+Lines starting with **'SR'** are parsed as sensor reporter definitions.
+
+### Line Format
+```
+1. SR,       (sensor reporter type definition)
+2. CPUTemp,  (unique sensor name)
+3. cpu,      (measurement source name - must match an MS definition)
+4. 0,        (enableable: 0 or 1)
+5. 0,        (cumulative mode: 0 or 1)
+6. 1000,     (sampling interval in milliseconds)
+7. 300,      (reporting interval in SECONDS)
+8. 0.0/      (optional temperature offset in °C)
+```
+
+#### Parameters
+1. **Name** (`char[]`) - Unique name for this sensor
+2. **Measurement Source** (`char[]`) - Name of measurement source (from MS line)
+3. **Enableable** (`uint8_t`) - 0 or 1
+    * **0** - Sensor always reports
+    * **1** - Sensor can be enabled/disabled at runtime (increases memory)
+4. **Cumulative Mode** (`uint8_t`) - 0 or 1
+    * **0** (standard) - Temperature measured once per report interval
+    * **1** (cumulative) - Temperature sampled at sampling interval, average reported
+5. **Sampling Interval** (`uint16_t`) - In **milliseconds**, default 1000 ms or `PINCFG_CPUTEMP_SAMPLING_INTV_MS_D`
+    * Valid range: 100-5000 ms (100 ms - 5 seconds)
+6. **Report Interval** (`uint16_t`) - In **SECONDS**, default 300 s (5 min) or `PINCFG_CPUTEMP_REPORTING_INTV_SEC_D`
+    * Valid range: 1-3600 seconds (1 second - 1 hour)
+7. **Offset** (optional, `float`) - Temperature calibration offset in °C, default 0.0 or `PINCFG_CPUTEMP_OFFSET_D`
+
+#### Examples
+```
+# Basic sensor reporting every 5 minutes
+SR,CPUTemp,cpu,0,0,1000,300/
+
+# Sensor with calibration offset
+SR,CPUTemp_calibrated,cpu,0,0,1000,300,-2.1/
+
+# Enableable sensor with averaging, reporting every minute
+SR,CPUTemp_avg,cpu,1,1,500,60,0.0/
+
+# Multiple sensors sharing one measurement source with different offsets
+MS,0,shared/                                   # type 0 = CPU temp
+SR,fast_reporter,shared,0,0,500,10,0.0/       # No offset, report every 10 seconds
+SR,slow_reporter,shared,0,0,1000,3600,2.5/    # +2.5°C offset, report every hour
+SR,calibrated,shared,0,0,1000,300,-1.0/       # -1.0°C offset, report every 5 min
+```
+
+### Measurement Reusability
+Multiple sensor reporters can use the same measurement source, allowing different reporting schedules and calibrations without duplicate hardware readings:
+
+```
+MS,0,cpu_temp/                            # One raw measurement (type 0 = CPU temp)
+SR,sensor_fast,cpu_temp,0,0,500,60,0.0/   # No offset, report every minute
+SR,sensor_slow,cpu_temp,0,0,1000,600,2.5/ # +2.5°C offset, report every 10 min
+SR,sensor_avg,cpu_temp,0,1,2000,300,-1.0/ # -1.0°C offset, 5-min average
+```
+
+Each sensor can apply its own calibration offset to the raw measurement, enabling flexible use cases like:
+- Raw reading for debugging
+- Calibrated reading for home automation
+- Different offsets for different zones
+
+**Important:** MS lines must appear **before** SR lines that reference them.

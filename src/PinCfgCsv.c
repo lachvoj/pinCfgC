@@ -2,8 +2,8 @@
 #include <stdio.h>
 #include <string.h>
 
-#include "CPUTemp.h"
 #include "Cli.h"
+#include "CPUTempMeasure.h"
 #include "Globals.h"
 #include "InPin.h"
 #include "Memory.h"
@@ -33,6 +33,7 @@ static const char *_s[] = {
     "%s%d:%s\n",                          // FSDS_E
     "%s%d:%s%s\n",                        // FSDSS_E
     "%s%d:%s%s%s\n",                      // FSDSSS_E
+    "%s%d:%s%s (0-%d)\n",                 // FSDSSD_E - for type enum errors
     "E:",                                 // E_E
     "W:",                                 // W_E
     "E:L:",                               // EL_E
@@ -48,13 +49,29 @@ static const char *_s[] = {
     "SwitchImpulseDurationMs:",           // SWIDMS_E
     "SwitchFbOnDelayMs:",                 // SWFNDMS_E
     "SwitchFbOffDelayMs:",                // SWFFDMS_E
-    "Out of memory.",                     // OOM_E
-    "Init failed!",                       // INITF_E
+    "OOM",                                // OOM_E
+    "init failed",                        // INITF_E
     "Invalid pin number.",                // IPN_E
+    "invalid",                            // IVLD_E
     "Invalid number",                     // IN_E
     " of arguments.",                     // OARGS_E
     " of items defining names and pins.", // OITMS_E
-    "Switch name not found."              // SNNF_E
+    "Switch name not found.",             // SNNF_E
+    "MS",                                 // MS_E
+    "SR",                                 // SR_E
+    " type enum",                         // TE_E
+    " args\n",                            // ARGS_E
+    " (name)\n",                          // NAME_E
+    " (cputemp)\n",                       // CPUTEMP_E
+    " type not implemented\n",            // TNI_E
+    " (sensor)\n",                        // SENSOR_E
+    " measurement not found: ",           // MNF_E
+    "\n",                                 // NL_E
+    " offset\n",                          // OFFSET_E
+    " enableable\n",                      // ENABLEABLE_E
+    " cumulative\n",                      // CUMULATIVE_E
+    " sampling interval\n",               // SAMPINT_E
+    " report interval\n"                  // REPINT_E
 };
 
 typedef enum PINCFG_PARSE_STRINGS_E
@@ -64,6 +81,7 @@ typedef enum PINCFG_PARSE_STRINGS_E
     FSDS_E,
     FSDSS_E,
     FSDSSS_E,
+    FSDSSD_E,
     E_E,
     W_E,
     EL_E,
@@ -82,23 +100,43 @@ typedef enum PINCFG_PARSE_STRINGS_E
     OOM_E,
     INITF_E,
     IPN_E,
+    IVLD_E,
     IN_E,
     OARGS_E,
     OITMS_E,
-    SNNF_E
+    SNNF_E,
+    MS_E,
+    SR_E,
+    TE_E,
+    ARGS_E,
+    NAME_E,
+    CPUTEMP_E,
+    TNI_E,
+    SENSOR_E,
+    MNF_E,
+    NL_E,
+    OFFSET_E,
+    ENABLEABLE_E,
+    CUMULATIVE_E,
+    SAMPINT_E,
+    REPINT_E
 } PINCFG_PARSE_STRINGS_T;
 
 static inline PINCFG_RESULT_T PinCfgCsv_CreateCli(PINCFG_PARSE_SUBFN_PARAMS_T *psPrms);
 static inline PINCFG_RESULT_T PinCfgCsv_ParseSwitch(PINCFG_PARSE_SUBFN_PARAMS_T *psPrms);
 static inline PINCFG_RESULT_T PinCfgCsv_ParseInpins(PINCFG_PARSE_SUBFN_PARAMS_T *psPrms);
 static inline PINCFG_RESULT_T PinCfgCsv_ParseTriggers(PINCFG_PARSE_SUBFN_PARAMS_T *psPrms);
-static inline PINCFG_RESULT_T PinCfgCsv_ParseTemperatureSensors(PINCFG_PARSE_SUBFN_PARAMS_T *psPrms);
-static inline PINCFG_RESULT_T PinCfgCsv_ParseCPUTemperatureSensor(PINCFG_PARSE_SUBFN_PARAMS_T *psPrms);
+
+// Phase 2: Measurement source and sensor reporter parsers
+static inline PINCFG_RESULT_T PinCfgCsv_ParseMeasurementSource(PINCFG_PARSE_SUBFN_PARAMS_T *psPrms);
+static inline PINCFG_RESULT_T PinCfgCsv_ParseSensorReporter(PINCFG_PARSE_SUBFN_PARAMS_T *psPrms);
+static inline PINCFG_RESULT_T PinCfgCsv_eAddToLinkedList(LINKEDLIST_ITEM_T **psFirst, void *pvNew);
 
 static inline PINCFG_RESULT_T PinCfgCsv_ParseGlobalConfigItems(PINCFG_PARSE_SUBFN_PARAMS_T *psPrms);
 
 static inline PRESENTABLE_T *PinCfgCsv_psFindInPresentablesById(uint8_t u8Id);
 static PRESENTABLE_T *PinCfgCsv_psFindInTempPresentablesByName(const STRING_POINT_T *psName);
+static inline ISENSORMEASURE_T *PinCfgCsv_psFindMeasurementByName(const char *pcName, size_t szNameLen);
 static inline size_t szGetSize(size_t a, size_t b);
 
 #ifdef MY_CONTROLLER_HA
@@ -239,7 +277,7 @@ PINCFG_RESULT_T PinCfgCsv_eInit(uint8_t *pu8Memory, size_t szMemorySize, const c
 
     if (ePincfgResult == PINCFG_OK_E)
     {
-        // move loopables and presentables from linked list to array
+        // move loopables, presentables, and measurements from linked list to array
         LINKEDLIST_RESULT_T eLinkedListResult = LinkedList_eLinkedListToArray(
             (LINKEDLIST_ITEM_T **)&(psGlobals->ppsLoopables), &(psGlobals->u8LoopablesCount));
         if (eLinkedListResult != LINKEDLIST_OK_E)
@@ -247,6 +285,11 @@ PINCFG_RESULT_T PinCfgCsv_eInit(uint8_t *pu8Memory, size_t szMemorySize, const c
 
         eLinkedListResult = LinkedList_eLinkedListToArray(
             (LINKEDLIST_ITEM_T **)&(psGlobals->ppsPresentables), &(psGlobals->u8PresentablesCount));
+        if (eLinkedListResult != LINKEDLIST_OK_E)
+            return PINCFG_OUTOFMEMORY_ERROR_E;
+        
+        eLinkedListResult = LinkedList_eLinkedListToArray(
+            (LINKEDLIST_ITEM_T **)&(psGlobals->ppsMeasurements), &(psGlobals->u8MeasurementsCount));
         if (eLinkedListResult != LINKEDLIST_OK_E)
             return PINCFG_OUTOFMEMORY_ERROR_E;
     }
@@ -343,10 +386,21 @@ PINCFG_RESULT_T PinCfgCsv_eParse(PINCFG_PARSE_PARAMS_T *psParams)
             if (eResult != PINCFG_OK_E)
                 return eResult;
         }
-        // temperature
-        else if (sPrms.sTempStrPt.szLen == 2 && sPrms.sTempStrPt.pcStrStart[0] == 'T')
+        // Phase 2: Measurement Source (MS)
+        else if (sPrms.sTempStrPt.szLen == 2 && 
+                 sPrms.sTempStrPt.pcStrStart[0] == 'M' &&
+                 sPrms.sTempStrPt.pcStrStart[1] == 'S')
         {
-            eResult = PinCfgCsv_ParseTemperatureSensors(&sPrms);
+            eResult = PinCfgCsv_ParseMeasurementSource(&sPrms);
+            if (eResult != PINCFG_OK_E)
+                return eResult;
+        }
+        // Phase 2: Sensor Reporter (SR)
+        else if (sPrms.sTempStrPt.szLen == 2 && 
+                 sPrms.sTempStrPt.pcStrStart[0] == 'S' &&
+                 sPrms.sTempStrPt.pcStrStart[1] == 'R')
+        {
+            eResult = PinCfgCsv_ParseSensorReporter(&sPrms);
             if (eResult != PINCFG_OK_E)
                 return eResult;
         }
@@ -1027,224 +1081,307 @@ static inline PINCFG_RESULT_T PinCfgCsv_ParseTriggers(PINCFG_PARSE_SUBFN_PARAMS_
     return PINCFG_OK_E;
 }
 
-static inline PINCFG_RESULT_T PinCfgCsv_ParseTemperatureSensors(PINCFG_PARSE_SUBFN_PARAMS_T *psPrms)
+// Phase 2: Parse Measurement Source (MS)
+// Format: MS,<type_enum>,<name>/
+// Example: MS,0,temp0/  (0 = MEASUREMENT_TYPE_CPUTEMP_E)
+static inline PINCFG_RESULT_T PinCfgCsv_ParseMeasurementSource(PINCFG_PARSE_SUBFN_PARAMS_T *psPrms)
 {
-    switch (psPrms->sTempStrPt.pcStrStart[1])
-    {
-    case 'I': return PinCfgCsv_ParseCPUTemperatureSensor(psPrms); break;
-    default:
+    // MS,<type_enum>,<name>
+    // Required: MS,0,name = 3 items (0 = MEASUREMENT_TYPE_CPUTEMP_E)
+    if (psPrms->u8LineItemsLen != 3)
     {
         psPrms->pcOutStringLast += snprintf(
             (char *)(psPrms->psParsePrms->pcOutString + psPrms->pcOutStringLast),
             szGetSize(psPrms->psParsePrms->u16OutStrMaxLen, psPrms->pcOutStringLast),
-            _s[FSDS_E],
-            _s[WL_E],
-            psPrms->u16LinesProcessed,
-            " Unknown type of temperature sensor.");
+            _s[FSDSS_E], _s[EL_E], psPrms->u16LinesProcessed, _s[MS_E], _s[IVLD_E], _s[ARGS_E]);
         psPrms->szNumberOfWarnings++;
-
         return PINCFG_OK_E;
     }
-    break;
+
+    // Get type enum (index 1) - parse as uint8_t
+    uint8_t u8Type = 0;
+    psPrms->sTempStrPt = psPrms->sLine;
+    PinCfgStr_vGetSplitElemByIndex(&(psPrms->sTempStrPt), PINCFG_VALUE_SEPARATOR_D, 1);
+    
+    if (PinCfgStr_eAtoU8(&(psPrms->sTempStrPt), &u8Type) != PINCFG_STR_OK_E ||
+        u8Type >= MEASUREMENT_TYPE_COUNT_E)
+    {
+        psPrms->pcOutStringLast += snprintf(
+            (char *)(psPrms->psParsePrms->pcOutString + psPrms->pcOutStringLast),
+            szGetSize(psPrms->psParsePrms->u16OutStrMaxLen, psPrms->pcOutStringLast),
+            _s[FSDSSD_E], _s[EL_E], psPrms->u16LinesProcessed,
+            _s[MS_E], _s[IVLD_E], _s[TE_E], MEASUREMENT_TYPE_COUNT_E - 1);
+        psPrms->szNumberOfWarnings++;
+        return PINCFG_OK_E;
+    }
+    
+    MEASUREMENT_TYPE_T eType = (MEASUREMENT_TYPE_T)u8Type;
+
+    // Get name (index 2) - allocate string storage
+    psPrms->sTempStrPt = psPrms->sLine;
+    PinCfgStr_vGetSplitElemByIndex(&(psPrms->sTempStrPt), PINCFG_VALUE_SEPARATOR_D, 2);
+    
+    // Calculate memory
+    if (psPrms->psParsePrms->pszMemoryRequired != NULL)
+    {
+        *(psPrms->psParsePrms->pszMemoryRequired) +=
+            Memory_szGetAllocatedSize(sizeof(CPUTEMPMEASURE_T)) +
+            Memory_szGetAllocatedSize(psPrms->sTempStrPt.szLen + 1);
+        return PINCFG_OK_E;
+    }
+
+    if (psPrms->psParsePrms->bValidate)
+        return PINCFG_OK_E;
+
+    // Allocate and copy name string
+    char *pcName = (char *)Memory_vpAlloc(psPrms->sTempStrPt.szLen + 1);
+    if (pcName == NULL)
+    {
+        Memory_eReset();
+        psPrms->pcOutStringLast += snprintf(
+            (char *)(psPrms->psParsePrms->pcOutString + psPrms->pcOutStringLast),
+            szGetSize(psPrms->psParsePrms->u16OutStrMaxLen, psPrms->pcOutStringLast),
+            _s[FSDSS_E], _s[EL_E], psPrms->u16LinesProcessed, _s[MS_E], _s[OOM_E], _s[NAME_E]);
+        return PINCFG_OUTOFMEMORY_ERROR_E;
+    }
+    strncpy(pcName, psPrms->sTempStrPt.pcStrStart, psPrms->sTempStrPt.szLen);
+    pcName[psPrms->sTempStrPt.szLen] = '\0';
+
+    // Create measurement source based on type
+    ISENSORMEASURE_T *psGenericMeasurement = NULL;
+    
+    switch (eType)
+    {
+    case MEASUREMENT_TYPE_CPUTEMP_E:
+    {
+        CPUTEMPMEASURE_T *psMeasurement = (CPUTEMPMEASURE_T *)Memory_vpAlloc(sizeof(CPUTEMPMEASURE_T));
+        if (psMeasurement == NULL)
+        {
+            Memory_eReset();
+            psPrms->pcOutStringLast += snprintf(
+                (char *)(psPrms->psParsePrms->pcOutString + psPrms->pcOutStringLast),
+                szGetSize(psPrms->psParsePrms->u16OutStrMaxLen, psPrms->pcOutStringLast),
+                _s[FSDSS_E], _s[EL_E], psPrms->u16LinesProcessed, _s[MS_E], _s[OOM_E], _s[CPUTEMP_E]);
+            return PINCFG_OUTOFMEMORY_ERROR_E;
+        }
+
+        if (CPUTempMeasure_eInit(psMeasurement, eType, pcName) != CPUTEMPMEASURE_OK_E)
+        {
+            psPrms->pcOutStringLast += snprintf(
+                (char *)(psPrms->psParsePrms->pcOutString + psPrms->pcOutStringLast),
+                szGetSize(psPrms->psParsePrms->u16OutStrMaxLen, psPrms->pcOutStringLast),
+                _s[FSDSS_E], _s[EL_E], psPrms->u16LinesProcessed, _s[MS_E], _s[INITF_E], _s[NL_E]);
+            psPrms->szNumberOfWarnings++;
+            return PINCFG_OK_E;
+        }
+        
+        psGenericMeasurement = &(psMeasurement->sSensorMeasure);
+        break;
+    }
+    
+    // Phase 3: Add cases for other measurement types here
+    case MEASUREMENT_TYPE_ANALOG_E:
+    case MEASUREMENT_TYPE_DIGITAL_E:
+    case MEASUREMENT_TYPE_I2C_E:
+    case MEASUREMENT_TYPE_CALCULATED_E:
+    default:
+        psPrms->pcOutStringLast += snprintf(
+            (char *)(psPrms->psParsePrms->pcOutString + psPrms->pcOutStringLast),
+            szGetSize(psPrms->psParsePrms->u16OutStrMaxLen, psPrms->pcOutStringLast),
+            _s[FSDSS_E], _s[EL_E], psPrms->u16LinesProcessed, _s[MS_E], _s[TNI_E]);
+        psPrms->szNumberOfWarnings++;
+        return PINCFG_OK_E;
+    }
+
+    // Register measurement (add to linked list during parsing)
+    if (psGlobals->ppsMeasurements != NULL && psGenericMeasurement != NULL)
+    {
+        PinCfgCsv_eAddToLinkedList((LINKEDLIST_ITEM_T **)&(psGlobals->ppsMeasurements), 
+                                     (void *)psGenericMeasurement);
     }
 
     return PINCFG_OK_E;
 }
 
-static inline PINCFG_RESULT_T PinCfgCsv_ParseCPUTemperatureSensor(PINCFG_PARSE_SUBFN_PARAMS_T *psPrms)
+// Phase 2: Parse Sensor Reporter (SR)
+// Format: SR,<name>,<measurementName>,<enableable>,<cumulative>,<samplingMs>,<reportSec>,<offset>/
+// Example: SR,sensor1,temp0,0,0,1000,300,0.0/
+static inline PINCFG_RESULT_T PinCfgCsv_ParseSensorReporter(PINCFG_PARSE_SUBFN_PARAMS_T *psPrms)
 {
-    if (psPrms->u8LineItemsLen < 2 || psPrms->u8LineItemsLen > 7)
+    // SR,<name>,<measurement>,<enableable>,<cumulative>,<sampMs>,<reportSec>,<offset>
+    // Min: SR,name,meas,0,0,1000,300 = 7 items (offset optional)
+    // Max: SR,name,meas,0,0,1000,300,0.0 = 8 items
+    if (psPrms->u8LineItemsLen < 7 || psPrms->u8LineItemsLen > 8)
     {
         psPrms->pcOutStringLast += snprintf(
             (char *)(psPrms->psParsePrms->pcOutString + psPrms->pcOutStringLast),
             szGetSize(psPrms->psParsePrms->u16OutStrMaxLen, psPrms->pcOutStringLast),
-            _s[FSDSSS_E],
-            _s[WL_E],
-            psPrms->u16LinesProcessed,
-            _s[CPUTMP_E],
-            _s[IN_E],
-            _s[OARGS_E]);
+            _s[FSDSS_E], _s[EL_E], psPrms->u16LinesProcessed, _s[SR_E], _s[IVLD_E], _s[ARGS_E]);
         psPrms->szNumberOfWarnings++;
-
         return PINCFG_OK_E;
     }
 
+    // Get sensor name (index 1)
+    psPrms->sTempStrPt = psPrms->sLine;
+    PinCfgStr_vGetSplitElemByIndex(&(psPrms->sTempStrPt), PINCFG_VALUE_SEPARATOR_D, 1);
+    STRING_POINT_T sSensorName = psPrms->sTempStrPt;
+
+    // Get measurement name (index 2)
+    psPrms->sTempStrPt = psPrms->sLine;
+    PinCfgStr_vGetSplitElemByIndex(&(psPrms->sTempStrPt), PINCFG_VALUE_SEPARATOR_D, 2);
+    
+    // Lookup measurement by name
+    ISENSORMEASURE_T *psMeasurement = PinCfgCsv_psFindMeasurementByName(
+        psPrms->sTempStrPt.pcStrStart, 
+        psPrms->sTempStrPt.szLen);
+    
+    if (psMeasurement == NULL && !psPrms->psParsePrms->bValidate)
+    {
+        psPrms->pcOutStringLast += snprintf(
+            (char *)(psPrms->psParsePrms->pcOutString + psPrms->pcOutStringLast),
+            szGetSize(psPrms->psParsePrms->u16OutStrMaxLen, psPrms->pcOutStringLast),
+            "%s%d:%s%s%.*s\n",
+            _s[EL_E], psPrms->u16LinesProcessed,
+            _s[SR_E], _s[MNF_E],
+            (int)psPrms->sTempStrPt.szLen,
+            psPrms->sTempStrPt.pcStrStart);
+        psPrms->szNumberOfWarnings++;
+        return PINCFG_OK_E;
+    }
+
+    // Get enableable (index 3)
     uint8_t u8Enableable = 0U;
-    if (psPrms->u8LineItemsLen >= 3)
+    psPrms->sTempStrPt = psPrms->sLine;
+    PinCfgStr_vGetSplitElemByIndex(&(psPrms->sTempStrPt), PINCFG_VALUE_SEPARATOR_D, 3);
+    if (PinCfgStr_eAtoU8(&(psPrms->sTempStrPt), &u8Enableable) != PINCFG_STR_OK_E || u8Enableable > 1U)
     {
-        psPrms->sTempStrPt = psPrms->sLine;
-        PinCfgStr_vGetSplitElemByIndex(&(psPrms->sTempStrPt), PINCFG_VALUE_SEPARATOR_D, 2);
-        if (PinCfgStr_eAtoU8(&(psPrms->sTempStrPt), &u8Enableable) != PINCFG_STR_OK_E || u8Enableable > 1U)
-        {
-            psPrms->pcOutStringLast += snprintf(
-                (char *)(psPrms->psParsePrms->pcOutString + psPrms->pcOutStringLast),
-                szGetSize(psPrms->psParsePrms->u16OutStrMaxLen, psPrms->pcOutStringLast),
-                _s[FSDSSS_E],
-                _s[WL_E],
-                psPrms->u16LinesProcessed,
-                _s[CPUTMP_E],
-                _s[IN_E],
-                ".");
-            psPrms->szNumberOfWarnings++;
-
-            return PINCFG_OK_E;
-        }
+        psPrms->pcOutStringLast += snprintf(
+            (char *)(psPrms->psParsePrms->pcOutString + psPrms->pcOutStringLast),
+            szGetSize(psPrms->psParsePrms->u16OutStrMaxLen, psPrms->pcOutStringLast),
+            _s[FSDSS_E], _s[EL_E], psPrms->u16LinesProcessed, _s[SR_E], _s[IVLD_E], _s[ENABLEABLE_E]);
+        psPrms->szNumberOfWarnings++;
+        return PINCFG_OK_E;
     }
 
+    // Get cumulative (index 4)
     uint8_t u8Cumulative = 0U;
-    if (psPrms->u8LineItemsLen >= 4)
+    psPrms->sTempStrPt = psPrms->sLine;
+    PinCfgStr_vGetSplitElemByIndex(&(psPrms->sTempStrPt), PINCFG_VALUE_SEPARATOR_D, 4);
+    if (PinCfgStr_eAtoU8(&(psPrms->sTempStrPt), &u8Cumulative) != PINCFG_STR_OK_E || u8Cumulative > 1U)
     {
-        psPrms->sTempStrPt = psPrms->sLine;
-        PinCfgStr_vGetSplitElemByIndex(&(psPrms->sTempStrPt), PINCFG_VALUE_SEPARATOR_D, 3);
-        if (PinCfgStr_eAtoU8(&(psPrms->sTempStrPt), &u8Cumulative) != PINCFG_STR_OK_E || u8Cumulative > 1U)
-        {
-            psPrms->pcOutStringLast += snprintf(
-                (char *)(psPrms->psParsePrms->pcOutString + psPrms->pcOutStringLast),
-                szGetSize(psPrms->psParsePrms->u16OutStrMaxLen, psPrms->pcOutStringLast),
-                _s[FSDSSS_E],
-                _s[WL_E],
-                psPrms->u16LinesProcessed,
-                _s[CPUTMP_E],
-                _s[IN_E],
-                ".");
-            psPrms->szNumberOfWarnings++;
-
-            return PINCFG_OK_E;
-        }
+        psPrms->pcOutStringLast += snprintf(
+            (char *)(psPrms->psParsePrms->pcOutString + psPrms->pcOutStringLast),
+            szGetSize(psPrms->psParsePrms->u16OutStrMaxLen, psPrms->pcOutStringLast),
+            _s[FSDSS_E], _s[EL_E], psPrms->u16LinesProcessed, _s[SR_E], _s[IVLD_E], _s[CUMULATIVE_E]);
+        psPrms->szNumberOfWarnings++;
+        return PINCFG_OK_E;
     }
 
+    // Get sampling interval (index 5)
     uint16_t u16SamplingIntervalMs = PINCFG_CPUTEMP_SAMPLING_INTV_MS_D;
-    if (psPrms->u8LineItemsLen >= 5)
+    uint32_t u32Temp = 0;
+    psPrms->sTempStrPt = psPrms->sLine;
+    PinCfgStr_vGetSplitElemByIndex(&(psPrms->sTempStrPt), PINCFG_VALUE_SEPARATOR_D, 5);
+    if (PinCfgStr_eAtoU32(&(psPrms->sTempStrPt), &u32Temp) != PINCFG_STR_OK_E ||
+        u32Temp < PINCFG_CPUTEMP_SAMPLING_INTV_MIN_MS_D ||
+        u32Temp > PINCFG_CPUTEMP_SAMPLING_INTV_MAX_MS_D)
     {
-        uint32_t u32Temp = 0;
-        psPrms->sTempStrPt = psPrms->sLine;
-        PinCfgStr_vGetSplitElemByIndex(&(psPrms->sTempStrPt), PINCFG_VALUE_SEPARATOR_D, 4);
-        if (PinCfgStr_eAtoU32(&(psPrms->sTempStrPt), &u32Temp) != PINCFG_STR_OK_E ||
-            u32Temp < PINCFG_CPUTEMP_SAMPLING_INTV_MIN_MS_D ||
-            u32Temp > PINCFG_CPUTEMP_SAMPLING_INTV_MAX_MS_D)
-        {
-            psPrms->pcOutStringLast += snprintf(
-                (char *)(psPrms->psParsePrms->pcOutString + psPrms->pcOutStringLast),
-                szGetSize(psPrms->psParsePrms->u16OutStrMaxLen, psPrms->pcOutStringLast),
-                _s[FSDSSS_E],
-                _s[WL_E],
-                psPrms->u16LinesProcessed,
-                _s[CPUTMP_E],
-                _s[IN_E],
-                ".");
-            psPrms->szNumberOfWarnings++;
-
-            return PINCFG_OK_E;
-        }
-        u16SamplingIntervalMs = (uint16_t)u32Temp;
+        psPrms->pcOutStringLast += snprintf(
+            (char *)(psPrms->psParsePrms->pcOutString + psPrms->pcOutStringLast),
+            szGetSize(psPrms->psParsePrms->u16OutStrMaxLen, psPrms->pcOutStringLast),
+            _s[FSDSS_E], _s[EL_E], psPrms->u16LinesProcessed, _s[SR_E], _s[IVLD_E], _s[SAMPINT_E]);
+        psPrms->szNumberOfWarnings++;
+        return PINCFG_OK_E;
     }
+    u16SamplingIntervalMs = (uint16_t)u32Temp;
 
+    // Get report interval in SECONDS (index 6)
     uint16_t u16ReportIntervalSec = PINCFG_CPUTEMP_REPORTING_INTV_SEC_D;
-    if (psPrms->u8LineItemsLen >= 6)
+    u32Temp = 0;
+    psPrms->sTempStrPt = psPrms->sLine;
+    PinCfgStr_vGetSplitElemByIndex(&(psPrms->sTempStrPt), PINCFG_VALUE_SEPARATOR_D, 6);
+    if (PinCfgStr_eAtoU32(&(psPrms->sTempStrPt), &u32Temp) != PINCFG_STR_OK_E ||
+        u32Temp < PINCFG_CPUTEMP_REPORTING_INTV_MIN_SEC_D ||
+        u32Temp > PINCFG_CPUTEMP_REPORTING_INTV_MAX_SEC_D)
     {
-        uint32_t u32Temp = 0;
-        psPrms->sTempStrPt = psPrms->sLine;
-        PinCfgStr_vGetSplitElemByIndex(&(psPrms->sTempStrPt), PINCFG_VALUE_SEPARATOR_D, 5);
-        if (PinCfgStr_eAtoU32(&(psPrms->sTempStrPt), &u32Temp) != PINCFG_STR_OK_E ||
-            u32Temp < PINCFG_CPUTEMP_REPORTING_INTV_MIN_SEC_D ||
-            u32Temp > PINCFG_CPUTEMP_REPORTING_INTV_MAX_SEC_D)
-        {
-            psPrms->pcOutStringLast += snprintf(
-                (char *)(psPrms->psParsePrms->pcOutString + psPrms->pcOutStringLast),
-                szGetSize(psPrms->psParsePrms->u16OutStrMaxLen, psPrms->pcOutStringLast),
-                _s[FSDSSS_E],
-                _s[WL_E],
-                psPrms->u16LinesProcessed,
-                _s[CPUTMP_E],
-                _s[IN_E],
-                ".");
-            psPrms->szNumberOfWarnings++;
-
-            return PINCFG_OK_E;
-        }
-        u16ReportIntervalSec = (uint16_t)u32Temp;
+        psPrms->pcOutStringLast += snprintf(
+            (char *)(psPrms->psParsePrms->pcOutString + psPrms->pcOutStringLast),
+            szGetSize(psPrms->psParsePrms->u16OutStrMaxLen, psPrms->pcOutStringLast),
+            _s[FSDSS_E], _s[EL_E], psPrms->u16LinesProcessed, _s[SR_E], _s[IVLD_E], _s[REPINT_E]);
+        psPrms->szNumberOfWarnings++;
+        return PINCFG_OK_E;
     }
+    u16ReportIntervalSec = (uint16_t)u32Temp;
 
+    // Get offset (index 7, optional)
     float fOffset = PINCFG_CPUTEMP_OFFSET_D;
-    if (psPrms->u8LineItemsLen >= 7)
+    if (psPrms->u8LineItemsLen >= 8)
     {
         psPrms->sTempStrPt = psPrms->sLine;
-        PinCfgStr_vGetSplitElemByIndex(&(psPrms->sTempStrPt), PINCFG_VALUE_SEPARATOR_D, 6);
+        PinCfgStr_vGetSplitElemByIndex(&(psPrms->sTempStrPt), PINCFG_VALUE_SEPARATOR_D, 7);
         if (PinCfgStr_eAtoFloat(&(psPrms->sTempStrPt), &fOffset) != PINCFG_STR_OK_E)
         {
             psPrms->pcOutStringLast += snprintf(
                 (char *)(psPrms->psParsePrms->pcOutString + psPrms->pcOutStringLast),
                 szGetSize(psPrms->psParsePrms->u16OutStrMaxLen, psPrms->pcOutStringLast),
-                _s[FSDSSS_E],
-                _s[WL_E],
-                psPrms->u16LinesProcessed,
-                _s[CPUTMP_E],
-                _s[IN_E],
-                ".");
+                _s[FSDSS_E], _s[EL_E], psPrms->u16LinesProcessed, _s[SR_E], _s[IVLD_E], _s[OFFSET_E]);
             psPrms->szNumberOfWarnings++;
-
             return PINCFG_OK_E;
         }
     }
 
-    psPrms->sTempStrPt = psPrms->sLine;
-    PinCfgStr_vGetSplitElemByIndex(&(psPrms->sTempStrPt), PINCFG_VALUE_SEPARATOR_D, 1);
-
-    // Sensor now has fixed size - much simpler!
+    // Calculate memory
     if (psPrms->psParsePrms->pszMemoryRequired != NULL)
     {
         *(psPrms->psParsePrms->pszMemoryRequired) +=
             Memory_szGetAllocatedSize(sizeof(SENSOR_T)) +
-            Memory_szGetAllocatedSize(psPrms->sTempStrPt.szLen + 1) +
-            Memory_szGetAllocatedSize(sizeof(CPUTEMP_T));
-
+            Memory_szGetAllocatedSize(sSensorName.szLen + 1);
+        
         if (psPrms->psParsePrms->eAddToPresentables != NULL)
             *(psPrms->psParsePrms->pszMemoryRequired) +=
                 Memory_szGetAllocatedSize(sizeof(LINKEDLIST_ITEM_T) + sizeof(void *));
         if (psPrms->psParsePrms->eAddToLoopables != NULL)
             *(psPrms->psParsePrms->pszMemoryRequired) +=
                 Memory_szGetAllocatedSize(sizeof(LINKEDLIST_ITEM_T) + sizeof(void *));
+        return PINCFG_OK_E;
     }
 
     if (psPrms->psParsePrms->bValidate)
         return PINCFG_OK_E;
 
-    CPUTEMP_T *psTempHnd = (CPUTEMP_T *)Memory_vpAlloc(sizeof(CPUTEMP_T));
-    if (psTempHnd == NULL)
+    // Create sensor reporter
+    SENSOR_T *psSensorHandle = (SENSOR_T *)Memory_vpAlloc(sizeof(SENSOR_T));
+    if (psSensorHandle == NULL)
     {
         Memory_eReset();
         psPrms->pcOutStringLast += snprintf(
             (char *)(psPrms->psParsePrms->pcOutString + psPrms->pcOutStringLast),
             szGetSize(psPrms->psParsePrms->u16OutStrMaxLen, psPrms->pcOutStringLast),
-            _s[FSDSS_E],
-            _s[EL_E],
-            psPrms->u16LinesProcessed,
-            _s[CPUTMP_E],
-            _s[OOM_E]);
-
+            _s[FSDSS_E], _s[EL_E], psPrms->u16LinesProcessed, _s[SR_E], _s[OOM_E], _s[SENSOR_E]);
         return PINCFG_OUTOFMEMORY_ERROR_E;
     }
 
-    if (CPUTemp_eInit(
-             psTempHnd,
-             psPrms->psParsePrms->eAddToLoopables,
-             psPrms->psParsePrms->eAddToPresentables,
-             &psPrms->u8PresentablesCount,
-             (bool)u8Cumulative,
-             (bool)u8Enableable,
-             &(psPrms->sTempStrPt),
-             u16SamplingIntervalMs,
-             u16ReportIntervalSec,
-             fOffset) != SENSOR_OK_E)
+    // Link sensor to measurement source
+    if (Sensor_eInit(
+            psSensorHandle,
+            psPrms->psParsePrms->eAddToLoopables,
+            psPrms->psParsePrms->eAddToPresentables,
+            &psPrms->u8PresentablesCount,
+            (bool)u8Cumulative,
+            (bool)u8Enableable,
+            &sSensorName,
+            V_TEMP,
+            S_TEMP,
+            InPin_vRcvMessage,
+            psMeasurement,  // Link to measurement
+            u16SamplingIntervalMs,
+            u16ReportIntervalSec,
+            fOffset) != SENSOR_OK_E)  // Sensor-specific calibration offset
     {
         psPrms->pcOutStringLast += snprintf(
             (char *)(psPrms->psParsePrms->pcOutString + psPrms->pcOutStringLast),
             szGetSize(psPrms->psParsePrms->u16OutStrMaxLen, psPrms->pcOutStringLast),
-            _s[FSDSS_E],
-            _s[WL_E],
-            psPrms->u16LinesProcessed,
-            _s[CPUTMP_E],
-            _s[INITF_E]);
+            _s[FSDSS_E], _s[EL_E], psPrms->u16LinesProcessed, _s[SR_E], _s[INITF_E], _s[NL_E]);
         psPrms->szNumberOfWarnings++;
     }
 
@@ -1345,6 +1482,54 @@ static inline PRESENTABLE_T *PinCfgCsv_psFindInPresentablesById(uint8_t u8Id)
         return NULL;
 
     return (psGlobals->ppsPresentables)[u8Id];
+}
+
+static inline ISENSORMEASURE_T *PinCfgCsv_psFindMeasurementByName(const char *pcName, size_t szNameLen)
+{
+    if (pcName == NULL || szNameLen == 0)
+        return NULL;
+
+    // Search through registered measurements
+    for (uint8_t i = 0; i < psGlobals->u8MeasurementsCount; i++)
+    {
+        ISENSORMEASURE_T *psMeasure = psGlobals->ppsMeasurements[i];
+        if (psMeasure == NULL)
+            continue;
+
+        // Use type enum to safely cast and access name
+        const char *pcStoredName = NULL;
+        
+        switch (psMeasure->eType)
+        {
+        case MEASUREMENT_TYPE_CPUTEMP_E:
+        {
+            CPUTEMPMEASURE_T *psCPUTemp = (CPUTEMPMEASURE_T *)psMeasure;
+            pcStoredName = psCPUTemp->pcName;
+            break;
+        }
+        
+        // Phase 3: Add cases for other measurement types
+        case MEASUREMENT_TYPE_ANALOG_E:
+        case MEASUREMENT_TYPE_DIGITAL_E:
+        case MEASUREMENT_TYPE_I2C_E:
+        case MEASUREMENT_TYPE_CALCULATED_E:
+        default:
+            continue;  // Unknown type, skip
+        }
+        
+        if (pcStoredName != NULL)
+        {
+            // Compare names (length and content)
+            size_t szStoredLen = strlen(pcStoredName);
+            if (szStoredLen == szNameLen && 
+                strncmp(pcStoredName, pcName, szNameLen) == 0)
+            {
+                return psMeasure;
+            }
+        }
+    }
+
+    return NULL;  // Not found
 }
 
 static PRESENTABLE_T *PinCfgCsv_psFindInTempPresentablesByName(const STRING_POINT_T *psName)
