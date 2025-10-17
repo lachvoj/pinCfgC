@@ -17,6 +17,7 @@ The goal of this library is to provide a CSV-based configuration that specifies 
 7. [Triggers](#triggers)
 8. [Measurement Sources](#measurement-sources)
    1. [CPU Temperature Measurement](#cpu-temperature-measurement)
+   2. [I2C Measurement](#i2c-measurement-compile-time-optional)
 9. [Sensor Reporters](#sensor-reporters)
 
 ## Format Overview
@@ -46,7 +47,7 @@ T,t08,i08,1,1,o08,0/
 T,t09,i09,1,1,o09,0/
 T,t10,i10,1,1,o10,0/
 MS,0,cpu_temp/
-SR,CPUTemp,cpu_temp,0,0,1000,300,-2.1/
+SR,CPUTemp,cpu_temp,6,6,0,0,1000,300,-2.1/
 ```
 ## Comments
 Lines starting with **#** will be ignored by the parsing function and can be used as comments.
@@ -286,6 +287,170 @@ MS,0,external_sensor/     # Another measurement source
 
 **Note:** Using numeric type enum instead of string for compact CSV format.
 
+### I2C Measurement (Compile-Time Optional)
+Defines an I2C sensor measurement source with non-blocking read support.
+
+**Requires:** `FEATURE_I2C_MEASUREMENT` defined at compile time.
+
+#### Line Formats
+
+**Simple Mode (5 parameters)** - For register-based sensors:
+```
+MS,3,<name>,<i2c_addr>,<register>,<data_size>/
+```
+
+**Command Mode (6-7 parameters)** - For triggered sensors:
+```
+MS,3,<name>,<i2c_addr>,<cmd1>,<data_size>,<cmd2>[,<cmd3>]/
+```
+
+#### Parameters
+1. **Type** (`uint8_t`) - Must be **3** (`MEASUREMENT_TYPE_I2C_E`)
+2. **Name** (`char[]`) - Unique name for this measurement source
+3. **I2C Address** (`uint8_t`) - 7-bit I2C device address (hex: 0x48 or decimal: 72)
+4. **Register/Cmd1** (`uint8_t`) - Register address (simple) or first command byte (command mode)
+5. **Data Size** (`uint8_t`) - Number of bytes to read (1-6)
+6. **Cmd2** (optional, `uint8_t`) - Second command byte (triggers command mode)
+7. **Cmd3** (optional, `uint8_t`) - Third command byte
+
+#### Mode Detection
+- **5 parameters** → Simple mode: Write register → Read immediately
+- **6-7 parameters** → Command mode: Write command → Wait → Read
+
+**Auto Conversion Delays:**
+- `0xAC` (AHT10 trigger): 80ms
+- `0xF4` (BME280 forced): 10ms
+- Others: 0ms (immediate)
+
+#### Data Format
+- **Byte Order:** Big-endian (MSB first) - standard for most I2C sensors
+- **Sign Extension:** Automatic for signed values (based on MSB)
+- **Scaling:** Apply sensor-specific scaling via offset parameter in SR line
+
+#### Examples
+
+**Simple Mode Sensors:**
+```
+# TMP102 temperature sensor (12-bit, 0.0625°C per LSB)
+MS,3,tmp102_raw,0x48,0x00,2/                        # 5 params = simple mode
+SR,RoomTemp,tmp102_raw,6,6,0,0,5000,300,0.0625/    # V_TEMP, S_TEMP, scale by 0.0625
+
+# BH1750 light sensor (16-bit, 1 lux per LSB)
+MS,3,light_raw,0x23,0x10,2/                         # Simple mode
+SR,Brightness,light_raw,37,16,0,0,1000,60,1.0/     # V_LIGHT_LEVEL, S_LIGHT_LEVEL
+
+# Multiple I2C sensors at different addresses
+MS,3,tmp102_1,0x48,0x00,2/                          # First TMP102
+MS,3,tmp102_2,0x49,0x00,2/                          # Second TMP102 (different address)
+SR,IndoorTemp,tmp102_1,6,6,0,0,5000,300,0.0625/
+SR,OutdoorTemp,tmp102_2,6,6,0,0,5000,300,0.0625/
+```
+
+**Command Mode Sensors:**
+```
+# AHT10 temperature/humidity sensor
+MS,3,aht10_raw,0x38,0xAC,6,0x33,0x00/              # 7 params = command mode
+                                                    # Writes: 0xAC, 0x33, 0x00
+                                                    # Waits: 80ms (auto)
+                                                    # Reads: 6 bytes
+SR,Temperature,aht10_raw,6,6,0,0,10000,300,0.0/    # V_TEMP, S_TEMP, read every 10s
+
+# BME280 pressure sensor  
+MS,3,bme280_raw,0x76,0xF4,8,0x25/                  # 6 params = command mode
+                                                    # Writes: 0xF4, 0x25 (forced mode)
+                                                    # Waits: 10ms (auto)
+SR,Pressure,bme280_raw,17,4,0,0,5000,300,1.0/       # V_PRESSURE, S_BARO, read every 5s
+```
+
+#### Multi-Value Sensors
+
+Many I2C sensors return multiple measurements in one read (e.g., AHT10 returns both temperature and humidity in 6 bytes). To extract specific values, use byte offset and count parameters in the SR line.
+
+**Extended SR Format:**
+```
+SR,<name>,<meas>,<vType>,<sType>,<en>,<cum>,<samp>,<rep>,<offset>,<byte_offset>,<byte_count>/
+```
+
+**Byte Extraction Parameters:**
+- **byte_offset** (param 10, optional): Starting byte index (0-5), default 0
+- **byte_count** (param 11, optional): Number of bytes to extract (1-6, 0=all), default 0
+
+**Default behavior (0, 0):** Extract all bytes from measurement
+**Custom extraction:** Specify byte range for multi-value sensors
+
+**Example: AHT10 Temperature + Humidity**
+
+AHT10 returns 6 bytes containing both values:
+- Temperature: bytes 3-5 (20-bit value)
+- Humidity: bytes 1-3 (20-bit value)
+
+```csv
+# Single I2C read for both measurements
+MS,3,aht10,0x38,0xAC,6,0x33,0x00/
+
+# Extract temperature (bytes 3-5) and scale (V_TEMP=6, S_TEMP=6)
+SR,Temperature,aht10,6,6,0,0,10000,300,0.000191,3,3/
+
+# Extract humidity (bytes 1-3) and scale (V_HUM=1, S_HUM=7)
+SR,Humidity,aht10,1,7,0,0,10000,300,0.000095,1,3/
+```
+
+**Benefits:**
+- Single I2C read for both values (efficient)
+- Clear separation of temperature and humidity
+- No duplicate I2C transactions
+- Each value has independent scaling factor
+
+**Other Multi-Value Examples:**
+
+```csv
+# BME280: Temperature + Pressure + Humidity in 8 bytes
+MS,3,bme280,0x76,0xF4,8,0x25/
+SR,Temp,bme280,6,6,0,0,10000,300,0.01,0,3/       # V_TEMP, S_TEMP, bytes 0-2
+SR,Press,bme280,17,4,0,0,10000,300,0.01,3,3/     # V_PRESSURE, S_BARO, bytes 3-5
+SR,Hum,bme280,1,7,0,0,10000,300,0.001,6,2/       # V_HUM, S_HUM, bytes 6-7
+
+# SHT31: Temperature + Humidity in 6 bytes
+MS,3,sht31,0x44,0x2C,6,0x06/
+SR,Temp,sht31,6,6,0,0,10000,300,0.00268,0,2/     # V_TEMP, S_TEMP, bytes 0-1
+SR,Hum,sht31,1,7,0,0,10000,300,0.00152,3,2/      # V_HUM, S_HUM, bytes 3-4
+```
+
+#### Non-Blocking Operation
+I2C measurements use a state machine to avoid blocking the main `loop()`:
+- **Simple mode:** Write register → Check data → Return value
+- **Command mode:** Write command → Wait conversion → Check data → Return value
+
+The sensor automatically retries on PENDING, so multiple `loop()` iterations may be needed per reading.
+
+**Timeout:** 100ms default (compile-time configurable)
+
+#### Supported Sensors
+
+**Simple Mode:** TMP102, LM75, LM75A, BH1750  
+**Command Mode:** AHT10, BME280, SHT31
+
+See `PHASE3_IMPLEMENTATION.md` for complete sensor compatibility list.
+
+#### Compile-Time Configuration
+Enable I2C support by defining:
+
+**In `Globals.h`:**
+```c
+#define FEATURE_I2C_MEASUREMENT
+```
+
+**Or in `platformio.ini`:**
+```ini
+[env:myboard]
+build_flags = 
+    -DFEATURE_I2C_MEASUREMENT
+```
+
+**Binary Size:** +800-1000 bytes when enabled, +0 bytes when disabled.
+
+**Compatibility:** Both 5-parameter (simple) and 6-7 parameter (command) formats are supported.
+
 ## Sensor Reporters
 Sensor reporters define timing, averaging, and MySensors reporting behavior. They reference measurement sources by name.
 
@@ -296,54 +461,74 @@ Lines starting with **'SR'** are parsed as sensor reporter definitions.
 1. SR,       (sensor reporter type definition)
 2. CPUTemp,  (unique sensor name)
 3. cpu,      (measurement source name - must match an MS definition)
-4. 0,        (enableable: 0 or 1)
-5. 0,        (cumulative mode: 0 or 1)
-6. 1000,     (sampling interval in milliseconds)
-7. 300,      (reporting interval in SECONDS)
-8. 0.0/      (optional temperature offset in °C)
+4. 6,        (V_TYPE: MySensors variable type - e.g., 6 = V_TEMP)
+5. 6,        (S_TYPE: MySensors sensor type - e.g., 6 = S_TEMP)
+6. 0,        (enableable: 0 or 1)
+7. 0,        (cumulative mode: 0 or 1)
+8. 1000,     (sampling interval in milliseconds)
+9. 300,      (reporting interval in SECONDS)
+10. 0.0,     (optional temperature offset/scale factor)
+11. 0,       (optional byte offset for multi-value sensors)
+12. 0/       (optional byte count for multi-value sensors)
 ```
 
 #### Parameters
 1. **Name** (`char[]`) - Unique name for this sensor
 2. **Measurement Source** (`char[]`) - Name of measurement source (from MS line)
-3. **Enableable** (`uint8_t`) - 0 or 1
+3. **V_TYPE** (`uint8_t`) - MySensors variable type (see MySensors documentation)
+    * **0** = V_TEMP (temperature)
+    * **1** = V_HUM (humidity)
+    * **2** = V_STATUS (binary status)
+    * **6** = V_TEMP (legacy, same as 0)
+    * See MySensors `mysensors_data_t` for complete list
+4. **S_TYPE** (`uint8_t`) - MySensors sensor type (see MySensors documentation)
+    * **0** = S_DOOR (door/window sensor)
+    * **1** = S_MOTION (motion sensor)
+    * **6** = S_TEMP (temperature sensor)
+    * **7** = S_HUM (humidity sensor)
+    * See MySensors `mysensors_sensor_t` for complete list
+5. **Enableable** (`uint8_t`) - 0 or 1
     * **0** - Sensor always reports
     * **1** - Sensor can be enabled/disabled at runtime (increases memory)
-4. **Cumulative Mode** (`uint8_t`) - 0 or 1
+6. **Cumulative Mode** (`uint8_t`) - 0 or 1
     * **0** (standard) - Temperature measured once per report interval
     * **1** (cumulative) - Temperature sampled at sampling interval, average reported
-5. **Sampling Interval** (`uint16_t`) - In **milliseconds**, default 1000 ms or `PINCFG_CPUTEMP_SAMPLING_INTV_MS_D`
+7. **Sampling Interval** (`uint16_t`) - In **milliseconds**, default 1000 ms or `PINCFG_CPUTEMP_SAMPLING_INTV_MS_D`
     * Valid range: 100-5000 ms (100 ms - 5 seconds)
-6. **Report Interval** (`uint16_t`) - In **SECONDS**, default 300 s (5 min) or `PINCFG_CPUTEMP_REPORTING_INTV_SEC_D`
+8. **Report Interval** (`uint16_t`) - In **SECONDS**, default 300 s (5 min) or `PINCFG_CPUTEMP_REPORTING_INTV_SEC_D`
     * Valid range: 1-3600 seconds (1 second - 1 hour)
-7. **Offset** (optional, `float`) - Temperature calibration offset in °C, default 0.0 or `PINCFG_CPUTEMP_OFFSET_D`
+9. **Offset** (optional, `float`) - Scaling factor or calibration offset, default 0.0 or `PINCFG_CPUTEMP_OFFSET_D`
+    * For temperature: calibration offset in °C
+    * For I2C: scaling multiplier (e.g., 0.0625 for TMP102)
+10. **Byte Offset** (optional, `uint8_t`) - Starting byte index for multi-value sensors (0-5), default 0
+11. **Byte Count** (optional, `uint8_t`) - Number of bytes to extract (1-6, 0=all), default 0
 
 #### Examples
 ```
-# Basic sensor reporting every 5 minutes
-SR,CPUTemp,cpu,0,0,1000,300/
+# Basic temperature sensor reporting every 5 minutes
+SR,CPUTemp,cpu,6,6,0,0,1000,300/
 
-# Sensor with calibration offset
-SR,CPUTemp_calibrated,cpu,0,0,1000,300,-2.1/
+# Temperature sensor with calibration offset
+SR,CPUTemp_calibrated,cpu,6,6,0,0,1000,300,-2.1/
 
-# Enableable sensor with averaging, reporting every minute
-SR,CPUTemp_avg,cpu,1,1,500,60,0.0/
+# Enableable humidity sensor with averaging, reporting every minute
+SR,Humidity_avg,humid_sensor,1,7,1,1,500,60,0.0/
 
-# Multiple sensors sharing one measurement source with different offsets
-MS,0,shared/                                   # type 0 = CPU temp
-SR,fast_reporter,shared,0,0,500,10,0.0/       # No offset, report every 10 seconds
-SR,slow_reporter,shared,0,0,1000,3600,2.5/    # +2.5°C offset, report every hour
-SR,calibrated,shared,0,0,1000,300,-1.0/       # -1.0°C offset, report every 5 min
+# Multiple sensors sharing one measurement source with different types
+MS,0,shared/                                           # type 0 = CPU temp
+SR,fast_reporter,shared,6,6,0,0,500,10,0.0/          # V_TEMP, S_TEMP, report every 10 sec
+SR,slow_reporter,shared,6,6,0,0,1000,3600,2.5/       # V_TEMP, S_TEMP, +2.5°C offset, hourly
+SR,calibrated,shared,6,6,0,0,1000,300,-1.0/          # V_TEMP, S_TEMP, -1.0°C offset, 5 min
 ```
 
 ### Measurement Reusability
 Multiple sensor reporters can use the same measurement source, allowing different reporting schedules and calibrations without duplicate hardware readings:
 
 ```
-MS,0,cpu_temp/                            # One raw measurement (type 0 = CPU temp)
-SR,sensor_fast,cpu_temp,0,0,500,60,0.0/   # No offset, report every minute
-SR,sensor_slow,cpu_temp,0,0,1000,600,2.5/ # +2.5°C offset, report every 10 min
-SR,sensor_avg,cpu_temp,0,1,2000,300,-1.0/ # -1.0°C offset, 5-min average
+MS,0,cpu_temp/                                    # One raw measurement (type 0 = CPU temp)
+SR,sensor_fast,cpu_temp,6,6,0,0,500,60,0.0/      # V_TEMP, S_TEMP, report every minute
+SR,sensor_slow,cpu_temp,6,6,0,0,1000,600,2.5/    # V_TEMP, S_TEMP, +2.5°C offset, 10 min
+SR,sensor_avg,cpu_temp,6,6,0,1,2000,300,-1.0/    # V_TEMP, S_TEMP, -1.0°C, 5-min average
 ```
 
 Each sensor can apply its own calibration offset to the raw measurement, enabling flexible use cases like:

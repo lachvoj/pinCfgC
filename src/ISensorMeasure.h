@@ -21,13 +21,15 @@ typedef enum ISENSORMEASURE_RESULT_E
 {
     ISENSORMEASURE_OK_E = 0,
     ISENSORMEASURE_NULLPTR_ERROR_E,
-    ISENSORMEASURE_ERROR_E
+    ISENSORMEASURE_ERROR_E,
+    ISENSORMEASURE_PENDING_E  // Operation in progress, call again (non-blocking operations)
 } ISENSORMEASURE_RESULT_T;
 
 typedef struct ISENSORMEASURE_S ISENSORMEASURE_T;
 typedef struct ISENSORMEASURE_S
 {
     ISENSORMEASURE_RESULT_T (*eMeasure)(ISENSORMEASURE_T *pSelf, float *pfValue, const float fOffset, uint32_t u32ms);
+    ISENSORMEASURE_RESULT_T (*eMeasureRaw)(ISENSORMEASURE_T *pSelf, uint8_t *pu8Buffer, uint8_t *pu8Size, uint32_t u32ms);  // Get raw bytes
     MEASUREMENT_TYPE_T eType;  // Measurement type (part of interface contract)
 } ISENSORMEASURE_T;
 

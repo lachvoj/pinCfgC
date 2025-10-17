@@ -15,6 +15,10 @@
 #include "Switch.h"
 #include "Trigger.h"
 
+#ifdef FEATURE_I2C_MEASUREMENT
+#include "I2CMeasure.h"
+#endif
+
 typedef struct PINCFG_PARSE_SUBFN_PARAMS_S
 {
     PINCFG_PARSE_PARAMS_T *psParsePrms;
@@ -1180,9 +1184,139 @@ static inline PINCFG_RESULT_T PinCfgCsv_ParseMeasurementSource(PINCFG_PARSE_SUBF
     }
     
     // Phase 3: Add cases for other measurement types here
+#ifdef FEATURE_I2C_MEASUREMENT
+    case MEASUREMENT_TYPE_I2C_E:
+    {
+        // Parse I2C-specific parameters
+        // Format: MS,3,name,addr,cmd1,size[,cmd2,cmd3]/
+        // Simple mode (5 params): MS,3,name,addr,register,size/
+        // Command mode (6-7 params): MS,3,name,addr,cmd1,size,cmd2[,cmd3]/
+        
+        uint8_t au8CommandBytes[3] = {0};
+        uint8_t u8CommandLength = 0;
+        uint16_t u16ConversionDelayMs = 0;
+        
+        // Parameter 3: I2C device address (hex or decimal)
+        psPrms->u16Index++;
+        if (!PinCfgStr_bParseNextParam(psPrms, '/'))
+        {
+            psPrms->pcOutStringLast += snprintf(
+                (char *)(psPrms->psParsePrms->pcOutString + psPrms->pcOutStringLast),
+                szGetSize(psPrms->psParsePrms->u16OutStrMaxLen, psPrms->pcOutStringLast),
+                _s[FSDSS_E], _s[EL_E], psPrms->u16LinesProcessed, _s[MS_E], _s[IVLD_E], " I2C address\n");
+            psPrms->szNumberOfWarnings++;
+            return PINCFG_OK_E;
+        }
+        uint8_t u8DeviceAddress = (uint8_t)PinCfgStr_u32GetNumber(psPrms->sTempStrPt.pcStrStart);
+        
+        // Parameter 4: Command byte 1 (register or first command byte)
+        psPrms->u16Index++;
+        if (!PinCfgStr_bParseNextParam(psPrms, '/'))
+        {
+            psPrms->pcOutStringLast += snprintf(
+                (char *)(psPrms->psParsePrms->pcOutString + psPrms->pcOutStringLast),
+                szGetSize(psPrms->psParsePrms->u16OutStrMaxLen, psPrms->pcOutStringLast),
+                _s[FSDSS_E], _s[EL_E], psPrms->u16LinesProcessed, _s[MS_E], _s[IVLD_E], " command byte\n");
+            psPrms->szNumberOfWarnings++;
+            return PINCFG_OK_E;
+        }
+        au8CommandBytes[0] = (uint8_t)PinCfgStr_u32GetNumber(psPrms->sTempStrPt.pcStrStart);
+        u8CommandLength = 1;
+        
+        // Parameter 5: Data size (1-6 bytes)
+        psPrms->u16Index++;
+        if (!PinCfgStr_bParseNextParam(psPrms, '/'))
+        {
+            psPrms->pcOutStringLast += snprintf(
+                (char *)(psPrms->psParsePrms->pcOutString + psPrms->pcOutStringLast),
+                szGetSize(psPrms->psParsePrms->u16OutStrMaxLen, psPrms->pcOutStringLast),
+                _s[FSDSS_E], _s[EL_E], psPrms->u16LinesProcessed, _s[MS_E], _s[IVLD_E], " data size\n");
+            psPrms->szNumberOfWarnings++;
+            return PINCFG_OK_E;
+        }
+        uint8_t u8DataSize = (uint8_t)PinCfgStr_u32GetNumber(psPrms->sTempStrPt.pcStrStart);
+        
+        // Validate data size (1-6 bytes)
+        if (u8DataSize < 1 || u8DataSize > 6)
+        {
+            psPrms->pcOutStringLast += snprintf(
+                (char *)(psPrms->psParsePrms->pcOutString + psPrms->pcOutStringLast),
+                szGetSize(psPrms->psParsePrms->u16OutStrMaxLen, psPrms->pcOutStringLast),
+                _s[FSDSS_E], _s[EL_E], psPrms->u16LinesProcessed, _s[MS_E], _s[IVLD_E], " data size (1-6)\n");
+            psPrms->szNumberOfWarnings++;
+            return PINCFG_OK_E;
+        }
+        
+        // Check for optional command bytes (parameter 6 and 7)
+        // Try to parse parameter 6 (command byte 2)
+        psPrms->u16Index++;
+        if (PinCfgStr_bParseNextParam(psPrms, '/'))
+        {
+            // Parameter 6 exists - command mode
+            au8CommandBytes[1] = (uint8_t)PinCfgStr_u32GetNumber(psPrms->sTempStrPt.pcStrStart);
+            u8CommandLength = 2;
+            
+            // Try to parse parameter 7 (command byte 3)
+            psPrms->u16Index++;
+            if (PinCfgStr_bParseNextParam(psPrms, '/'))
+            {
+                au8CommandBytes[2] = (uint8_t)PinCfgStr_u32GetNumber(psPrms->sTempStrPt.pcStrStart);
+                u8CommandLength = 3;
+            }
+            
+            // Determine conversion delay based on command pattern
+            // AHT10: 0xAC trigger → 80ms delay
+            // BME280: 0xF4 forced mode → 10ms delay
+            if (au8CommandBytes[0] == 0xAC)
+            {
+                u16ConversionDelayMs = 80;  // AHT10
+            }
+            else if (au8CommandBytes[0] == 0xF4)
+            {
+                u16ConversionDelayMs = 10;  // BME280
+            }
+            else
+            {
+                u16ConversionDelayMs = 0;   // Unknown, no delay
+            }
+        }
+        // else: Simple mode (5 params), u8CommandLength=1, u16ConversionDelayMs=0
+        
+        // Allocate I2C measurement structure
+        I2CMEASURE_T *psMeasurement = (I2CMEASURE_T *)Memory_vpAlloc(sizeof(I2CMEASURE_T));
+        if (psMeasurement == NULL)
+        {
+            Memory_eReset();
+            psPrms->pcOutStringLast += snprintf(
+                (char *)(psPrms->psParsePrms->pcOutString + psPrms->pcOutStringLast),
+                szGetSize(psPrms->psParsePrms->u16OutStrMaxLen, psPrms->pcOutStringLast),
+                _s[FSDSS_E], _s[EL_E], psPrms->u16LinesProcessed, _s[MS_E], _s[OOM_E], " (I2C)\n");
+            return PINCFG_OUTOFMEMORY_ERROR_E;
+        }
+        
+        // Initialize I2C measurement
+        if (I2CMeasure_eInit(psMeasurement, eType, pcName, u8DeviceAddress, 
+                             au8CommandBytes, u8CommandLength, u8DataSize, 
+                             u16ConversionDelayMs) != PINCFG_RESULT_OK_E)
+        {
+            psPrms->pcOutStringLast += snprintf(
+                (char *)(psPrms->psParsePrms->pcOutString + psPrms->pcOutStringLast),
+                szGetSize(psPrms->psParsePrms->u16OutStrMaxLen, psPrms->pcOutStringLast),
+                _s[FSDSS_E], _s[EL_E], psPrms->u16LinesProcessed, _s[MS_E], _s[INITF_E], " (I2C)\n");
+            psPrms->szNumberOfWarnings++;
+            return PINCFG_OK_E;
+        }
+        
+        psGenericMeasurement = &(psMeasurement->sInterface);
+        break;
+    }
+#endif // FEATURE_I2C_MEASUREMENT
+    
     case MEASUREMENT_TYPE_ANALOG_E:
     case MEASUREMENT_TYPE_DIGITAL_E:
+#ifndef FEATURE_I2C_MEASUREMENT
     case MEASUREMENT_TYPE_I2C_E:
+#endif
     case MEASUREMENT_TYPE_CALCULATED_E:
     default:
         psPrms->pcOutStringLast += snprintf(
@@ -1204,14 +1338,14 @@ static inline PINCFG_RESULT_T PinCfgCsv_ParseMeasurementSource(PINCFG_PARSE_SUBF
 }
 
 // Phase 2: Parse Sensor Reporter (SR)
-// Format: SR,<name>,<measurementName>,<enableable>,<cumulative>,<samplingMs>,<reportSec>,<offset>/
-// Example: SR,sensor1,temp0,0,0,1000,300,0.0/
+// Format: SR,<name>,<measurementName>,<vType>,<sType>,<enableable>,<cumulative>,<samplingMs>,<reportSec>,<offset>,<byteOffset>,<byteCount>/
+// Example: SR,sensor1,temp0,6,6,0,0,1000,300,0.0/
 static inline PINCFG_RESULT_T PinCfgCsv_ParseSensorReporter(PINCFG_PARSE_SUBFN_PARAMS_T *psPrms)
 {
-    // SR,<name>,<measurement>,<enableable>,<cumulative>,<sampMs>,<reportSec>,<offset>
-    // Min: SR,name,meas,0,0,1000,300 = 7 items (offset optional)
-    // Max: SR,name,meas,0,0,1000,300,0.0 = 8 items
-    if (psPrms->u8LineItemsLen < 7 || psPrms->u8LineItemsLen > 8)
+    // SR,<name>,<measurement>,<vType>,<sType>,<enableable>,<cumulative>,<sampMs>,<reportSec>,<offset>,<byteOffset>,<byteCount>
+    // Min: SR,name,meas,6,6,0,0,1000,300 = 9 items (offset, byte offset/count optional)
+    // Max: SR,name,meas,6,6,0,0,1000,300,0.0,0,0 = 12 items
+    if (psPrms->u8LineItemsLen < 9 || psPrms->u8LineItemsLen > 12)
     {
         psPrms->pcOutStringLast += snprintf(
             (char *)(psPrms->psParsePrms->pcOutString + psPrms->pcOutStringLast),
@@ -1249,10 +1383,38 @@ static inline PINCFG_RESULT_T PinCfgCsv_ParseSensorReporter(PINCFG_PARSE_SUBFN_P
         return PINCFG_OK_E;
     }
 
-    // Get enableable (index 3)
-    uint8_t u8Enableable = 0U;
+    // Get V_TYPE (MySensors variable type, index 3)
+    uint8_t u8VType = 0U;
     psPrms->sTempStrPt = psPrms->sLine;
     PinCfgStr_vGetSplitElemByIndex(&(psPrms->sTempStrPt), PINCFG_VALUE_SEPARATOR_D, 3);
+    if (PinCfgStr_eAtoU8(&(psPrms->sTempStrPt), &u8VType) != PINCFG_STR_OK_E)
+    {
+        psPrms->pcOutStringLast += snprintf(
+            (char *)(psPrms->psParsePrms->pcOutString + psPrms->pcOutStringLast),
+            szGetSize(psPrms->psParsePrms->u16OutStrMaxLen, psPrms->pcOutStringLast),
+            _s[FSDSS_E], _s[EL_E], psPrms->u16LinesProcessed, _s[SR_E], _s[IVLD_E], " V_TYPE\n");
+        psPrms->szNumberOfWarnings++;
+        return PINCFG_OK_E;
+    }
+
+    // Get S_TYPE (MySensors sensor type, index 4)
+    uint8_t u8SType = 0U;
+    psPrms->sTempStrPt = psPrms->sLine;
+    PinCfgStr_vGetSplitElemByIndex(&(psPrms->sTempStrPt), PINCFG_VALUE_SEPARATOR_D, 4);
+    if (PinCfgStr_eAtoU8(&(psPrms->sTempStrPt), &u8SType) != PINCFG_STR_OK_E)
+    {
+        psPrms->pcOutStringLast += snprintf(
+            (char *)(psPrms->psParsePrms->pcOutString + psPrms->pcOutStringLast),
+            szGetSize(psPrms->psParsePrms->u16OutStrMaxLen, psPrms->pcOutStringLast),
+            _s[FSDSS_E], _s[EL_E], psPrms->u16LinesProcessed, _s[SR_E], _s[IVLD_E], " S_TYPE\n");
+        psPrms->szNumberOfWarnings++;
+        return PINCFG_OK_E;
+    }
+
+    // Get enableable (index 5)
+    uint8_t u8Enableable = 0U;
+    psPrms->sTempStrPt = psPrms->sLine;
+    PinCfgStr_vGetSplitElemByIndex(&(psPrms->sTempStrPt), PINCFG_VALUE_SEPARATOR_D, 5);
     if (PinCfgStr_eAtoU8(&(psPrms->sTempStrPt), &u8Enableable) != PINCFG_STR_OK_E || u8Enableable > 1U)
     {
         psPrms->pcOutStringLast += snprintf(
@@ -1263,10 +1425,10 @@ static inline PINCFG_RESULT_T PinCfgCsv_ParseSensorReporter(PINCFG_PARSE_SUBFN_P
         return PINCFG_OK_E;
     }
 
-    // Get cumulative (index 4)
+    // Get cumulative (index 6)
     uint8_t u8Cumulative = 0U;
     psPrms->sTempStrPt = psPrms->sLine;
-    PinCfgStr_vGetSplitElemByIndex(&(psPrms->sTempStrPt), PINCFG_VALUE_SEPARATOR_D, 4);
+    PinCfgStr_vGetSplitElemByIndex(&(psPrms->sTempStrPt), PINCFG_VALUE_SEPARATOR_D, 6);
     if (PinCfgStr_eAtoU8(&(psPrms->sTempStrPt), &u8Cumulative) != PINCFG_STR_OK_E || u8Cumulative > 1U)
     {
         psPrms->pcOutStringLast += snprintf(
@@ -1277,11 +1439,11 @@ static inline PINCFG_RESULT_T PinCfgCsv_ParseSensorReporter(PINCFG_PARSE_SUBFN_P
         return PINCFG_OK_E;
     }
 
-    // Get sampling interval (index 5)
+    // Get sampling interval (index 7)
     uint16_t u16SamplingIntervalMs = PINCFG_CPUTEMP_SAMPLING_INTV_MS_D;
     uint32_t u32Temp = 0;
     psPrms->sTempStrPt = psPrms->sLine;
-    PinCfgStr_vGetSplitElemByIndex(&(psPrms->sTempStrPt), PINCFG_VALUE_SEPARATOR_D, 5);
+    PinCfgStr_vGetSplitElemByIndex(&(psPrms->sTempStrPt), PINCFG_VALUE_SEPARATOR_D, 7);
     if (PinCfgStr_eAtoU32(&(psPrms->sTempStrPt), &u32Temp) != PINCFG_STR_OK_E ||
         u32Temp < PINCFG_CPUTEMP_SAMPLING_INTV_MIN_MS_D ||
         u32Temp > PINCFG_CPUTEMP_SAMPLING_INTV_MAX_MS_D)
@@ -1295,11 +1457,11 @@ static inline PINCFG_RESULT_T PinCfgCsv_ParseSensorReporter(PINCFG_PARSE_SUBFN_P
     }
     u16SamplingIntervalMs = (uint16_t)u32Temp;
 
-    // Get report interval in SECONDS (index 6)
+    // Get report interval in SECONDS (index 8)
     uint16_t u16ReportIntervalSec = PINCFG_CPUTEMP_REPORTING_INTV_SEC_D;
     u32Temp = 0;
     psPrms->sTempStrPt = psPrms->sLine;
-    PinCfgStr_vGetSplitElemByIndex(&(psPrms->sTempStrPt), PINCFG_VALUE_SEPARATOR_D, 6);
+    PinCfgStr_vGetSplitElemByIndex(&(psPrms->sTempStrPt), PINCFG_VALUE_SEPARATOR_D, 8);
     if (PinCfgStr_eAtoU32(&(psPrms->sTempStrPt), &u32Temp) != PINCFG_STR_OK_E ||
         u32Temp < PINCFG_CPUTEMP_REPORTING_INTV_MIN_SEC_D ||
         u32Temp > PINCFG_CPUTEMP_REPORTING_INTV_MAX_SEC_D)
@@ -1313,18 +1475,52 @@ static inline PINCFG_RESULT_T PinCfgCsv_ParseSensorReporter(PINCFG_PARSE_SUBFN_P
     }
     u16ReportIntervalSec = (uint16_t)u32Temp;
 
-    // Get offset (index 7, optional)
+    // Get offset (index 9, optional)
     float fOffset = PINCFG_CPUTEMP_OFFSET_D;
-    if (psPrms->u8LineItemsLen >= 8)
+    if (psPrms->u8LineItemsLen >= 10)
     {
         psPrms->sTempStrPt = psPrms->sLine;
-        PinCfgStr_vGetSplitElemByIndex(&(psPrms->sTempStrPt), PINCFG_VALUE_SEPARATOR_D, 7);
+        PinCfgStr_vGetSplitElemByIndex(&(psPrms->sTempStrPt), PINCFG_VALUE_SEPARATOR_D, 9);
         if (PinCfgStr_eAtoFloat(&(psPrms->sTempStrPt), &fOffset) != PINCFG_STR_OK_E)
         {
             psPrms->pcOutStringLast += snprintf(
                 (char *)(psPrms->psParsePrms->pcOutString + psPrms->pcOutStringLast),
                 szGetSize(psPrms->psParsePrms->u16OutStrMaxLen, psPrms->pcOutStringLast),
                 _s[FSDSS_E], _s[EL_E], psPrms->u16LinesProcessed, _s[SR_E], _s[IVLD_E], _s[OFFSET_E]);
+            psPrms->szNumberOfWarnings++;
+            return PINCFG_OK_E;
+        }
+    }
+
+    // Get byte offset (index 10, optional, for multi-value sensors)
+    uint8_t u8ByteOffset = 0U;
+    if (psPrms->u8LineItemsLen >= 11)
+    {
+        psPrms->sTempStrPt = psPrms->sLine;
+        PinCfgStr_vGetSplitElemByIndex(&(psPrms->sTempStrPt), PINCFG_VALUE_SEPARATOR_D, 10);
+        if (PinCfgStr_eAtoU8(&(psPrms->sTempStrPt), &u8ByteOffset) != PINCFG_STR_OK_E || u8ByteOffset > 5U)
+        {
+            psPrms->pcOutStringLast += snprintf(
+                (char *)(psPrms->psParsePrms->pcOutString + psPrms->pcOutStringLast),
+                szGetSize(psPrms->psParsePrms->u16OutStrMaxLen, psPrms->pcOutStringLast),
+                _s[FSDSS_E], _s[EL_E], psPrms->u16LinesProcessed, _s[SR_E], _s[IVLD_E], " byte offset (0-5)\n");
+            psPrms->szNumberOfWarnings++;
+            return PINCFG_OK_E;
+        }
+    }
+
+    // Get byte count (index 11, optional, for multi-value sensors)
+    uint8_t u8ByteCount = 0U;  // 0 means use all bytes from offset
+    if (psPrms->u8LineItemsLen >= 12)
+    {
+        psPrms->sTempStrPt = psPrms->sLine;
+        PinCfgStr_vGetSplitElemByIndex(&(psPrms->sTempStrPt), PINCFG_VALUE_SEPARATOR_D, 11);
+        if (PinCfgStr_eAtoU8(&(psPrms->sTempStrPt), &u8ByteCount) != PINCFG_STR_OK_E || u8ByteCount > 6U)
+        {
+            psPrms->pcOutStringLast += snprintf(
+                (char *)(psPrms->psParsePrms->pcOutString + psPrms->pcOutStringLast),
+                szGetSize(psPrms->psParsePrms->u16OutStrMaxLen, psPrms->pcOutStringLast),
+                _s[FSDSS_E], _s[EL_E], psPrms->u16LinesProcessed, _s[SR_E], _s[IVLD_E], " byte count (0-6)\n");
             psPrms->szNumberOfWarnings++;
             return PINCFG_OK_E;
         }
@@ -1370,8 +1566,8 @@ static inline PINCFG_RESULT_T PinCfgCsv_ParseSensorReporter(PINCFG_PARSE_SUBFN_P
             (bool)u8Cumulative,
             (bool)u8Enableable,
             &sSensorName,
-            V_TEMP,
-            S_TEMP,
+            (mysensors_data_t)u8VType,
+            (mysensors_sensor_t)u8SType,
             InPin_vRcvMessage,
             psMeasurement,  // Link to measurement
             u16SamplingIntervalMs,
@@ -1384,6 +1580,10 @@ static inline PINCFG_RESULT_T PinCfgCsv_ParseSensorReporter(PINCFG_PARSE_SUBFN_P
             _s[FSDSS_E], _s[EL_E], psPrms->u16LinesProcessed, _s[SR_E], _s[INITF_E], _s[NL_E]);
         psPrms->szNumberOfWarnings++;
     }
+
+    // Set byte extraction parameters for multi-value sensors (e.g., AHT10 temp+humidity)
+    psSensorHandle->u8DataByteOffset = u8ByteOffset;
+    psSensorHandle->u8DataByteCount = u8ByteCount;
 
     return PINCFG_OK_E;
 }

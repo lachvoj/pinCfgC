@@ -1,6 +1,16 @@
 #ifndef GLOBALS_H
 #define GLOBALS_H
 
+// ============================================================================
+// Compile-Time Feature Flags
+// ============================================================================
+
+// Uncomment to enable I2C measurement support (Phase 3)
+// Adds ~600-800 bytes to binary when enabled
+// #define FEATURE_I2C_MEASUREMENT
+
+// ============================================================================
+
 #include "ILoopable.h"
 #include "ISensorMeasure.h"
 #include "PinSubscriberIf.h"

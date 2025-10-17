@@ -4,6 +4,53 @@
 
 static void Sensor_vLoop(LOOPABLE_T *psLoopableHandle, uint32_t u32ms);
 
+/**
+ * @brief Extract specific bytes from raw buffer and convert to float
+ * 
+ * @param pu8Buffer Raw byte buffer
+ * @param u8TotalSize Total size of buffer
+ * @param u8Offset Starting byte offset
+ * @param u8Count Number of bytes to extract (0 = use all from offset)
+ * @return Extracted value as float (big-endian)
+ */
+static float Sensor_fExtractBytes(
+    const uint8_t *pu8Buffer,
+    uint8_t u8TotalSize,
+    uint8_t u8Offset,
+    uint8_t u8Count)
+{
+    int32_t i32Value = 0;
+    uint8_t u8ExtractSize = u8Count;
+    
+    // If count is 0, use all bytes from offset
+    if (u8ExtractSize == 0 || (u8Offset + u8ExtractSize) > u8TotalSize)
+    {
+        u8ExtractSize = u8TotalSize - u8Offset;
+    }
+    
+    // Combine bytes (big-endian: MSB first)
+    for (uint8_t i = 0; i < u8ExtractSize; i++)
+    {
+        i32Value = (i32Value << 8) | pu8Buffer[u8Offset + i];
+    }
+    
+    // Sign-extend for signed values (if MSB is set)
+    if (u8ExtractSize == 1 && (i32Value & 0x80))
+    {
+        i32Value |= 0xFFFFFF00;
+    }
+    else if (u8ExtractSize == 2 && (i32Value & 0x8000))
+    {
+        i32Value |= 0xFFFF0000;
+    }
+    else if (u8ExtractSize == 3 && (i32Value & 0x800000))
+    {
+        i32Value |= 0xFF000000;
+    }
+    
+    return (float)i32Value;
+}
+
 SENSOR_RESULT_T Sensor_eInit(
     SENSOR_T *psHandle,
     PINCFG_RESULT_T (*eAddToLoopables)(LOOPABLE_T *psLoopable),
@@ -43,6 +90,10 @@ SENSOR_RESULT_T Sensor_eInit(
     psHandle->u32LastReportMs = 0U;
     psHandle->u32LastSamplingMs = 0U;
     psHandle->fOffset = fOffset;
+    
+    // Initialize byte extraction (defaults: use all bytes)
+    psHandle->u8DataByteOffset = 0;
+    psHandle->u8DataByteCount = 0;  // 0 = use all bytes
 
     // Initialize mode flags
     psHandle->u8Flags = 0U;
@@ -139,11 +190,51 @@ static void Sensor_vLoop(LOOPABLE_T *psLoopableHandle, uint32_t u32ms)
             
             // Take a sample
             float fValue = 0.0f;
-            if (psHandle->psSensorMeasure->eMeasure(psHandle->psSensorMeasure, &fValue, psHandle->fOffset, u32ms) == SENSOR_OK_E)
+            ISENSORMEASURE_RESULT_T eResult;
+            
+            // Check if we need byte extraction (eMeasureRaw available and offset/count specified)
+            if (psHandle->psSensorMeasure->eMeasureRaw != NULL && 
+                (psHandle->u8DataByteOffset != 0 || psHandle->u8DataByteCount != 0))
+            {
+                // Use raw byte extraction
+                uint8_t au8Buffer[6];
+                uint8_t u8Size = sizeof(au8Buffer);
+                
+                eResult = psHandle->psSensorMeasure->eMeasureRaw(
+                    psHandle->psSensorMeasure, au8Buffer, &u8Size, u32ms);
+                
+                if (eResult == ISENSORMEASURE_OK_E)
+                {
+                    // Extract specific bytes
+                    fValue = Sensor_fExtractBytes(
+                        au8Buffer,
+                        u8Size,
+                        psHandle->u8DataByteOffset,
+                        psHandle->u8DataByteCount);
+                    
+                    // Apply offset (scaling factor)
+                    fValue = fValue * psHandle->fOffset;
+                }
+            }
+            else
+            {
+                // Use standard float measurement
+                eResult = psHandle->psSensorMeasure->eMeasure(
+                    psHandle->psSensorMeasure, &fValue, psHandle->fOffset, u32ms);
+            }
+            
+            // Handle non-blocking measurements
+            if (eResult == ISENSORMEASURE_PENDING_E)
+            {
+                return; // Operation in progress, try again next loop
+            }
+            
+            if (eResult == ISENSORMEASURE_OK_E)
             {
                 psHandle->fCumulatedValue += fValue;
                 psHandle->u32SamplesCount++;
             }
+            // Note: On error, skip this sample (no increment)
         }
         
         // Check report interval (convert seconds to milliseconds)
@@ -171,10 +262,50 @@ static void Sensor_vLoop(LOOPABLE_T *psLoopableHandle, uint32_t u32ms)
             psHandle->u32LastReportMs = u32ms;
             
             float fValue = 0.0f;
-            if (psHandle->psSensorMeasure->eMeasure(psHandle->psSensorMeasure, &fValue, psHandle->fOffset, u32ms) == SENSOR_OK_E)
+            ISENSORMEASURE_RESULT_T eResult;
+            
+            // Check if we need byte extraction (eMeasureRaw available and offset/count specified)
+            if (psHandle->psSensorMeasure->eMeasureRaw != NULL && 
+                (psHandle->u8DataByteOffset != 0 || psHandle->u8DataByteCount != 0))
+            {
+                // Use raw byte extraction
+                uint8_t au8Buffer[6];
+                uint8_t u8Size = sizeof(au8Buffer);
+                
+                eResult = psHandle->psSensorMeasure->eMeasureRaw(
+                    psHandle->psSensorMeasure, au8Buffer, &u8Size, u32ms);
+                
+                if (eResult == ISENSORMEASURE_OK_E)
+                {
+                    // Extract specific bytes
+                    fValue = Sensor_fExtractBytes(
+                        au8Buffer,
+                        u8Size,
+                        psHandle->u8DataByteOffset,
+                        psHandle->u8DataByteCount);
+                    
+                    // Apply offset (scaling factor)
+                    fValue = fValue * psHandle->fOffset;
+                }
+            }
+            else
+            {
+                // Use standard float measurement
+                eResult = psHandle->psSensorMeasure->eMeasure(
+                    psHandle->psSensorMeasure, &fValue, psHandle->fOffset, u32ms);
+            }
+            
+            // Handle non-blocking measurements
+            if (eResult == ISENSORMEASURE_PENDING_E)
+            {
+                return; // Operation in progress, try again next loop
+            }
+            
+            if (eResult == ISENSORMEASURE_OK_E)
             {
                 Presentable_vSetState((PRESENTABLE_T *)psHandle, (uint8_t)fValue, true);
             }
+            // Note: On error, skip this reading (no state update)
         }
     }
 }

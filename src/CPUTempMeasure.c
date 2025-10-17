@@ -19,6 +19,7 @@ CPUTEMPMEASURE_RESULT_T CPUTempMeasure_eInit(
     // Initialize ISensorMeasure interface
     psHandle->sSensorMeasure.eType = eType;  // Set type in interface
     psHandle->sSensorMeasure.eMeasure = CPUTempMeasure_eMeasure;
+    psHandle->sSensorMeasure.eMeasureRaw = NULL;  // CPU temp doesn't support raw byte access
     
     // Store name for lookup
     psHandle->pcName = pcName;

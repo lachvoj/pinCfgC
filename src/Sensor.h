@@ -41,6 +41,10 @@ typedef struct SENSOR_S
     // Calibration
     float fOffset;
     
+    // Data extraction (for multi-value I2C sensors)
+    uint8_t u8DataByteOffset;           // Starting byte index in raw measurement buffer (0-5)
+    uint8_t u8DataByteCount;            // Number of bytes to extract (1-6, 0=use all)
+    
     // Feature flags (use SENSOR_FLAG_* masks to access)
     uint8_t u8Flags;
     
