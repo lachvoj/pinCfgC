@@ -1091,13 +1091,12 @@ static inline PINCFG_RESULT_T PinCfgCsv_ParseCPUTemperatureSensor(PINCFG_PARSE_S
         }
     }
 
-    SENSOR_MODE_T eMode = SENSOR_MODE_STANDARD_E;
+    uint8_t u8Cumulative = 0U;
     if (psPrms->u8LineItemsLen >= 4)
     {
         psPrms->sTempStrPt = psPrms->sLine;
         PinCfgStr_vGetSplitElemByIndex(&(psPrms->sTempStrPt), PINCFG_VALUE_SEPARATOR_D, 3);
-        if (PinCfgStr_eAtoU8(&(psPrms->sTempStrPt), (uint8_t *)&eMode) != PINCFG_STR_OK_E ||
-            eMode > SENSOR_MODE_CUMULATIVE_E)
+        if (PinCfgStr_eAtoU8(&(psPrms->sTempStrPt), &u8Cumulative) != PINCFG_STR_OK_E || u8Cumulative > 1U)
         {
             psPrms->pcOutStringLast += snprintf(
                 (char *)(psPrms->psParsePrms->pcOutString + psPrms->pcOutStringLast),
@@ -1114,14 +1113,15 @@ static inline PINCFG_RESULT_T PinCfgCsv_ParseCPUTemperatureSensor(PINCFG_PARSE_S
         }
     }
 
-    uint32_t u32SamplingInterval = PINCFG_CPUTEMP_SAMPLING_INTV_MS_D;
+    uint16_t u16SamplingIntervalMs = PINCFG_CPUTEMP_SAMPLING_INTV_MS_D;
     if (psPrms->u8LineItemsLen >= 5)
     {
+        uint32_t u32Temp = 0;
         psPrms->sTempStrPt = psPrms->sLine;
         PinCfgStr_vGetSplitElemByIndex(&(psPrms->sTempStrPt), PINCFG_VALUE_SEPARATOR_D, 4);
-        if (PinCfgStr_eAtoU32(&(psPrms->sTempStrPt), &u32SamplingInterval) != PINCFG_STR_OK_E ||
-            u32SamplingInterval < PINCFG_CPUTEMP_SAMPLING_INTV_MIN_MS_D ||
-            u32SamplingInterval > PINCFG_CPUTEMP_SAMPLING_INTV_MAX_MS_D)
+        if (PinCfgStr_eAtoU32(&(psPrms->sTempStrPt), &u32Temp) != PINCFG_STR_OK_E ||
+            u32Temp < PINCFG_CPUTEMP_SAMPLING_INTV_MIN_MS_D ||
+            u32Temp > PINCFG_CPUTEMP_SAMPLING_INTV_MAX_MS_D)
         {
             psPrms->pcOutStringLast += snprintf(
                 (char *)(psPrms->psParsePrms->pcOutString + psPrms->pcOutStringLast),
@@ -1136,14 +1136,18 @@ static inline PINCFG_RESULT_T PinCfgCsv_ParseCPUTemperatureSensor(PINCFG_PARSE_S
 
             return PINCFG_OK_E;
         }
+        u16SamplingIntervalMs = (uint16_t)u32Temp;
     }
 
-    uint32_t u32ReportInterval = PINCFG_CPUTEMP_REPORTING_INTV_MS_D;
+    uint16_t u16ReportIntervalSec = PINCFG_CPUTEMP_REPORTING_INTV_SEC_D;
     if (psPrms->u8LineItemsLen >= 6)
     {
+        uint32_t u32Temp = 0;
         psPrms->sTempStrPt = psPrms->sLine;
         PinCfgStr_vGetSplitElemByIndex(&(psPrms->sTempStrPt), PINCFG_VALUE_SEPARATOR_D, 5);
-        if (PinCfgStr_eAtoU32(&(psPrms->sTempStrPt), &u32ReportInterval) != PINCFG_STR_OK_E)
+        if (PinCfgStr_eAtoU32(&(psPrms->sTempStrPt), &u32Temp) != PINCFG_STR_OK_E ||
+            u32Temp < PINCFG_CPUTEMP_REPORTING_INTV_MIN_SEC_D ||
+            u32Temp > PINCFG_CPUTEMP_REPORTING_INTV_MAX_SEC_D)
         {
             psPrms->pcOutStringLast += snprintf(
                 (char *)(psPrms->psParsePrms->pcOutString + psPrms->pcOutStringLast),
@@ -1158,6 +1162,7 @@ static inline PINCFG_RESULT_T PinCfgCsv_ParseCPUTemperatureSensor(PINCFG_PARSE_S
 
             return PINCFG_OK_E;
         }
+        u16ReportIntervalSec = (uint16_t)u32Temp;
     }
 
     float fOffset = PINCFG_CPUTEMP_OFFSET_D;
@@ -1185,11 +1190,11 @@ static inline PINCFG_RESULT_T PinCfgCsv_ParseCPUTemperatureSensor(PINCFG_PARSE_S
     psPrms->sTempStrPt = psPrms->sLine;
     PinCfgStr_vGetSplitElemByIndex(&(psPrms->sTempStrPt), PINCFG_VALUE_SEPARATOR_D, 1);
 
-    size_t szSensorSize = Sensor_szGetTypeSize(eMode, u8Enableable);
+    // Sensor now has fixed size - much simpler!
     if (psPrms->psParsePrms->pszMemoryRequired != NULL)
     {
         *(psPrms->psParsePrms->pszMemoryRequired) +=
-            Memory_szGetAllocatedSize(szSensorSize) +
+            Memory_szGetAllocatedSize(sizeof(SENSOR_T)) +
             Memory_szGetAllocatedSize(psPrms->sTempStrPt.szLen + 1) +
             Memory_szGetAllocatedSize(sizeof(CPUTEMP_T));
 
@@ -1204,7 +1209,7 @@ static inline PINCFG_RESULT_T PinCfgCsv_ParseCPUTemperatureSensor(PINCFG_PARSE_S
     if (psPrms->psParsePrms->bValidate)
         return PINCFG_OK_E;
 
-    CPUTEMP_T *psTempHnd = (CPUTEMP_T *)Memory_vpAlloc(szSensorSize);
+    CPUTEMP_T *psTempHnd = (CPUTEMP_T *)Memory_vpAlloc(sizeof(CPUTEMP_T));
     if (psTempHnd == NULL)
     {
         Memory_eReset();
@@ -1225,11 +1230,11 @@ static inline PINCFG_RESULT_T PinCfgCsv_ParseCPUTemperatureSensor(PINCFG_PARSE_S
              psPrms->psParsePrms->eAddToLoopables,
              psPrms->psParsePrms->eAddToPresentables,
              &psPrms->u8PresentablesCount,
-             eMode,
-             u8Enableable,
+             (bool)u8Cumulative,
+             (bool)u8Enableable,
              &(psPrms->sTempStrPt),
-             u32SamplingInterval,
-             u32ReportInterval,
+             u16SamplingIntervalMs,
+             u16ReportIntervalSec,
              fOffset) != SENSOR_OK_E)
     {
         psPrms->pcOutStringLast += snprintf(

@@ -12,19 +12,18 @@ CPUTEMP_RESULT_T CPUTemp_eInit(
     PINCFG_RESULT_T (*eAddToLoopables)(LOOPABLE_T *psLoopable),
     PINCFG_RESULT_T (*eAddToPresentables)(PRESENTABLE_T *psPresentable),
     uint8_t *pu8PresentablesCount,
-    SENSOR_MODE_T eMode,
-    uint8_t u8Enableable,
+    bool bCumulative,
+    bool bEnableable,
     STRING_POINT_T *sName,
-    uint32_t u32SamplingInterval,
-    uint32_t u32ReportInterval,
+    uint16_t u16SamplingIntervalMs,
+    uint16_t u16ReportIntervalSec,
     float fOffset)
 {
     if (psHandle == NULL || sName == NULL)
         return CPUTEMP_NULLPTR_ERROR_E;
 
-    // Allocate memory for the sensor handle
-    size_t szSensorSize = Sensor_szGetTypeSize(eMode, u8Enableable);
-    SENSOR_T *psSensorHandle = (SENSOR_T *)Memory_vpAlloc(szSensorSize);
+    // Allocate memory for the sensor handle (now fixed size)
+    SENSOR_T *psSensorHandle = (SENSOR_T *)Memory_vpAlloc(sizeof(SENSOR_T));
     if (psSensorHandle == NULL)
         return CPUTEMP_MEMORY_ALLOCATION_ERROR_E;
 
@@ -34,15 +33,15 @@ CPUTEMP_RESULT_T CPUTemp_eInit(
             eAddToLoopables,
             eAddToPresentables,
             pu8PresentablesCount,
-            eMode,
-            u8Enableable,
+            bCumulative,
+            bEnableable,
             sName,
             V_TEMP,
             S_TEMP,
             InPin_vRcvMessage,
             &(psHandle->sSensorMeasure),
-            u32SamplingInterval,
-            u32ReportInterval,
+            u16SamplingIntervalMs,
+            u16ReportIntervalSec,
             fOffset) != SENSOR_OK_E)
     {
         return CPUTEMP_SUBINIT_ERROR_E;

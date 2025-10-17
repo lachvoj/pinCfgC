@@ -61,16 +61,18 @@
 #define PINCFG_VALUE_SEPARATOR_D ','
 #endif
 
+// Sampling interval in milliseconds (needs ms precision)
 #define PINCFG_CPUTEMP_SAMPLING_INTV_MIN_MS_D 100
 #define PINCFG_CPUTEMP_SAMPLING_INTV_MAX_MS_D 5000
 #ifndef PINCFG_CPUTEMP_SAMPLING_INTV_MS_D
 #define PINCFG_CPUTEMP_SAMPLING_INTV_MS_D 1000 /* 1s */
 #endif
 
-#define PINCFG_CPUTEMP_REPORTING_INTV_MIN_MS_D 1000
-#define PINCFG_CPUTEMP_REPORTING_INTV_MAX_MS_D 3600000 /* 1 hour */
-#ifndef PINCFG_CPUTEMP_REPORTING_INTV_MS_D
-#define PINCFG_CPUTEMP_REPORTING_INTV_MS_D 300000 /* 5min */
+// Reporting interval in SECONDS (more intuitive, allows uint16_t optimization)
+#define PINCFG_CPUTEMP_REPORTING_INTV_MIN_SEC_D 1       /* 1 second */
+#define PINCFG_CPUTEMP_REPORTING_INTV_MAX_SEC_D 3600    /* 1 hour */
+#ifndef PINCFG_CPUTEMP_REPORTING_INTV_SEC_D
+#define PINCFG_CPUTEMP_REPORTING_INTV_SEC_D 300         /* 5 minutes */
 #endif
 
 #ifndef PINCFG_CPUTEMP_OFFSET_D

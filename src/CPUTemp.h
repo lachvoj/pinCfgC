@@ -28,11 +28,11 @@ CPUTEMP_RESULT_T CPUTemp_eInit(
     PINCFG_RESULT_T (*eAddToLoopables)(LOOPABLE_T *psLoopable),
     PINCFG_RESULT_T (*eAddToPresentables)(PRESENTABLE_T *psPresentable),
     uint8_t *u8PresentablesCount,
-    SENSOR_MODE_T eMode,
-    uint8_t u8Enableable,
+    bool bCumulative,
+    bool bEnableable,
     STRING_POINT_T *sName,
-    uint32_t u32SamplingInterval,
-    uint32_t u32ReportInterval,
+    uint16_t u16SamplingIntervalMs,
+    uint16_t u16ReportIntervalSec,
     float fOffset);
 
 #endif // CPUTEMP_H
