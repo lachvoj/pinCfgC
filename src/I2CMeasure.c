@@ -1,8 +1,14 @@
 #ifdef FEATURE_I2C_MEASUREMENT
 
 #include "I2CMeasure.h"
-#include <Wire.h>
+#include "WireWrapper.h"
 #include <string.h>
+
+#ifdef UNIT_TEST
+#include "ArduinoMock.h"
+#else
+#include <Arduino.h>
+#endif
 
 // Default timeout for I2C operations (milliseconds)
 #define I2CMEASURE_DEFAULT_TIMEOUT_MS 100
@@ -60,27 +66,27 @@ PINCFG_RESULT_T I2CMeasure_eInit(
     // Validate parameters
     if (psHandle == NULL)
     {
-        return PINCFG_RESULT_NULLPTR_ERROR_E;
+        return PINCFG_NULLPTR_ERROR_E;
     }
 
     if (eType != MEASUREMENT_TYPE_I2C_E)
     {
-        return PINCFG_RESULT_INVALID_PARAMETER_E;
+        return PINCFG_ERROR_E;
     }
 
     if (u8DataSize < 1 || u8DataSize > 6)
     {
-        return PINCFG_RESULT_INVALID_PARAMETER_E;
+        return PINCFG_ERROR_E;
     }
 
     if (u8CommandLength < 1 || u8CommandLength > 3)
     {
-        return PINCFG_RESULT_INVALID_PARAMETER_E;
+        return PINCFG_ERROR_E;
     }
 
     if (pu8CommandBytes == NULL)
     {
-        return PINCFG_RESULT_NULLPTR_ERROR_E;
+        return PINCFG_NULLPTR_ERROR_E;
     }
 
     // Initialize structure
@@ -112,12 +118,12 @@ PINCFG_RESULT_T I2CMeasure_eInit(
     psHandle->fLastValue = 0.0f;
 
     // Initialize Wire library (safe to call multiple times)
-    Wire.begin();
+    Wire_vBegin();
 
     // Note: pcName is not used (no logging in measurement layer)
     (void)pcName;
 
-    return PINCFG_RESULT_OK_E;
+    return PINCFG_OK_E;
 }
 
 /**
@@ -161,22 +167,22 @@ ISENSORMEASURE_RESULT_T I2CMeasure_eMeasureRaw(
         if (psHandle->u8CommandLength == 1)
         {
             // Simple mode
-            Wire.beginTransmission(psHandle->u8DeviceAddress);
-            Wire.write(psHandle->au8CommandBytes[0]);
-            Wire.endTransmission(false);
-            Wire.requestFrom(psHandle->u8DeviceAddress, psHandle->u8DataSize);
+            Wire_vBeginTransmission(psHandle->u8DeviceAddress);
+            Wire_u8Write(psHandle->au8CommandBytes[0]);
+            Wire_u8EndTransmission(false);
+            Wire_u8RequestFrom(psHandle->u8DeviceAddress, psHandle->u8DataSize);
             psHandle->u32RequestTime = millis();
             psHandle->eState = I2CMEASURE_STATE_REQUEST_SENT_E;
         }
         else
         {
             // Command mode
-            Wire.beginTransmission(psHandle->u8DeviceAddress);
+            Wire_vBeginTransmission(psHandle->u8DeviceAddress);
             for (uint8_t i = 0; i < psHandle->u8CommandLength; i++)
             {
-                Wire.write(psHandle->au8CommandBytes[i]);
+                Wire_u8Write(psHandle->au8CommandBytes[i]);
             }
-            Wire.endTransmission(true);
+            Wire_u8EndTransmission(true);
             psHandle->u32RequestTime = millis();
             psHandle->eState = I2CMEASURE_STATE_COMMAND_SENT_E;
         }
@@ -186,7 +192,7 @@ ISENSORMEASURE_RESULT_T I2CMeasure_eMeasureRaw(
         // Wait for conversion delay
         if ((millis() - psHandle->u32RequestTime) >= psHandle->u16ConversionDelayMs)
         {
-            Wire.requestFrom(psHandle->u8DeviceAddress, psHandle->u8DataSize);
+            Wire_u8RequestFrom(psHandle->u8DeviceAddress, psHandle->u8DataSize);
             psHandle->u32RequestTime = millis();
             psHandle->eState = I2CMEASURE_STATE_REQUEST_SENT_E;
         }
@@ -195,12 +201,12 @@ ISENSORMEASURE_RESULT_T I2CMeasure_eMeasureRaw(
     case I2CMEASURE_STATE_REQUEST_SENT_E:
     case I2CMEASURE_STATE_READING_E:
         // Check if data available
-        if (Wire.available() >= psHandle->u8DataSize)
+        if (Wire_u8Available() >= psHandle->u8DataSize)
         {
             // Read all bytes
             for (uint8_t i = 0; i < psHandle->u8DataSize; i++)
             {
-                psHandle->au8Buffer[i] = Wire.read();
+                psHandle->au8Buffer[i] = Wire_u8Read();
             }
             psHandle->eState = I2CMEASURE_STATE_DATA_READY_E;
             return ISENSORMEASURE_PENDING_E;
@@ -275,12 +281,12 @@ ISENSORMEASURE_RESULT_T I2CMeasure_eMeasure(
         if (psHandle->u8CommandLength == 1)
         {
             // Simple mode: Write register address, then read
-            Wire.beginTransmission(psHandle->u8DeviceAddress);
-            Wire.write(psHandle->au8CommandBytes[0]);  // Register address
-            Wire.endTransmission(false); // Keep bus active (repeated start)
+            Wire_vBeginTransmission(psHandle->u8DeviceAddress);
+            Wire_u8Write(psHandle->au8CommandBytes[0]);  // Register address
+            Wire_u8EndTransmission(false); // Keep bus active (repeated start)
 
             // Request data bytes immediately
-            Wire.requestFrom(psHandle->u8DeviceAddress, psHandle->u8DataSize);
+            Wire_u8RequestFrom(psHandle->u8DeviceAddress, psHandle->u8DataSize);
 
             // Record start time for timeout
             psHandle->u32RequestTime = millis();
@@ -291,12 +297,12 @@ ISENSORMEASURE_RESULT_T I2CMeasure_eMeasure(
         else
         {
             // Command mode: Write multi-byte command
-            Wire.beginTransmission(psHandle->u8DeviceAddress);
+            Wire_vBeginTransmission(psHandle->u8DeviceAddress);
             for (uint8_t i = 0; i < psHandle->u8CommandLength; i++)
             {
-                Wire.write(psHandle->au8CommandBytes[i]);
+                Wire_u8Write(psHandle->au8CommandBytes[i]);
             }
-            Wire.endTransmission(true); // Release bus after command
+            Wire_u8EndTransmission(true); // Release bus after command
 
             // Record start time for conversion delay
             psHandle->u32RequestTime = millis();
@@ -313,7 +319,7 @@ ISENSORMEASURE_RESULT_T I2CMeasure_eMeasure(
         if ((millis() - psHandle->u32RequestTime) >= psHandle->u16ConversionDelayMs)
         {
             // Delay complete, now request data
-            Wire.requestFrom(psHandle->u8DeviceAddress, psHandle->u8DataSize);
+            Wire_u8RequestFrom(psHandle->u8DeviceAddress, psHandle->u8DataSize);
 
             // Update time for read timeout
             psHandle->u32RequestTime = millis();
@@ -328,12 +334,12 @@ ISENSORMEASURE_RESULT_T I2CMeasure_eMeasure(
     case I2CMEASURE_STATE_REQUEST_SENT_E:
     case I2CMEASURE_STATE_READING_E:
         // Check if all bytes available
-        if (Wire.available() >= psHandle->u8DataSize)
+        if (Wire_u8Available() >= psHandle->u8DataSize)
         {
             // Read all bytes into buffer
             for (uint8_t i = 0; i < psHandle->u8DataSize; i++)
             {
-                psHandle->au8Buffer[i] = Wire.read();
+                psHandle->au8Buffer[i] = Wire_u8Read();
             }
 
             // Convert bytes to float (big-endian)

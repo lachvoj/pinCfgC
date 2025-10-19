@@ -5,6 +5,7 @@
 
 #include "ISensorMeasure.h"
 #include "Types.h"
+#include "PinCfgCsv.h"
 #include <stdint.h>
 
 /**
