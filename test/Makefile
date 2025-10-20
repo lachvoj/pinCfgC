@@ -27,7 +27,13 @@ EXE = test
 INCLUDES = -I. -I../include -I$(MOCKDIR) -I$(UNITY_ROOT)/src -I$(SRCDIR)
 LIBS = -lm
 
-CFLAGS = -g 
+# Set USE_ERROR_MESSAGES=1 to enable full error messages, otherwise use compact error codes
+# Example: make USE_ERROR_MESSAGES=1
+ifdef USE_ERROR_MESSAGES
+CFLAGS = -g -DUSE_ERROR_MESSAGES
+else
+CFLAGS = -g
+endif 
 CFLAGS += -Wall
 CFLAGS += -Wextra
 CFLAGS += -Wpointer-arith

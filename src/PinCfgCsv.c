@@ -11,6 +11,8 @@
 #include "PersistentConfigiration.h"
 #include "PinCfgCsv.h"
 #include "PinCfgStr.h"
+#include "PinCfgMessages.h"
+#include "PinCfgParse.h"
 #include "Sensor.h"
 #include "Switch.h"
 #include "Trigger.h"
@@ -19,128 +21,22 @@
 #include "I2CMeasure.h"
 #endif
 
-typedef struct PINCFG_PARSE_SUBFN_PARAMS_S
-{
-    PINCFG_PARSE_PARAMS_T *psParsePrms;
-    size_t pcOutStringLast;
-    uint16_t u16LinesProcessed;
-    uint8_t u8LineItemsLen;
-    uint8_t u8PresentablesCount;
-    size_t szNumberOfWarnings;
-    STRING_POINT_T sLine;
-    STRING_POINT_T sTempStrPt;
-} PINCFG_PARSE_SUBFN_PARAMS_T;
-
-static const char *_s[] = {
-    "%s%s\n",                             // FSS_E
-    "%s%s%s\n",                           // FSSS_E
-    "%s%d:%s\n",                          // FSDS_E
-    "%s%d:%s%s\n",                        // FSDSS_E
-    "%s%d:%s%s%s\n",                      // FSDSSS_E
-    "%s%d:%s%s (0-%d)\n",                 // FSDSSD_E - for type enum errors
-    "E:",                                 // E_E
-    "W:",                                 // W_E
-    "E:L:",                               // EL_E
-    "W:L:",                               // WL_E
-    "I:",                                 // I_E
-    "CLI:",                               // ECR_E
-    "Switch:",                            // SW_E
-    "InPin:",                             // IP_E
-    "Trigger:",                           // TRG_E
-    "CPUTemperature",                     // CPUTMP_E
-    "InPinDebounceMs:",                   // IPDMS_E
-    "InPinMulticlickMaxDelayMs:",         // IPMCDMS_E
-    "SwitchImpulseDurationMs:",           // SWIDMS_E
-    "SwitchFbOnDelayMs:",                 // SWFNDMS_E
-    "SwitchFbOffDelayMs:",                // SWFFDMS_E
-    "OOM",                                // OOM_E
-    "init failed",                        // INITF_E
-    "Invalid pin number.",                // IPN_E
-    "invalid",                            // IVLD_E
-    "Invalid number",                     // IN_E
-    " of arguments.",                     // OARGS_E
-    " of items defining names and pins.", // OITMS_E
-    "Switch name not found.",             // SNNF_E
-    "MS",                                 // MS_E
-    "SR",                                 // SR_E
-    " type enum",                         // TE_E
-    " args\n",                            // ARGS_E
-    " (name)\n",                          // NAME_E
-    " (cputemp)\n",                       // CPUTEMP_E
-    " type not implemented\n",            // TNI_E
-    " (sensor)\n",                        // SENSOR_E
-    " measurement not found: ",           // MNF_E
-    "\n",                                 // NL_E
-    " offset\n",                          // OFFSET_E
-    " enableable\n",                      // ENABLEABLE_E
-    " cumulative\n",                      // CUMULATIVE_E
-    " sampling interval\n",               // SAMPINT_E
-    " report interval\n"                  // REPINT_E
-};
-
-typedef enum PINCFG_PARSE_STRINGS_E
-{
-    FSS_E = 0,
-    FSSS_E,
-    FSDS_E,
-    FSDSS_E,
-    FSDSSS_E,
-    FSDSSD_E,
-    E_E,
-    W_E,
-    EL_E,
-    WL_E,
-    I_E,
-    ECR_E,
-    SW_E,
-    IP_E,
-    TRG_E,
-    CPUTMP_E,
-    IPDMS_E,
-    IPMCDMS_E,
-    SWIDMS_E,
-    SWFNDMS_E,
-    SWFFDMS_E,
-    OOM_E,
-    INITF_E,
-    IPN_E,
-    IVLD_E,
-    IN_E,
-    OARGS_E,
-    OITMS_E,
-    SNNF_E,
-    MS_E,
-    SR_E,
-    TE_E,
-    ARGS_E,
-    NAME_E,
-    CPUTEMP_E,
-    TNI_E,
-    SENSOR_E,
-    MNF_E,
-    NL_E,
-    OFFSET_E,
-    ENABLEABLE_E,
-    CUMULATIVE_E,
-    SAMPINT_E,
-    REPINT_E
-} PINCFG_PARSE_STRINGS_T;
-
-static inline PINCFG_RESULT_T PinCfgCsv_CreateCli(PINCFG_PARSE_SUBFN_PARAMS_T *psPrms);
-static inline PINCFG_RESULT_T PinCfgCsv_ParseSwitch(PINCFG_PARSE_SUBFN_PARAMS_T *psPrms);
-static inline PINCFG_RESULT_T PinCfgCsv_ParseInpins(PINCFG_PARSE_SUBFN_PARAMS_T *psPrms);
-static inline PINCFG_RESULT_T PinCfgCsv_ParseTriggers(PINCFG_PARSE_SUBFN_PARAMS_T *psPrms);
+// Forward declarations
+static PINCFG_RESULT_T PinCfgCsv_CreateCli(PINCFG_PARSE_SUBFN_PARAMS_T *psPrms);
+static PINCFG_RESULT_T PinCfgCsv_ParseSwitch(PINCFG_PARSE_SUBFN_PARAMS_T *psPrms);
+static PINCFG_RESULT_T PinCfgCsv_ParseInpins(PINCFG_PARSE_SUBFN_PARAMS_T *psPrms);
+static PINCFG_RESULT_T PinCfgCsv_ParseTriggers(PINCFG_PARSE_SUBFN_PARAMS_T *psPrms);
 
 // Phase 2: Measurement source and sensor reporter parsers
-static inline PINCFG_RESULT_T PinCfgCsv_ParseMeasurementSource(PINCFG_PARSE_SUBFN_PARAMS_T *psPrms);
-static inline PINCFG_RESULT_T PinCfgCsv_ParseSensorReporter(PINCFG_PARSE_SUBFN_PARAMS_T *psPrms);
-static inline PINCFG_RESULT_T PinCfgCsv_eAddToLinkedList(LINKEDLIST_ITEM_T **psFirst, void *pvNew);
+static PINCFG_RESULT_T PinCfgCsv_ParseMeasurementSource(PINCFG_PARSE_SUBFN_PARAMS_T *psPrms);
+static PINCFG_RESULT_T PinCfgCsv_ParseSensorReporter(PINCFG_PARSE_SUBFN_PARAMS_T *psPrms);
+static PINCFG_RESULT_T PinCfgCsv_eAddToLinkedList(LINKEDLIST_ITEM_T **psFirst, void *pvNew);
 
-static inline PINCFG_RESULT_T PinCfgCsv_ParseGlobalConfigItems(PINCFG_PARSE_SUBFN_PARAMS_T *psPrms);
+static PINCFG_RESULT_T PinCfgCsv_ParseGlobalConfigItems(PINCFG_PARSE_SUBFN_PARAMS_T *psPrms);
 
-static inline PRESENTABLE_T *PinCfgCsv_psFindInPresentablesById(uint8_t u8Id);
+static PRESENTABLE_T *PinCfgCsv_psFindInPresentablesById(uint8_t u8Id);
 static PRESENTABLE_T *PinCfgCsv_psFindInTempPresentablesByName(const STRING_POINT_T *psName);
-static inline ISENSORMEASURE_T *PinCfgCsv_psFindMeasurementByName(const char *pcName, size_t szNameLen);
+static ISENSORMEASURE_T *PinCfgCsv_psFindMeasurementByName(const char *pcName, size_t szNameLen);
 static inline size_t szGetSize(size_t a, size_t b);
 
 #ifdef MY_CONTROLLER_HA
@@ -328,10 +224,11 @@ PINCFG_RESULT_T PinCfgCsv_eParse(PINCFG_PARSE_PARAMS_T *psParams)
 
     if (psParams->pcConfig == NULL)
     {
-        sPrms.pcOutStringLast += snprintf(
-            (char *)(sPrms.psParsePrms->pcOutString + sPrms.pcOutStringLast),
-            szGetSize(sPrms.psParsePrms->u16OutStrMaxLen, sPrms.pcOutStringLast),
-            "E:Invalid format. NULL configuration.\n");
+        sPrms.pcOutStringLast += LOG_SIMPLE_ERROR(
+            sPrms.psParsePrms->pcOutString,
+            sPrms.pcOutStringLast,
+            sPrms.psParsePrms->u16OutStrMaxLen,
+            ERR_NULL_CONFIG);
         return PINCFG_NULLPTR_ERROR_E;
     }
 
@@ -339,10 +236,11 @@ PINCFG_RESULT_T PinCfgCsv_eParse(PINCFG_PARSE_PARAMS_T *psParams)
     u16LinesLen = (uint8_t)PinCfgStr_szGetSplitCount(&(sPrms.sTempStrPt), PINCFG_LINE_SEPARATOR_D);
     if (u16LinesLen == 1 && sPrms.sTempStrPt.szLen == 0)
     {
-        sPrms.pcOutStringLast += snprintf(
-            (char *)(sPrms.psParsePrms->pcOutString + sPrms.pcOutStringLast),
-            szGetSize(sPrms.psParsePrms->u16OutStrMaxLen, sPrms.pcOutStringLast),
-            "E:Invalid format. Empty configuration.\n");
+        sPrms.pcOutStringLast += LOG_SIMPLE_ERROR(
+            sPrms.psParsePrms->pcOutString,
+            sPrms.pcOutStringLast,
+            sPrms.psParsePrms->u16OutStrMaxLen,
+            ERR_EMPTY_CONFIG);
         return PINCFG_ERROR_E;
     }
 
@@ -356,14 +254,7 @@ PINCFG_RESULT_T PinCfgCsv_eParse(PINCFG_PARSE_PARAMS_T *psParams)
         sPrms.u8LineItemsLen = (uint8_t)PinCfgStr_szGetSplitCount(&(sPrms.sLine), PINCFG_VALUE_SEPARATOR_D);
         if (sPrms.u8LineItemsLen < 2)
         {
-            sPrms.pcOutStringLast += snprintf(
-                (char *)(sPrms.psParsePrms->pcOutString + sPrms.pcOutStringLast),
-                szGetSize(sPrms.psParsePrms->u16OutStrMaxLen, sPrms.pcOutStringLast),
-                _s[FSDS_E],
-                _s[WL_E],
-                sPrms.u16LinesProcessed,
-                "Not defined or invalid format.");
-            sPrms.szNumberOfWarnings++;
+            sPrms.pcOutStringLast += LOG_WARNING(&sPrms, "", ERR_UNDEFINED_FORMAT);
             continue;
         }
 
@@ -419,20 +310,22 @@ PINCFG_RESULT_T PinCfgCsv_eParse(PINCFG_PARSE_PARAMS_T *psParams)
         }
         else
         {
-            sPrms.pcOutStringLast += snprintf(
-                (char *)(sPrms.psParsePrms->pcOutString + sPrms.pcOutStringLast),
-                szGetSize(sPrms.psParsePrms->u16OutStrMaxLen, sPrms.pcOutStringLast),
-                _s[FSDS_E],
-                _s[EL_E],
-                sPrms.u16LinesProcessed,
-                "Unknown type.");
-            sPrms.szNumberOfWarnings++;
+            sPrms.pcOutStringLast += LOG_WARNING(&sPrms, "", ERR_UNKNOWN_TYPE);
         }
     }
+    
+    // Print final summary
+#ifdef USE_ERROR_MESSAGES
     sPrms.pcOutStringLast += snprintf(
         (char *)(sPrms.psParsePrms->pcOutString + sPrms.pcOutStringLast),
         szGetSize(sPrms.psParsePrms->u16OutStrMaxLen, sPrms.pcOutStringLast),
         "I: Configuration parsed.\n");
+#else
+    sPrms.pcOutStringLast += snprintf(
+        (char *)(sPrms.psParsePrms->pcOutString + sPrms.pcOutStringLast),
+        szGetSize(sPrms.psParsePrms->u16OutStrMaxLen, sPrms.pcOutStringLast),
+        "W%zu\n", sPrms.szNumberOfWarnings);
+#endif
 
     if (sPrms.szNumberOfWarnings > 0)
         return PINCFG_WARNINGS_E;
@@ -441,7 +334,7 @@ PINCFG_RESULT_T PinCfgCsv_eParse(PINCFG_PARSE_PARAMS_T *psParams)
 }
 
 // private
-static inline PINCFG_RESULT_T PinCfgCsv_CreateCli(PINCFG_PARSE_SUBFN_PARAMS_T *psPrms)
+static PINCFG_RESULT_T PinCfgCsv_CreateCli(PINCFG_PARSE_SUBFN_PARAMS_T *psPrms)
 {
     if (psPrms == NULL)
         return PINCFG_NULLPTR_ERROR_E;
@@ -460,13 +353,9 @@ static inline PINCFG_RESULT_T PinCfgCsv_CreateCli(PINCFG_PARSE_SUBFN_PARAMS_T *p
         if (psCfgRcvrHnd == NULL)
         {
             Memory_eReset();
-            psPrms->pcOutStringLast += snprintf(
-                (char *)(psPrms->psParsePrms->pcOutString + psPrms->pcOutStringLast),
-                szGetSize(psPrms->psParsePrms->u16OutStrMaxLen, psPrms->pcOutStringLast),
-                _s[FSSS_E],
-                _s[E_E],
-                _s[ECR_E],
-                _s[OOM_E]);
+            psPrms->pcOutStringLast += LOG_SIMPLE_ERROR(
+                psPrms->psParsePrms->pcOutString, psPrms->pcOutStringLast,
+                psPrms->psParsePrms->u16OutStrMaxLen, ERR_OOM);
 
             return PINCFG_OUTOFMEMORY_ERROR_E;
         }
@@ -478,21 +367,16 @@ static inline PINCFG_RESULT_T PinCfgCsv_CreateCli(PINCFG_PARSE_SUBFN_PARAMS_T *p
         }
         else
         {
-            psPrms->pcOutStringLast += snprintf(
-                (char *)(psPrms->psParsePrms->pcOutString + psPrms->pcOutStringLast),
-                szGetSize(psPrms->psParsePrms->u16OutStrMaxLen, psPrms->pcOutStringLast),
-                _s[FSSS_E],
-                _s[W_E],
-                _s[ECR_E],
-                _s[INITF_E]);
-            psPrms->szNumberOfWarnings++;
+            psPrms->pcOutStringLast += LOG_SIMPLE_WARNING(
+                psPrms->psParsePrms->pcOutString, psPrms->pcOutStringLast,
+                psPrms->psParsePrms->u16OutStrMaxLen, ERR_INIT_FAILED);
         }
     }
 
     return PINCFG_OK_E;
 }
 
-static inline PINCFG_RESULT_T PinCfgCsv_ParseSwitch(PINCFG_PARSE_SUBFN_PARAMS_T *psPrms)
+static PINCFG_RESULT_T PinCfgCsv_ParseSwitch(PINCFG_PARSE_SUBFN_PARAMS_T *psPrms)
 {
     uint8_t u8Pin, u8FbPin, u8Count, u8Offset, u8SwItems, i;
     uint32_t u32TimedPeriodMs = 0U;
@@ -507,16 +391,7 @@ static inline PINCFG_RESULT_T PinCfgCsv_ParseSwitch(PINCFG_PARSE_SUBFN_PARAMS_T 
 
     if (psPrms->u8LineItemsLen < 3)
     {
-        psPrms->pcOutStringLast += snprintf(
-            (char *)(psPrms->psParsePrms->pcOutString + psPrms->pcOutStringLast),
-            szGetSize(psPrms->psParsePrms->u16OutStrMaxLen, psPrms->pcOutStringLast),
-            _s[FSDSSS_E],
-            _s[WL_E],
-            psPrms->u16LinesProcessed,
-            _s[SW_E],
-            _s[IN_E],
-            _s[OARGS_E]);
-        psPrms->szNumberOfWarnings++;
+        psPrms->pcOutStringLast += LOG_WARNING(psPrms, PinCfgMessages_getString(SW_E), ERR_INVALID_ARGS);
         return PINCFG_OK_E;
     }
 
@@ -544,15 +419,7 @@ static inline PINCFG_RESULT_T PinCfgCsv_ParseSwitch(PINCFG_PARSE_SUBFN_PARAMS_T 
 
         if (!bIsDefinitionValid)
         {
-            psPrms->pcOutStringLast += snprintf(
-                (char *)(psPrms->psParsePrms->pcOutString + psPrms->pcOutStringLast),
-                szGetSize(psPrms->psParsePrms->u16OutStrMaxLen, psPrms->pcOutStringLast),
-                _s[FSDSS_E],
-                _s[WL_E],
-                psPrms->u16LinesProcessed,
-                _s[SW_E],
-                "Invalid definition.");
-            psPrms->szNumberOfWarnings++;
+            psPrms->pcOutStringLast += LOG_WARNING(psPrms, PinCfgMessages_getString(SW_E), ERR_INVALID_DEFINITION);
             return PINCFG_OK_E;
         }
     }
@@ -560,16 +427,7 @@ static inline PINCFG_RESULT_T PinCfgCsv_ParseSwitch(PINCFG_PARSE_SUBFN_PARAMS_T 
     u8Count = (uint8_t)((psPrms->u8LineItemsLen - 1) % u8SwItems);
     if (u8Count != 0)
     {
-        psPrms->pcOutStringLast += snprintf(
-            (char *)(psPrms->psParsePrms->pcOutString + psPrms->pcOutStringLast),
-            szGetSize(psPrms->psParsePrms->u16OutStrMaxLen, psPrms->pcOutStringLast),
-            _s[FSDSSS_E],
-            _s[WL_E],
-            psPrms->u16LinesProcessed,
-            _s[SW_E],
-            _s[IN_E],
-            _s[OITMS_E]);
-        psPrms->szNumberOfWarnings++;
+        psPrms->pcOutStringLast += LOG_WARNING(psPrms, PinCfgMessages_getString(SW_E), ERR_INVALID_ITEMS);
         return PINCFG_OK_E;
     }
 
@@ -582,15 +440,7 @@ static inline PINCFG_RESULT_T PinCfgCsv_ParseSwitch(PINCFG_PARSE_SUBFN_PARAMS_T 
         PinCfgStr_vGetSplitElemByIndex(&(psPrms->sTempStrPt), PINCFG_VALUE_SEPARATOR_D, (u8Offset + 1));
         if (PinCfgStr_eAtoU8(&(psPrms->sTempStrPt), &u8Pin) != PINCFG_STR_OK_E)
         {
-            psPrms->pcOutStringLast += snprintf(
-                (char *)(psPrms->psParsePrms->pcOutString + psPrms->pcOutStringLast),
-                szGetSize(psPrms->psParsePrms->u16OutStrMaxLen, psPrms->pcOutStringLast),
-                _s[FSDSS_E],
-                _s[WL_E],
-                psPrms->u16LinesProcessed,
-                _s[SW_E],
-                _s[IPN_E]);
-            psPrms->szNumberOfWarnings++;
+            psPrms->pcOutStringLast += LOG_WARNING(psPrms, PinCfgMessages_getString(SW_E), ERR_INVALID_PIN);
             continue;
         }
 
@@ -605,15 +455,7 @@ static inline PINCFG_RESULT_T PinCfgCsv_ParseSwitch(PINCFG_PARSE_SUBFN_PARAMS_T 
             PinCfgStr_vGetSplitElemByIndex(&(psPrms->sTempStrPt), PINCFG_VALUE_SEPARATOR_D, (u8Offset + u8FbPinOffset));
             if (PinCfgStr_eAtoU8(&(psPrms->sTempStrPt), &u8FbPin) != PINCFG_STR_OK_E)
             {
-                psPrms->pcOutStringLast += snprintf(
-                    (char *)(psPrms->psParsePrms->pcOutString + psPrms->pcOutStringLast),
-                    szGetSize(psPrms->psParsePrms->u16OutStrMaxLen, psPrms->pcOutStringLast),
-                    _s[FSDSS_E],
-                    _s[WL_E],
-                    psPrms->u16LinesProcessed,
-                    _s[SW_E],
-                    _s[IPN_E]);
-                psPrms->szNumberOfWarnings++;
+                psPrms->pcOutStringLast += LOG_WARNING(psPrms, PinCfgMessages_getString(SW_E), ERR_INVALID_PIN);
                 continue;
             }
         }
@@ -627,15 +469,7 @@ static inline PINCFG_RESULT_T PinCfgCsv_ParseSwitch(PINCFG_PARSE_SUBFN_PARAMS_T 
                 u32TimedPeriodMs < PINCFG_TIMED_SWITCH_MIN_PERIOD_MS_D ||
                 u32TimedPeriodMs > PINCFG_TIMED_SWITCH_MAX_PERIOD_MS_D)
             {
-                psPrms->pcOutStringLast += snprintf(
-                    (char *)(psPrms->psParsePrms->pcOutString + psPrms->pcOutStringLast),
-                    szGetSize(psPrms->psParsePrms->u16OutStrMaxLen, psPrms->pcOutStringLast),
-                    _s[FSDSS_E],
-                    _s[WL_E],
-                    psPrms->u16LinesProcessed,
-                    _s[SW_E],
-                    "Invalid time period.");
-                psPrms->szNumberOfWarnings++;
+                psPrms->pcOutStringLast += LOG_WARNING(psPrms, PinCfgMessages_getString(SW_E), ERR_INVALID_TIME_PERIOD);
                 continue;
             }
         }
@@ -664,14 +498,7 @@ static inline PINCFG_RESULT_T PinCfgCsv_ParseSwitch(PINCFG_PARSE_SUBFN_PARAMS_T 
         {
             Memory_eReset();
 
-            psPrms->pcOutStringLast += snprintf(
-                (char *)(psPrms->psParsePrms->pcOutString + psPrms->pcOutStringLast),
-                szGetSize(psPrms->psParsePrms->u16OutStrMaxLen, psPrms->pcOutStringLast),
-                _s[FSDSS_E],
-                _s[EL_E],
-                psPrms->u16LinesProcessed,
-                _s[SW_E],
-                _s[OOM_E]);
+            psPrms->pcOutStringLast += LOG_ERROR(psPrms, PinCfgMessages_getString(SW_E), ERR_OOM);
 
             return PINCFG_OUTOFMEMORY_ERROR_E;
         }
@@ -700,22 +527,14 @@ static inline PINCFG_RESULT_T PinCfgCsv_ParseSwitch(PINCFG_PARSE_SUBFN_PARAMS_T 
         }
         if (!bInitOk)
         {
-            psPrms->pcOutStringLast += snprintf(
-                (char *)(psPrms->psParsePrms->pcOutString + psPrms->pcOutStringLast),
-                szGetSize(psPrms->psParsePrms->u16OutStrMaxLen, psPrms->pcOutStringLast),
-                _s[FSDSS_E],
-                _s[WL_E],
-                psPrms->u16LinesProcessed,
-                _s[SW_E],
-                _s[INITF_E]);
-            psPrms->szNumberOfWarnings++;
+            psPrms->pcOutStringLast += LOG_WARNING(psPrms, PinCfgMessages_getString(SW_E), ERR_INIT_FAILED);
         }
     }
 
     return PINCFG_OK_E;
 }
 
-static inline PINCFG_RESULT_T PinCfgCsv_ParseInpins(PINCFG_PARSE_SUBFN_PARAMS_T *psPrms)
+static PINCFG_RESULT_T PinCfgCsv_ParseInpins(PINCFG_PARSE_SUBFN_PARAMS_T *psPrms)
 {
     uint8_t u8Pin, u8Count, u8Offset, i;
 
@@ -724,16 +543,7 @@ static inline PINCFG_RESULT_T PinCfgCsv_ParseInpins(PINCFG_PARSE_SUBFN_PARAMS_T 
 
     if (psPrms->u8LineItemsLen < 3)
     {
-        psPrms->pcOutStringLast += snprintf(
-            (char *)(psPrms->psParsePrms->pcOutString + psPrms->pcOutStringLast),
-            szGetSize(psPrms->psParsePrms->u16OutStrMaxLen, psPrms->pcOutStringLast),
-            _s[FSDSSS_E],
-            _s[WL_E],
-            psPrms->u16LinesProcessed,
-            _s[IP_E],
-            _s[IN_E],
-            _s[OARGS_E]);
-        psPrms->szNumberOfWarnings++;
+        psPrms->pcOutStringLast += LOG_WARNING(psPrms, PinCfgMessages_getString(IP_E), ERR_INVALID_ARGS);
 
         return PINCFG_OK_E;
     }
@@ -741,16 +551,7 @@ static inline PINCFG_RESULT_T PinCfgCsv_ParseInpins(PINCFG_PARSE_SUBFN_PARAMS_T 
     u8Count = ((psPrms->u8LineItemsLen - 1) % 2);
     if (u8Count != 0)
     {
-        psPrms->pcOutStringLast += snprintf(
-            (char *)(psPrms->psParsePrms->pcOutString + psPrms->pcOutStringLast),
-            szGetSize(psPrms->psParsePrms->u16OutStrMaxLen, psPrms->pcOutStringLast),
-            _s[FSDSSS_E],
-            _s[WL_E],
-            psPrms->u16LinesProcessed,
-            _s[IP_E],
-            _s[IN_E],
-            _s[OITMS_E]);
-        psPrms->szNumberOfWarnings++;
+        psPrms->pcOutStringLast += LOG_WARNING(psPrms, PinCfgMessages_getString(IP_E), ERR_INVALID_ITEMS);
         return PINCFG_OK_E;
     }
 
@@ -762,15 +563,7 @@ static inline PINCFG_RESULT_T PinCfgCsv_ParseInpins(PINCFG_PARSE_SUBFN_PARAMS_T 
         PinCfgStr_vGetSplitElemByIndex(&(psPrms->sTempStrPt), PINCFG_VALUE_SEPARATOR_D, (u8Offset + 1));
         if (PinCfgStr_eAtoU8(&(psPrms->sTempStrPt), &u8Pin) != PINCFG_STR_OK_E || u8Pin < 1)
         {
-            psPrms->pcOutStringLast += snprintf(
-                (char *)(psPrms->psParsePrms->pcOutString + psPrms->pcOutStringLast),
-                szGetSize(psPrms->psParsePrms->u16OutStrMaxLen, psPrms->pcOutStringLast),
-                _s[FSDSS_E],
-                _s[WL_E],
-                psPrms->u16LinesProcessed,
-                _s[IP_E],
-                _s[IPN_E]);
-            psPrms->szNumberOfWarnings++;
+            psPrms->pcOutStringLast += LOG_WARNING(psPrms, PinCfgMessages_getString(IP_E), ERR_INVALID_PIN);
             continue;
         }
 
@@ -797,14 +590,7 @@ static inline PINCFG_RESULT_T PinCfgCsv_ParseInpins(PINCFG_PARSE_SUBFN_PARAMS_T 
         if (!bInitOk)
         {
             Memory_eReset();
-            psPrms->pcOutStringLast += snprintf(
-                (char *)(psPrms->psParsePrms->pcOutString + psPrms->pcOutStringLast),
-                szGetSize(psPrms->psParsePrms->u16OutStrMaxLen, psPrms->pcOutStringLast),
-                _s[FSDSS_E],
-                _s[EL_E],
-                psPrms->u16LinesProcessed,
-                _s[IP_E],
-                _s[OOM_E]);
+            psPrms->pcOutStringLast += LOG_ERROR(psPrms, PinCfgMessages_getString(IP_E), ERR_OOM);
 
             return PINCFG_OUTOFMEMORY_ERROR_E;
         }
@@ -825,22 +611,14 @@ static inline PINCFG_RESULT_T PinCfgCsv_ParseInpins(PINCFG_PARSE_SUBFN_PARAMS_T 
         }
         if (!bInitOk)
         {
-            psPrms->pcOutStringLast += snprintf(
-                (char *)(psPrms->psParsePrms->pcOutString + psPrms->pcOutStringLast),
-                szGetSize(psPrms->psParsePrms->u16OutStrMaxLen, psPrms->pcOutStringLast),
-                _s[FSDSS_E],
-                _s[WL_E],
-                psPrms->u16LinesProcessed,
-                _s[IP_E],
-                _s[INITF_E]);
-            psPrms->szNumberOfWarnings++;
+            psPrms->pcOutStringLast += LOG_WARNING(psPrms, PinCfgMessages_getString(IP_E), ERR_INIT_FAILED);
         }
     }
 
     return PINCFG_OK_E;
 }
 
-static inline PINCFG_RESULT_T PinCfgCsv_ParseTriggers(PINCFG_PARSE_SUBFN_PARAMS_T *psPrms)
+static PINCFG_RESULT_T PinCfgCsv_ParseTriggers(PINCFG_PARSE_SUBFN_PARAMS_T *psPrms)
 {
     uint8_t u8Count, u8EventType, u8EventCount, u8DrivesCountReal, u8Offset, u8DrivenAction;
     INPIN_T *psInPinEmiterHnd;
@@ -851,16 +629,7 @@ static inline PINCFG_RESULT_T PinCfgCsv_ParseTriggers(PINCFG_PARSE_SUBFN_PARAMS_
 
     if (psPrms->u8LineItemsLen < 7)
     {
-        psPrms->pcOutStringLast += snprintf(
-            (char *)(psPrms->psParsePrms->pcOutString + psPrms->pcOutStringLast),
-            szGetSize(psPrms->psParsePrms->u16OutStrMaxLen, psPrms->pcOutStringLast),
-            _s[FSDSSS_E],
-            _s[WL_E],
-            psPrms->u16LinesProcessed,
-            _s[TRG_E],
-            _s[IN_E],
-            _s[OARGS_E]);
-        psPrms->szNumberOfWarnings++;
+        psPrms->pcOutStringLast += LOG_WARNING(psPrms, PinCfgMessages_getString(TRG_E), ERR_INVALID_ARGS);
 
         return PINCFG_OK_E;
     }
@@ -872,15 +641,7 @@ static inline PINCFG_RESULT_T PinCfgCsv_ParseTriggers(PINCFG_PARSE_SUBFN_PARAMS_
     {
         if (PinCfgCsv_pcStrstrpt(psPrms->psParsePrms->pcConfig, &(psPrms->sTempStrPt)) == NULL)
         {
-            psPrms->pcOutStringLast += snprintf(
-                (char *)(psPrms->psParsePrms->pcOutString + psPrms->pcOutStringLast),
-                szGetSize(psPrms->psParsePrms->u16OutStrMaxLen, psPrms->pcOutStringLast),
-                _s[FSDSS_E],
-                _s[WL_E],
-                psPrms->u16LinesProcessed,
-                _s[TRG_E],
-                _s[SNNF_E]);
-            psPrms->szNumberOfWarnings++;
+            psPrms->pcOutStringLast += LOG_WARNING(psPrms, PinCfgMessages_getString(TRG_E), ERR_SOURCE_NOT_FOUND);
 
             return PINCFG_OK_E;
         }
@@ -890,15 +651,7 @@ static inline PINCFG_RESULT_T PinCfgCsv_ParseTriggers(PINCFG_PARSE_SUBFN_PARAMS_
         psInPinEmiterHnd = (INPIN_T *)PinCfgCsv_psFindInTempPresentablesByName(&(psPrms->sTempStrPt));
         if (psInPinEmiterHnd == NULL)
         {
-            psPrms->pcOutStringLast += snprintf(
-                (char *)(psPrms->psParsePrms->pcOutString + psPrms->pcOutStringLast),
-                szGetSize(psPrms->psParsePrms->u16OutStrMaxLen, psPrms->pcOutStringLast),
-                _s[FSDSS_E],
-                _s[WL_E],
-                psPrms->u16LinesProcessed,
-                _s[TRG_E],
-                "Invalid InPin name.");
-            psPrms->szNumberOfWarnings++;
+            psPrms->pcOutStringLast += LOG_WARNING(psPrms, PinCfgMessages_getString(TRG_E), ERR_INPIN_NOT_FOUND);
 
             return PINCFG_OK_E;
         }
@@ -909,15 +662,7 @@ static inline PINCFG_RESULT_T PinCfgCsv_ParseTriggers(PINCFG_PARSE_SUBFN_PARAMS_
     if (PinCfgStr_eAtoU8(&(psPrms->sTempStrPt), &u8EventType) != PINCFG_STR_OK_E ||
         u8EventType > (uint8_t)TRIGGER_ALL_E)
     {
-        psPrms->pcOutStringLast += snprintf(
-            (char *)(psPrms->psParsePrms->pcOutString + psPrms->pcOutStringLast),
-            szGetSize(psPrms->psParsePrms->u16OutStrMaxLen, psPrms->pcOutStringLast),
-            _s[FSDSS_E],
-            _s[WL_E],
-            psPrms->u16LinesProcessed,
-            _s[TRG_E],
-            "Invalid format for event type.");
-        psPrms->szNumberOfWarnings++;
+        psPrms->pcOutStringLast += LOG_WARNING(psPrms, PinCfgMessages_getString(TRG_E), ERR_INVALID_EVENT_TYPE);
 
         return PINCFG_OK_E;
     }
@@ -926,15 +671,7 @@ static inline PINCFG_RESULT_T PinCfgCsv_ParseTriggers(PINCFG_PARSE_SUBFN_PARAMS_
     PinCfgStr_vGetSplitElemByIndex(&(psPrms->sTempStrPt), PINCFG_VALUE_SEPARATOR_D, 4);
     if (PinCfgStr_eAtoU8(&(psPrms->sTempStrPt), &u8EventCount) != PINCFG_STR_OK_E)
     {
-        psPrms->pcOutStringLast += snprintf(
-            (char *)(psPrms->psParsePrms->pcOutString + psPrms->pcOutStringLast),
-            szGetSize(psPrms->psParsePrms->u16OutStrMaxLen, psPrms->pcOutStringLast),
-            _s[FSDSS_E],
-            _s[WL_E],
-            psPrms->u16LinesProcessed,
-            _s[TRG_E],
-            "Invalid format for event count.");
-        psPrms->szNumberOfWarnings++;
+        psPrms->pcOutStringLast += LOG_WARNING(psPrms, PinCfgMessages_getString(TRG_E), ERR_INVALID_EVENT_COUNT);
 
         return PINCFG_OK_E;
     }
@@ -959,15 +696,7 @@ static inline PINCFG_RESULT_T PinCfgCsv_ParseTriggers(PINCFG_PARSE_SUBFN_PARAMS_
             PinCfgStr_vGetSplitElemByIndex(&(psPrms->sTempStrPt), PINCFG_VALUE_SEPARATOR_D, u8Offset);
             if (PinCfgCsv_pcStrstrpt(psPrms->psParsePrms->pcConfig, &(psPrms->sTempStrPt)) == NULL)
             {
-                psPrms->pcOutStringLast += snprintf(
-                    (char *)(psPrms->psParsePrms->pcOutString + psPrms->pcOutStringLast),
-                    szGetSize(psPrms->psParsePrms->u16OutStrMaxLen, psPrms->pcOutStringLast),
-                    _s[FSDSS_E],
-                    _s[WL_E],
-                    psPrms->u16LinesProcessed,
-                    _s[TRG_E],
-                    _s[SNNF_E]);
-                psPrms->szNumberOfWarnings++;
+                psPrms->pcOutStringLast += LOG_WARNING(psPrms, PinCfgMessages_getString(TRG_E), ERR_SOURCE_NOT_FOUND);
                 continue;
             }
         }
@@ -980,15 +709,7 @@ static inline PINCFG_RESULT_T PinCfgCsv_ParseTriggers(PINCFG_PARSE_SUBFN_PARAMS_
     if (pasSwActs == NULL)
     {
         Memory_eReset();
-        psPrms->pcOutStringLast += snprintf(
-            (char *)(psPrms->psParsePrms->pcOutString + psPrms->pcOutStringLast),
-            szGetSize(psPrms->psParsePrms->u16OutStrMaxLen, psPrms->pcOutStringLast),
-            _s[FSDSSS_E],
-            _s[EL_E],
-            psPrms->u16LinesProcessed,
-            _s[TRG_E],
-            "Switchaction:",
-            _s[OOM_E]);
+        psPrms->pcOutStringLast += LOG_ERROR(psPrms, PinCfgMessages_getString(TRG_E), ERR_OOM);
 
         return PINCFG_OUTOFMEMORY_ERROR_E;
     }
@@ -1000,15 +721,7 @@ static inline PINCFG_RESULT_T PinCfgCsv_ParseTriggers(PINCFG_PARSE_SUBFN_PARAMS_
         psSwitchHnd = (SWITCH_T *)PinCfgCsv_psFindInTempPresentablesByName(&(psPrms->sTempStrPt));
         if (psSwitchHnd == NULL)
         {
-            psPrms->pcOutStringLast += snprintf(
-                (char *)(psPrms->psParsePrms->pcOutString + psPrms->pcOutStringLast),
-                szGetSize(psPrms->psParsePrms->u16OutStrMaxLen, psPrms->pcOutStringLast),
-                _s[FSDSS_E],
-                _s[WL_E],
-                psPrms->u16LinesProcessed,
-                _s[TRG_E],
-                "Invalid switch name.");
-            psPrms->szNumberOfWarnings++;
+            psPrms->pcOutStringLast += LOG_WARNING(psPrms, PinCfgMessages_getString(TRG_E), ERR_SWITCH_NOT_FOUND);
             continue;
         }
 
@@ -1017,15 +730,7 @@ static inline PINCFG_RESULT_T PinCfgCsv_ParseTriggers(PINCFG_PARSE_SUBFN_PARAMS_
         if (PinCfgStr_eAtoU8(&(psPrms->sTempStrPt), &u8DrivenAction) != PINCFG_STR_OK_E ||
             u8DrivenAction > (uint8_t)TRIGGER_A_FORWARD_E)
         {
-            psPrms->pcOutStringLast += snprintf(
-                (char *)(psPrms->psParsePrms->pcOutString + psPrms->pcOutStringLast),
-                szGetSize(psPrms->psParsePrms->u16OutStrMaxLen, psPrms->pcOutStringLast),
-                _s[FSDSS_E],
-                _s[WL_E],
-                psPrms->u16LinesProcessed,
-                _s[TRG_E],
-                "Invalid switch action.");
-            psPrms->szNumberOfWarnings++;
+            psPrms->pcOutStringLast += LOG_WARNING(psPrms, PinCfgMessages_getString(TRG_E), ERR_INVALID_SWITCH_ACTION);
             continue;
         }
 
@@ -1037,15 +742,7 @@ static inline PINCFG_RESULT_T PinCfgCsv_ParseTriggers(PINCFG_PARSE_SUBFN_PARAMS_
 
     if (u8DrivesCountReal == 0U)
     {
-        psPrms->pcOutStringLast += snprintf(
-            (char *)(psPrms->psParsePrms->pcOutString + psPrms->pcOutStringLast),
-            szGetSize(psPrms->psParsePrms->u16OutStrMaxLen, psPrms->pcOutStringLast),
-            _s[FSDSS_E],
-            _s[WL_E],
-            psPrms->u16LinesProcessed,
-            _s[TRG_E],
-            "Nothing to drive.");
-        psPrms->szNumberOfWarnings++;
+        psPrms->pcOutStringLast += LOG_WARNING(psPrms, PinCfgMessages_getString(TRG_E), ERR_NOTHING_TO_DRIVE);
 
         return PINCFG_OK_E;
     }
@@ -1054,14 +751,7 @@ static inline PINCFG_RESULT_T PinCfgCsv_ParseTriggers(PINCFG_PARSE_SUBFN_PARAMS_
     if (psTriggerHnd == NULL)
     {
         Memory_eReset();
-        psPrms->pcOutStringLast += snprintf(
-            (char *)(psPrms->psParsePrms->pcOutString + psPrms->pcOutStringLast),
-            szGetSize(psPrms->psParsePrms->u16OutStrMaxLen, psPrms->pcOutStringLast),
-            _s[FSDSS_E],
-            _s[EL_E],
-            psPrms->u16LinesProcessed,
-            _s[TRG_E],
-            _s[OOM_E]);
+        psPrms->pcOutStringLast += LOG_ERROR(psPrms, PinCfgMessages_getString(TRG_E), ERR_OOM);
 
         return PINCFG_OUTOFMEMORY_ERROR_E;
     }
@@ -1073,15 +763,7 @@ static inline PINCFG_RESULT_T PinCfgCsv_ParseTriggers(PINCFG_PARSE_SUBFN_PARAMS_
     else
     {
         Memory_eReset();
-        psPrms->pcOutStringLast += snprintf(
-            (char *)(psPrms->psParsePrms->pcOutString + psPrms->pcOutStringLast),
-            szGetSize(psPrms->psParsePrms->u16OutStrMaxLen, psPrms->pcOutStringLast),
-            _s[FSDSS_E],
-            _s[WL_E],
-            psPrms->u16LinesProcessed,
-            _s[TRG_E],
-            _s[INITF_E]);
-        psPrms->szNumberOfWarnings++;
+        psPrms->pcOutStringLast += LOG_WARNING(psPrms, PinCfgMessages_getString(TRG_E), ERR_INIT_FAILED);
     }
 
     return PINCFG_OK_E;
@@ -1090,17 +772,13 @@ static inline PINCFG_RESULT_T PinCfgCsv_ParseTriggers(PINCFG_PARSE_SUBFN_PARAMS_
 // Phase 2: Parse Measurement Source (MS)
 // Format: MS,<type_enum>,<name>/
 // Example: MS,0,temp0/  (0 = MEASUREMENT_TYPE_CPUTEMP_E)
-static inline PINCFG_RESULT_T PinCfgCsv_ParseMeasurementSource(PINCFG_PARSE_SUBFN_PARAMS_T *psPrms)
+static PINCFG_RESULT_T PinCfgCsv_ParseMeasurementSource(PINCFG_PARSE_SUBFN_PARAMS_T *psPrms)
 {
     // MS,<type_enum>,<name>
     // Required: MS,0,name = 3 items (0 = MEASUREMENT_TYPE_CPUTEMP_E)
     if (psPrms->u8LineItemsLen != 3)
     {
-        psPrms->pcOutStringLast += snprintf(
-            (char *)(psPrms->psParsePrms->pcOutString + psPrms->pcOutStringLast),
-            szGetSize(psPrms->psParsePrms->u16OutStrMaxLen, psPrms->pcOutStringLast),
-            _s[FSDSS_E], _s[EL_E], psPrms->u16LinesProcessed, _s[MS_E], _s[IVLD_E], _s[ARGS_E]);
-        psPrms->szNumberOfWarnings++;
+        psPrms->pcOutStringLast += LOG_WARNING(psPrms, PinCfgMessages_getString(MS_E), ERR_INVALID_ARGS);
         return PINCFG_OK_E;
     }
 
@@ -1112,12 +790,7 @@ static inline PINCFG_RESULT_T PinCfgCsv_ParseMeasurementSource(PINCFG_PARSE_SUBF
     if (PinCfgStr_eAtoU8(&(psPrms->sTempStrPt), &u8Type) != PINCFG_STR_OK_E ||
         u8Type >= MEASUREMENT_TYPE_COUNT_E)
     {
-        psPrms->pcOutStringLast += snprintf(
-            (char *)(psPrms->psParsePrms->pcOutString + psPrms->pcOutStringLast),
-            szGetSize(psPrms->psParsePrms->u16OutStrMaxLen, psPrms->pcOutStringLast),
-            _s[FSDSSD_E], _s[EL_E], psPrms->u16LinesProcessed,
-            _s[MS_E], _s[IVLD_E], _s[TE_E], MEASUREMENT_TYPE_COUNT_E - 1);
-        psPrms->szNumberOfWarnings++;
+        psPrms->pcOutStringLast += LOG_WARNING(psPrms, PinCfgMessages_getString(MS_E), ERR_INVALID_TYPE_ENUM);
         return PINCFG_OK_E;
     }
     
@@ -1144,10 +817,7 @@ static inline PINCFG_RESULT_T PinCfgCsv_ParseMeasurementSource(PINCFG_PARSE_SUBF
     if (pcName == NULL)
     {
         Memory_eReset();
-        psPrms->pcOutStringLast += snprintf(
-            (char *)(psPrms->psParsePrms->pcOutString + psPrms->pcOutStringLast),
-            szGetSize(psPrms->psParsePrms->u16OutStrMaxLen, psPrms->pcOutStringLast),
-            _s[FSDSS_E], _s[EL_E], psPrms->u16LinesProcessed, _s[MS_E], _s[OOM_E], _s[NAME_E]);
+        psPrms->pcOutStringLast += LOG_ERROR(psPrms, PinCfgMessages_getString(MS_E), ERR_OOM);
         return PINCFG_OUTOFMEMORY_ERROR_E;
     }
     strncpy(pcName, psPrms->sTempStrPt.pcStrStart, psPrms->sTempStrPt.szLen);
@@ -1164,20 +834,13 @@ static inline PINCFG_RESULT_T PinCfgCsv_ParseMeasurementSource(PINCFG_PARSE_SUBF
         if (psMeasurement == NULL)
         {
             Memory_eReset();
-            psPrms->pcOutStringLast += snprintf(
-                (char *)(psPrms->psParsePrms->pcOutString + psPrms->pcOutStringLast),
-                szGetSize(psPrms->psParsePrms->u16OutStrMaxLen, psPrms->pcOutStringLast),
-                _s[FSDSS_E], _s[EL_E], psPrms->u16LinesProcessed, _s[MS_E], _s[OOM_E], _s[CPUTEMP_E]);
+            psPrms->pcOutStringLast += LOG_ERROR(psPrms, PinCfgMessages_getString(MS_E), ERR_OOM);
             return PINCFG_OUTOFMEMORY_ERROR_E;
         }
 
         if (CPUTempMeasure_eInit(psMeasurement, eType, pcName) != CPUTEMPMEASURE_OK_E)
         {
-            psPrms->pcOutStringLast += snprintf(
-                (char *)(psPrms->psParsePrms->pcOutString + psPrms->pcOutStringLast),
-                szGetSize(psPrms->psParsePrms->u16OutStrMaxLen, psPrms->pcOutStringLast),
-                _s[FSDSS_E], _s[EL_E], psPrms->u16LinesProcessed, _s[MS_E], _s[INITF_E], _s[NL_E]);
-            psPrms->szNumberOfWarnings++;
+            psPrms->pcOutStringLast += LOG_WARNING(psPrms, PinCfgMessages_getString(MS_E), ERR_INIT_FAILED);
             return PINCFG_OK_E;
         }
         
@@ -1197,11 +860,7 @@ static inline PINCFG_RESULT_T PinCfgCsv_ParseMeasurementSource(PINCFG_PARSE_SUBF
         // Validate parameter count (need at least 6: MS, type, name, addr, cmd1, size)
         if (psPrms->u8LineItemsLen < 6)
         {
-            psPrms->pcOutStringLast += snprintf(
-                (char *)(psPrms->psParsePrms->pcOutString + psPrms->pcOutStringLast),
-                szGetSize(psPrms->psParsePrms->u16OutStrMaxLen, psPrms->pcOutStringLast),
-                _s[FSDSS_E], _s[EL_E], psPrms->u16LinesProcessed, _s[MS_E], _s[IVLD_E], " I2C params\n");
-            psPrms->szNumberOfWarnings++;
+            psPrms->pcOutStringLast += LOG_WARNING(psPrms, PinCfgMessages_getString(MS_E), ERR_INVALID_I2C_PARAMS);
             return PINCFG_OK_E;
         }
         
@@ -1215,11 +874,7 @@ static inline PINCFG_RESULT_T PinCfgCsv_ParseMeasurementSource(PINCFG_PARSE_SUBF
         uint32_t u32Address = 0;
         if (PinCfgStr_eAtoU32(&(psPrms->sTempStrPt), &u32Address) != PINCFG_STR_OK_E)
         {
-            psPrms->pcOutStringLast += snprintf(
-                (char *)(psPrms->psParsePrms->pcOutString + psPrms->pcOutStringLast),
-                szGetSize(psPrms->psParsePrms->u16OutStrMaxLen, psPrms->pcOutStringLast),
-                _s[FSDSS_E], _s[EL_E], psPrms->u16LinesProcessed, _s[MS_E], _s[IVLD_E], " I2C address\n");
-            psPrms->szNumberOfWarnings++;
+            psPrms->pcOutStringLast += LOG_WARNING(psPrms, PinCfgMessages_getString(MS_E), ERR_INVALID_I2C_ADDRESS);
             return PINCFG_OK_E;
         }
         uint8_t u8DeviceAddress = (uint8_t)u32Address;
@@ -1233,8 +888,7 @@ static inline PINCFG_RESULT_T PinCfgCsv_ParseMeasurementSource(PINCFG_PARSE_SUBF
             psPrms->pcOutStringLast += snprintf(
                 (char *)(psPrms->psParsePrms->pcOutString + psPrms->pcOutStringLast),
                 szGetSize(psPrms->psParsePrms->u16OutStrMaxLen, psPrms->pcOutStringLast),
-                _s[FSDSS_E], _s[EL_E], psPrms->u16LinesProcessed, _s[MS_E], _s[IVLD_E], " command byte\n");
-            psPrms->szNumberOfWarnings++;
+                PinCfgMessages_getString(FSDSS_E), PinCfgMessages_getString(EL_E), psPrms->u16LinesProcessed, PinCfgMessages_getString(MS_E), PinCfgMessages_getString(IVLD_E), " command byte\n");
             return PINCFG_OK_E;
         }
         au8CommandBytes[0] = (uint8_t)u32Cmd1;
@@ -1246,22 +900,14 @@ static inline PINCFG_RESULT_T PinCfgCsv_ParseMeasurementSource(PINCFG_PARSE_SUBF
         uint8_t u8DataSize = 0;
         if (PinCfgStr_eAtoU8(&(psPrms->sTempStrPt), &u8DataSize) != PINCFG_STR_OK_E)
         {
-            psPrms->pcOutStringLast += snprintf(
-                (char *)(psPrms->psParsePrms->pcOutString + psPrms->pcOutStringLast),
-                szGetSize(psPrms->psParsePrms->u16OutStrMaxLen, psPrms->pcOutStringLast),
-                _s[FSDSS_E], _s[EL_E], psPrms->u16LinesProcessed, _s[MS_E], _s[IVLD_E], " data size\n");
-            psPrms->szNumberOfWarnings++;
+            psPrms->pcOutStringLast += LOG_WARNING(psPrms, PinCfgMessages_getString(MS_E), ERR_INVALID_DATA_SIZE);
             return PINCFG_OK_E;
         }
         
         // Validate data size (1-6 bytes)
         if (u8DataSize < 1 || u8DataSize > 6)
         {
-            psPrms->pcOutStringLast += snprintf(
-                (char *)(psPrms->psParsePrms->pcOutString + psPrms->pcOutStringLast),
-                szGetSize(psPrms->psParsePrms->u16OutStrMaxLen, psPrms->pcOutStringLast),
-                _s[FSDSS_E], _s[EL_E], psPrms->u16LinesProcessed, _s[MS_E], _s[IVLD_E], " data size (1-6)\n");
-            psPrms->szNumberOfWarnings++;
+            psPrms->pcOutStringLast += LOG_WARNING(psPrms, PinCfgMessages_getString(MS_E), ERR_INVALID_DATA_SIZE);
             return PINCFG_OK_E;
         }
         
@@ -1274,11 +920,7 @@ static inline PINCFG_RESULT_T PinCfgCsv_ParseMeasurementSource(PINCFG_PARSE_SUBF
             uint32_t u32Cmd2 = 0;
             if (PinCfgStr_eAtoU32(&(psPrms->sTempStrPt), &u32Cmd2) != PINCFG_STR_OK_E)
             {
-                psPrms->pcOutStringLast += snprintf(
-                    (char *)(psPrms->psParsePrms->pcOutString + psPrms->pcOutStringLast),
-                    szGetSize(psPrms->psParsePrms->u16OutStrMaxLen, psPrms->pcOutStringLast),
-                    _s[FSDSS_E], _s[EL_E], psPrms->u16LinesProcessed, _s[MS_E], _s[IVLD_E], " cmd2\n");
-                psPrms->szNumberOfWarnings++;
+                psPrms->pcOutStringLast += LOG_WARNING(psPrms, PinCfgMessages_getString(MS_E), ERR_INVALID_I2C_CMD);
                 return PINCFG_OK_E;
             }
             au8CommandBytes[1] = (uint8_t)u32Cmd2;
@@ -1292,11 +934,7 @@ static inline PINCFG_RESULT_T PinCfgCsv_ParseMeasurementSource(PINCFG_PARSE_SUBF
                 uint32_t u32Cmd3 = 0;
                 if (PinCfgStr_eAtoU32(&(psPrms->sTempStrPt), &u32Cmd3) != PINCFG_STR_OK_E)
                 {
-                    psPrms->pcOutStringLast += snprintf(
-                        (char *)(psPrms->psParsePrms->pcOutString + psPrms->pcOutStringLast),
-                        szGetSize(psPrms->psParsePrms->u16OutStrMaxLen, psPrms->pcOutStringLast),
-                        _s[FSDSS_E], _s[EL_E], psPrms->u16LinesProcessed, _s[MS_E], _s[IVLD_E], " cmd3\n");
-                    psPrms->szNumberOfWarnings++;
+                    psPrms->pcOutStringLast += LOG_WARNING(psPrms, PinCfgMessages_getString(MS_E), ERR_INVALID_I2C_CMD);
                     return PINCFG_OK_E;
                 }
                 au8CommandBytes[2] = (uint8_t)u32Cmd3;
@@ -1329,7 +967,7 @@ static inline PINCFG_RESULT_T PinCfgCsv_ParseMeasurementSource(PINCFG_PARSE_SUBF
             psPrms->pcOutStringLast += snprintf(
                 (char *)(psPrms->psParsePrms->pcOutString + psPrms->pcOutStringLast),
                 szGetSize(psPrms->psParsePrms->u16OutStrMaxLen, psPrms->pcOutStringLast),
-                _s[FSDSS_E], _s[EL_E], psPrms->u16LinesProcessed, _s[MS_E], _s[OOM_E], " (I2C)\n");
+                PinCfgMessages_getString(FSDSS_E), PinCfgMessages_getString(EL_E), psPrms->u16LinesProcessed, PinCfgMessages_getString(MS_E), PinCfgMessages_getString(OOM_E), " (I2C)\n");
             return PINCFG_OUTOFMEMORY_ERROR_E;
         }
         
@@ -1338,11 +976,7 @@ static inline PINCFG_RESULT_T PinCfgCsv_ParseMeasurementSource(PINCFG_PARSE_SUBF
                              au8CommandBytes, u8CommandLength, u8DataSize, 
                              u16ConversionDelayMs) != PINCFG_OK_E)
         {
-            psPrms->pcOutStringLast += snprintf(
-                (char *)(psPrms->psParsePrms->pcOutString + psPrms->pcOutStringLast),
-                szGetSize(psPrms->psParsePrms->u16OutStrMaxLen, psPrms->pcOutStringLast),
-                _s[FSDSS_E], _s[EL_E], psPrms->u16LinesProcessed, _s[MS_E], _s[INITF_E], " (I2C)\n");
-            psPrms->szNumberOfWarnings++;
+            psPrms->pcOutStringLast += LOG_WARNING(psPrms, PinCfgMessages_getString(MS_E), ERR_INIT_FAILED);
             return PINCFG_OK_E;
         }
         
@@ -1358,11 +992,7 @@ static inline PINCFG_RESULT_T PinCfgCsv_ParseMeasurementSource(PINCFG_PARSE_SUBF
 #endif
     case MEASUREMENT_TYPE_CALCULATED_E:
     default:
-        psPrms->pcOutStringLast += snprintf(
-            (char *)(psPrms->psParsePrms->pcOutString + psPrms->pcOutStringLast),
-            szGetSize(psPrms->psParsePrms->u16OutStrMaxLen, psPrms->pcOutStringLast),
-            _s[FSDSS_E], _s[EL_E], psPrms->u16LinesProcessed, _s[MS_E], _s[TNI_E]);
-        psPrms->szNumberOfWarnings++;
+        psPrms->pcOutStringLast += LOG_WARNING(psPrms, PinCfgMessages_getString(MS_E), ERR_TYPE_NOT_IMPLEMENTED);
         return PINCFG_OK_E;
     }
 
@@ -1376,10 +1006,7 @@ static inline PINCFG_RESULT_T PinCfgCsv_ParseMeasurementSource(PINCFG_PARSE_SUBF
         
         if (eAddResult != PINCFG_OK_E)
         {
-            psPrms->pcOutStringLast += snprintf(
-                (char *)(psPrms->psParsePrms->pcOutString + psPrms->pcOutStringLast),
-                szGetSize(psPrms->psParsePrms->u16OutStrMaxLen, psPrms->pcOutStringLast),
-                _s[FSDSS_E], _s[EL_E], psPrms->u16LinesProcessed, _s[MS_E], _s[OOM_E], _s[NL_E]);
+            psPrms->pcOutStringLast += LOG_ERROR(psPrms, PinCfgMessages_getString(MS_E), ERR_OOM);
             return eAddResult;
         }
     }
@@ -1390,18 +1017,14 @@ static inline PINCFG_RESULT_T PinCfgCsv_ParseMeasurementSource(PINCFG_PARSE_SUBF
 // Phase 2: Parse Sensor Reporter (SR)
 // Format: SR,<name>,<measurementName>,<vType>,<sType>,<enableable>,<cumulative>,<samplingMs>,<reportSec>,<offset>,<byteOffset>,<byteCount>/
 // Example: SR,sensor1,temp0,6,6,0,0,1000,300,0.0/
-static inline PINCFG_RESULT_T PinCfgCsv_ParseSensorReporter(PINCFG_PARSE_SUBFN_PARAMS_T *psPrms)
+static PINCFG_RESULT_T PinCfgCsv_ParseSensorReporter(PINCFG_PARSE_SUBFN_PARAMS_T *psPrms)
 {
     // SR,<name>,<measurement>,<vType>,<sType>,<enableable>,<cumulative>,<sampMs>,<reportSec>,<offset>,<byteOffset>,<byteCount>
     // Min: SR,name,meas,6,6,0,0,1000,300 = 9 items (offset, byte offset/count optional)
     // Max: SR,name,meas,6,6,0,0,1000,300,0.0,0,0 = 12 items
     if (psPrms->u8LineItemsLen < 9 || psPrms->u8LineItemsLen > 12)
     {
-        psPrms->pcOutStringLast += snprintf(
-            (char *)(psPrms->psParsePrms->pcOutString + psPrms->pcOutStringLast),
-            szGetSize(psPrms->psParsePrms->u16OutStrMaxLen, psPrms->pcOutStringLast),
-            _s[FSDSS_E], _s[EL_E], psPrms->u16LinesProcessed, _s[SR_E], _s[IVLD_E], _s[ARGS_E]);
-        psPrms->szNumberOfWarnings++;
+        psPrms->pcOutStringLast += LOG_WARNING(psPrms, PinCfgMessages_getString(SR_E), ERR_INVALID_ARGS);
         return PINCFG_OK_E;
     }
 
@@ -1428,15 +1051,7 @@ static inline PINCFG_RESULT_T PinCfgCsv_ParseSensorReporter(PINCFG_PARSE_SUBFN_P
         !psPrms->psParsePrms->bValidate &&
         psPrms->psParsePrms->pszMemoryRequired == NULL)
     {
-        psPrms->pcOutStringLast += snprintf(
-            (char *)(psPrms->psParsePrms->pcOutString + psPrms->pcOutStringLast),
-            szGetSize(psPrms->psParsePrms->u16OutStrMaxLen, psPrms->pcOutStringLast),
-            "%s%d:%s%s%.*s\n",
-            _s[EL_E], psPrms->u16LinesProcessed,
-            _s[SR_E], _s[MNF_E],
-            (int)psPrms->sTempStrPt.szLen,
-            psPrms->sTempStrPt.pcStrStart);
-        psPrms->szNumberOfWarnings++;
+        psPrms->pcOutStringLast += LOG_WARNING(psPrms, PinCfgMessages_getString(SR_E), ERR_MEASUREMENT_NOT_FOUND);
         return PINCFG_OK_E;
     }
 
@@ -1446,11 +1061,7 @@ static inline PINCFG_RESULT_T PinCfgCsv_ParseSensorReporter(PINCFG_PARSE_SUBFN_P
     PinCfgStr_vGetSplitElemByIndex(&(psPrms->sTempStrPt), PINCFG_VALUE_SEPARATOR_D, 3);
     if (PinCfgStr_eAtoU8(&(psPrms->sTempStrPt), &u8VType) != PINCFG_STR_OK_E)
     {
-        psPrms->pcOutStringLast += snprintf(
-            (char *)(psPrms->psParsePrms->pcOutString + psPrms->pcOutStringLast),
-            szGetSize(psPrms->psParsePrms->u16OutStrMaxLen, psPrms->pcOutStringLast),
-            _s[FSDSS_E], _s[EL_E], psPrms->u16LinesProcessed, _s[SR_E], _s[IVLD_E], " V_TYPE\n");
-        psPrms->szNumberOfWarnings++;
+        psPrms->pcOutStringLast += LOG_WARNING(psPrms, PinCfgMessages_getString(SR_E), ERR_INVALID_VTYPE);
         return PINCFG_OK_E;
     }
 
@@ -1460,11 +1071,7 @@ static inline PINCFG_RESULT_T PinCfgCsv_ParseSensorReporter(PINCFG_PARSE_SUBFN_P
     PinCfgStr_vGetSplitElemByIndex(&(psPrms->sTempStrPt), PINCFG_VALUE_SEPARATOR_D, 4);
     if (PinCfgStr_eAtoU8(&(psPrms->sTempStrPt), &u8SType) != PINCFG_STR_OK_E)
     {
-        psPrms->pcOutStringLast += snprintf(
-            (char *)(psPrms->psParsePrms->pcOutString + psPrms->pcOutStringLast),
-            szGetSize(psPrms->psParsePrms->u16OutStrMaxLen, psPrms->pcOutStringLast),
-            _s[FSDSS_E], _s[EL_E], psPrms->u16LinesProcessed, _s[SR_E], _s[IVLD_E], " S_TYPE\n");
-        psPrms->szNumberOfWarnings++;
+        psPrms->pcOutStringLast += LOG_WARNING(psPrms, PinCfgMessages_getString(SR_E), ERR_INVALID_STYPE);
         return PINCFG_OK_E;
     }
 
@@ -1474,11 +1081,7 @@ static inline PINCFG_RESULT_T PinCfgCsv_ParseSensorReporter(PINCFG_PARSE_SUBFN_P
     PinCfgStr_vGetSplitElemByIndex(&(psPrms->sTempStrPt), PINCFG_VALUE_SEPARATOR_D, 5);
     if (PinCfgStr_eAtoU8(&(psPrms->sTempStrPt), &u8Enableable) != PINCFG_STR_OK_E || u8Enableable > 1U)
     {
-        psPrms->pcOutStringLast += snprintf(
-            (char *)(psPrms->psParsePrms->pcOutString + psPrms->pcOutStringLast),
-            szGetSize(psPrms->psParsePrms->u16OutStrMaxLen, psPrms->pcOutStringLast),
-            _s[FSDSS_E], _s[EL_E], psPrms->u16LinesProcessed, _s[SR_E], _s[IVLD_E], _s[ENABLEABLE_E]);
-        psPrms->szNumberOfWarnings++;
+        psPrms->pcOutStringLast += LOG_WARNING(psPrms, PinCfgMessages_getString(SR_E), ERR_INVALID_ENABLEABLE);
         return PINCFG_OK_E;
     }
 
@@ -1488,11 +1091,7 @@ static inline PINCFG_RESULT_T PinCfgCsv_ParseSensorReporter(PINCFG_PARSE_SUBFN_P
     PinCfgStr_vGetSplitElemByIndex(&(psPrms->sTempStrPt), PINCFG_VALUE_SEPARATOR_D, 6);
     if (PinCfgStr_eAtoU8(&(psPrms->sTempStrPt), &u8Cumulative) != PINCFG_STR_OK_E || u8Cumulative > 1U)
     {
-        psPrms->pcOutStringLast += snprintf(
-            (char *)(psPrms->psParsePrms->pcOutString + psPrms->pcOutStringLast),
-            szGetSize(psPrms->psParsePrms->u16OutStrMaxLen, psPrms->pcOutStringLast),
-            _s[FSDSS_E], _s[EL_E], psPrms->u16LinesProcessed, _s[SR_E], _s[IVLD_E], _s[CUMULATIVE_E]);
-        psPrms->szNumberOfWarnings++;
+        psPrms->pcOutStringLast += LOG_WARNING(psPrms, PinCfgMessages_getString(SR_E), ERR_INVALID_CUMULATIVE);
         return PINCFG_OK_E;
     }
 
@@ -1505,11 +1104,7 @@ static inline PINCFG_RESULT_T PinCfgCsv_ParseSensorReporter(PINCFG_PARSE_SUBFN_P
         u32Temp < PINCFG_CPUTEMP_SAMPLING_INTV_MIN_MS_D ||
         u32Temp > PINCFG_CPUTEMP_SAMPLING_INTV_MAX_MS_D)
     {
-        psPrms->pcOutStringLast += snprintf(
-            (char *)(psPrms->psParsePrms->pcOutString + psPrms->pcOutStringLast),
-            szGetSize(psPrms->psParsePrms->u16OutStrMaxLen, psPrms->pcOutStringLast),
-            _s[FSDSS_E], _s[EL_E], psPrms->u16LinesProcessed, _s[SR_E], _s[IVLD_E], _s[SAMPINT_E]);
-        psPrms->szNumberOfWarnings++;
+        psPrms->pcOutStringLast += LOG_WARNING(psPrms, PinCfgMessages_getString(SR_E), ERR_INVALID_SAMPLING_INTV);
         return PINCFG_OK_E;
     }
     u16SamplingIntervalMs = (uint16_t)u32Temp;
@@ -1523,11 +1118,7 @@ static inline PINCFG_RESULT_T PinCfgCsv_ParseSensorReporter(PINCFG_PARSE_SUBFN_P
         u32Temp < PINCFG_CPUTEMP_REPORTING_INTV_MIN_SEC_D ||
         u32Temp > PINCFG_CPUTEMP_REPORTING_INTV_MAX_SEC_D)
     {
-        psPrms->pcOutStringLast += snprintf(
-            (char *)(psPrms->psParsePrms->pcOutString + psPrms->pcOutStringLast),
-            szGetSize(psPrms->psParsePrms->u16OutStrMaxLen, psPrms->pcOutStringLast),
-            _s[FSDSS_E], _s[EL_E], psPrms->u16LinesProcessed, _s[SR_E], _s[IVLD_E], _s[REPINT_E]);
-        psPrms->szNumberOfWarnings++;
+        psPrms->pcOutStringLast += LOG_WARNING(psPrms, PinCfgMessages_getString(SR_E), ERR_INVALID_REPORT_INTV);
         return PINCFG_OK_E;
     }
     u16ReportIntervalSec = (uint16_t)u32Temp;
@@ -1543,8 +1134,7 @@ static inline PINCFG_RESULT_T PinCfgCsv_ParseSensorReporter(PINCFG_PARSE_SUBFN_P
             psPrms->pcOutStringLast += snprintf(
                 (char *)(psPrms->psParsePrms->pcOutString + psPrms->pcOutStringLast),
                 szGetSize(psPrms->psParsePrms->u16OutStrMaxLen, psPrms->pcOutStringLast),
-                _s[FSDSS_E], _s[EL_E], psPrms->u16LinesProcessed, _s[SR_E], _s[IVLD_E], _s[OFFSET_E]);
-            psPrms->szNumberOfWarnings++;
+                PinCfgMessages_getString(FSDSS_E), PinCfgMessages_getString(EL_E), psPrms->u16LinesProcessed, PinCfgMessages_getString(SR_E), PinCfgMessages_getString(IVLD_E), PinCfgMessages_getString(OFFSET_E));
             return PINCFG_OK_E;
         }
     }
@@ -1557,11 +1147,7 @@ static inline PINCFG_RESULT_T PinCfgCsv_ParseSensorReporter(PINCFG_PARSE_SUBFN_P
         PinCfgStr_vGetSplitElemByIndex(&(psPrms->sTempStrPt), PINCFG_VALUE_SEPARATOR_D, 10);
         if (PinCfgStr_eAtoU8(&(psPrms->sTempStrPt), &u8ByteOffset) != PINCFG_STR_OK_E || u8ByteOffset > 5U)
         {
-            psPrms->pcOutStringLast += snprintf(
-                (char *)(psPrms->psParsePrms->pcOutString + psPrms->pcOutStringLast),
-                szGetSize(psPrms->psParsePrms->u16OutStrMaxLen, psPrms->pcOutStringLast),
-                _s[FSDSS_E], _s[EL_E], psPrms->u16LinesProcessed, _s[SR_E], _s[IVLD_E], " byte offset (0-5)\n");
-            psPrms->szNumberOfWarnings++;
+            psPrms->pcOutStringLast += LOG_WARNING(psPrms, PinCfgMessages_getString(SR_E), ERR_INVALID_BYTE_OFFSET);
             return PINCFG_OK_E;
         }
     }
@@ -1574,11 +1160,7 @@ static inline PINCFG_RESULT_T PinCfgCsv_ParseSensorReporter(PINCFG_PARSE_SUBFN_P
         PinCfgStr_vGetSplitElemByIndex(&(psPrms->sTempStrPt), PINCFG_VALUE_SEPARATOR_D, 11);
         if (PinCfgStr_eAtoU8(&(psPrms->sTempStrPt), &u8ByteCount) != PINCFG_STR_OK_E || u8ByteCount > 6U)
         {
-            psPrms->pcOutStringLast += snprintf(
-                (char *)(psPrms->psParsePrms->pcOutString + psPrms->pcOutStringLast),
-                szGetSize(psPrms->psParsePrms->u16OutStrMaxLen, psPrms->pcOutStringLast),
-                _s[FSDSS_E], _s[EL_E], psPrms->u16LinesProcessed, _s[SR_E], _s[IVLD_E], " byte count (0-6)\n");
-            psPrms->szNumberOfWarnings++;
+            psPrms->pcOutStringLast += LOG_WARNING(psPrms, PinCfgMessages_getString(SR_E), ERR_INVALID_BYTE_COUNT);
             return PINCFG_OK_E;
         }
     }
@@ -1607,10 +1189,7 @@ static inline PINCFG_RESULT_T PinCfgCsv_ParseSensorReporter(PINCFG_PARSE_SUBFN_P
     if (psSensorHandle == NULL)
     {
         Memory_eReset();
-        psPrms->pcOutStringLast += snprintf(
-            (char *)(psPrms->psParsePrms->pcOutString + psPrms->pcOutStringLast),
-            szGetSize(psPrms->psParsePrms->u16OutStrMaxLen, psPrms->pcOutStringLast),
-            _s[FSDSS_E], _s[EL_E], psPrms->u16LinesProcessed, _s[SR_E], _s[OOM_E], _s[SENSOR_E]);
+        psPrms->pcOutStringLast += LOG_ERROR(psPrms, PinCfgMessages_getString(SR_E), ERR_OOM);
         return PINCFG_OUTOFMEMORY_ERROR_E;
     }
 
@@ -1634,8 +1213,7 @@ static inline PINCFG_RESULT_T PinCfgCsv_ParseSensorReporter(PINCFG_PARSE_SUBFN_P
         psPrms->pcOutStringLast += snprintf(
             (char *)(psPrms->psParsePrms->pcOutString + psPrms->pcOutStringLast),
             szGetSize(psPrms->psParsePrms->u16OutStrMaxLen, psPrms->pcOutStringLast),
-            _s[FSDSS_E], _s[EL_E], psPrms->u16LinesProcessed, _s[SR_E], _s[INITF_E], _s[NL_E]);
-        psPrms->szNumberOfWarnings++;
+            PinCfgMessages_getString(FSDSS_E), PinCfgMessages_getString(EL_E), psPrms->u16LinesProcessed, PinCfgMessages_getString(SR_E), PinCfgMessages_getString(INITF_E), PinCfgMessages_getString(NL_E));
     }
 
     // Set byte extraction parameters for multi-value sensors (e.g., AHT10 temp+humidity)
@@ -1645,7 +1223,7 @@ static inline PINCFG_RESULT_T PinCfgCsv_ParseSensorReporter(PINCFG_PARSE_SUBFN_P
     return PINCFG_OK_E;
 }
 
-static inline PINCFG_RESULT_T PinCfgCsv_ParseGlobalConfigItems(PINCFG_PARSE_SUBFN_PARAMS_T *psPrms)
+static PINCFG_RESULT_T PinCfgCsv_ParseGlobalConfigItems(PINCFG_PARSE_SUBFN_PARAMS_T *psPrms)
 {
     PINCFG_PARSE_STRINGS_T eItem;
     uint32_t u32ParsedNumber = 0;
@@ -1665,15 +1243,7 @@ static inline PINCFG_RESULT_T PinCfgCsv_ParseGlobalConfigItems(PINCFG_PARSE_SUBF
     case 'F': eItem = SWFFDMS_E; break;
     default:
     {
-        psPrms->pcOutStringLast += snprintf(
-            (char *)(psPrms->psParsePrms->pcOutString + psPrms->pcOutStringLast),
-            szGetSize(psPrms->psParsePrms->u16OutStrMaxLen, psPrms->pcOutStringLast),
-            _s[FSDS_E],
-            _s[WL_E],
-            psPrms->u16LinesProcessed,
-            " Unknown global configuration item.");
-        psPrms->szNumberOfWarnings++;
-
+        psPrms->pcOutStringLast += LOG_WARNING(psPrms, "", ERR_INVALID_GLOBAL_CFG);
         return PINCFG_OK_E;
     }
     break;
@@ -1681,17 +1251,7 @@ static inline PINCFG_RESULT_T PinCfgCsv_ParseGlobalConfigItems(PINCFG_PARSE_SUBF
 
     if (psPrms->u8LineItemsLen < 2)
     {
-        psPrms->pcOutStringLast += snprintf(
-            (char *)(psPrms->psParsePrms->pcOutString + psPrms->pcOutStringLast),
-            szGetSize(psPrms->psParsePrms->u16OutStrMaxLen, psPrms->pcOutStringLast),
-            _s[FSDSSS_E],
-            _s[WL_E],
-            psPrms->u16LinesProcessed,
-            _s[eItem],
-            _s[IN_E],
-            _s[OARGS_E]);
-        psPrms->szNumberOfWarnings++;
-
+        psPrms->pcOutStringLast += LOG_WARNING(psPrms, PinCfgMessages_getString(eItem), ERR_INVALID_ARGS);
         return PINCFG_OK_E;
     }
 
@@ -1699,17 +1259,7 @@ static inline PINCFG_RESULT_T PinCfgCsv_ParseGlobalConfigItems(PINCFG_PARSE_SUBF
     PinCfgStr_vGetSplitElemByIndex(&(psPrms->sTempStrPt), PINCFG_VALUE_SEPARATOR_D, 1);
     if (PinCfgStr_eAtoU32(&(psPrms->sTempStrPt), &u32ParsedNumber) != PINCFG_STR_OK_E || u32ParsedNumber < u32Min)
     {
-        psPrms->pcOutStringLast += snprintf(
-            (char *)(psPrms->psParsePrms->pcOutString + psPrms->pcOutStringLast),
-            szGetSize(psPrms->psParsePrms->u16OutStrMaxLen, psPrms->pcOutStringLast),
-            _s[FSDSSS_E],
-            _s[WL_E],
-            psPrms->u16LinesProcessed,
-            _s[eItem],
-            _s[IN_E],
-            ".");
-        psPrms->szNumberOfWarnings++;
-
+        psPrms->pcOutStringLast += LOG_WARNING(psPrms, PinCfgMessages_getString(eItem), ERR_INVALID_NUMBER);
         return PINCFG_OK_E;
     }
 
@@ -1726,7 +1276,7 @@ static inline PINCFG_RESULT_T PinCfgCsv_ParseGlobalConfigItems(PINCFG_PARSE_SUBF
     return PINCFG_OK_E;
 }
 
-static inline PRESENTABLE_T *PinCfgCsv_psFindInPresentablesById(uint8_t u8Id)
+static PRESENTABLE_T *PinCfgCsv_psFindInPresentablesById(uint8_t u8Id)
 {
     // for (uint8_t i = 0; i < psGlobals->u8PresentablesCount; i++)
     // {
@@ -1741,7 +1291,7 @@ static inline PRESENTABLE_T *PinCfgCsv_psFindInPresentablesById(uint8_t u8Id)
     return (psGlobals->ppsPresentables)[u8Id];
 }
 
-static inline ISENSORMEASURE_T *PinCfgCsv_psFindMeasurementByName(const char *pcName, size_t szNameLen)
+static ISENSORMEASURE_T *PinCfgCsv_psFindMeasurementByName(const char *pcName, size_t szNameLen)
 {
     if (pcName == NULL || szNameLen == 0)
         return NULL;
@@ -1852,13 +1402,10 @@ static PRESENTABLE_T *PinCfgCsv_psFindInTempPresentablesByName(const STRING_POIN
 
 static inline size_t szGetSize(size_t a, size_t b)
 {
-    if (b >= a)
-        return 0;
-
-    return a - b;
+    return (a > b) ? (a - b) : 0;
 }
 
-static inline PINCFG_RESULT_T PinCfgCsv_eAddToLinkedList(LINKEDLIST_ITEM_T **psFirst, void *pvNew)
+static PINCFG_RESULT_T PinCfgCsv_eAddToLinkedList(LINKEDLIST_ITEM_T **psFirst, void *pvNew)
 {
     LINKEDLIST_RESULT_T eAddRes = LinkedList_eAddToLinkedList(psFirst, pvNew);
 
