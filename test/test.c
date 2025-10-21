@@ -24,6 +24,10 @@
 #include "I2CMock.h"
 #endif
 
+#ifdef FEATURE_ANALOG_MEASUREMENT
+#include "AnalogMeasure.h"
+#endif
+
 #ifndef MEMORY_SZ
 #ifdef USE_MALLOC
 #define MEMORY_SZ 3003
@@ -1826,12 +1830,13 @@ void test_vI2CMeasure_Init(void)
     uint8_t au8Cmd[] = {0xAC, 0x33, 0x00};
     uint8_t u8RegAddr = 0x00;  // TMP102 temperature register
     PINCFG_RESULT_T eResult;
+    STRING_POINT_T sName;
     
     // Test simple mode initialization (1-byte register read)
+    PinCfgStr_vInitStrPoint(&sName, "temp", 4);
     eResult = I2CMeasure_eInit(
         &sI2C,
-        MEASUREMENT_TYPE_I2C_E,
-        "temp",
+        &sName,
         0x48,         // TMP102 address
         &u8RegAddr,   // Register address
         1,            // 1 byte command (register address)
@@ -1847,10 +1852,10 @@ void test_vI2CMeasure_Init(void)
     TEST_ASSERT_EQUAL(0, sI2C.u16ConversionDelayMs);
 
     // Test command mode initialization (multi-byte command with delay)
+    PinCfgStr_vInitStrPoint(&sName, "aht10", 5);
     eResult = I2CMeasure_eInit(
         &sI2C,
-        MEASUREMENT_TYPE_I2C_E,
-        "aht10",
+        &sName,
         0x38,      // AHT10 address
         au8Cmd,    // 3-byte command
         3,         // Command length
@@ -1868,16 +1873,17 @@ void test_vI2CMeasure_Init(void)
     TEST_ASSERT_EQUAL(80, sI2C.u16ConversionDelayMs);
 
     // Test NULL pointer error
-    eResult = I2CMeasure_eInit(NULL, MEASUREMENT_TYPE_I2C_E, "test", 0x48, &u8RegAddr, 1, 2, 0);
+    eResult = I2CMeasure_eInit(NULL, &sName, 0x48, &u8RegAddr, 1, 2, 0);
     TEST_ASSERT_EQUAL(PINCFG_NULLPTR_ERROR_E, eResult);
 
     // Test invalid data size (0 bytes)
     uint8_t u8Dummy = 0;
-    eResult = I2CMeasure_eInit(&sI2C, MEASUREMENT_TYPE_I2C_E, "test", 0x48, &u8Dummy, 1, 0, 0);
+    PinCfgStr_vInitStrPoint(&sName, "test", 4);
+    eResult = I2CMeasure_eInit(&sI2C, &sName, 0x48, &u8Dummy, 1, 0, 0);
     TEST_ASSERT_EQUAL(PINCFG_ERROR_E, eResult);
 
     // Test invalid data size (>6 bytes)
-    eResult = I2CMeasure_eInit(&sI2C, MEASUREMENT_TYPE_I2C_E, "test", 0x48, &u8Dummy, 1, 7, 0);
+    eResult = I2CMeasure_eInit(&sI2C, &sName, 0x48, &u8Dummy, 1, 7, 0);
     TEST_ASSERT_EQUAL(PINCFG_ERROR_E, eResult);
 }
 
@@ -1887,38 +1893,46 @@ void test_vI2CMeasure_Init(void)
 void test_vI2CMeasure_SimpleRead(void)
 {
     I2CMEASURE_T sI2C;
-    float fValue = 0.0f;
+    uint8_t au8Buffer[6];
+    uint8_t u8Size = 6;
     ISENSORMEASURE_RESULT_T eResult;
     uint8_t au8ResponseData[] = {0x01, 0x90};  // 400 decimal
     uint8_t u8RegAddr = 0x00;  // Temperature register
+    STRING_POINT_T sName;
     
     // Initialize for simple 2-byte read
-    I2CMeasure_eInit(&sI2C, MEASUREMENT_TYPE_I2C_E, "temp", 0x48, &u8RegAddr, 1, 2, 0);
+    PinCfgStr_vInitStrPoint(&sName, "temp", 4);
+    I2CMeasure_eInit(&sI2C, &sName, 0x48, &u8RegAddr, 1, 2, 0);
     
     // Mock: Set up response data
     WireMock_vReset();
     WireMock_vSetResponse(au8ResponseData, 2);
     
     // First call: Should send request and return PENDING
-    eResult = I2CMeasure_eMeasure(&sI2C.sInterface, &fValue, 0.0f, 0);
+    eResult = I2CMeasure_eMeasure(&sI2C.sInterface, au8Buffer, &u8Size, 0);
     TEST_ASSERT_EQUAL(ISENSORMEASURE_PENDING_E, eResult);
     TEST_ASSERT_EQUAL(I2CMEASURE_STATE_REQUEST_SENT_E, sI2C.eState);
     TEST_ASSERT_EQUAL(0x48, WireMock_u8GetLastAddress());
     
     // Second call: Data available, should read and process
-    eResult = I2CMeasure_eMeasure(&sI2C.sInterface, &fValue, 0.0f, 0);
+    u8Size = 6;
+    eResult = I2CMeasure_eMeasure(&sI2C.sInterface, au8Buffer, &u8Size, 0);
     TEST_ASSERT_EQUAL(ISENSORMEASURE_PENDING_E, eResult);
     TEST_ASSERT_EQUAL(I2CMEASURE_STATE_DATA_READY_E, sI2C.eState);
     
-    // Third call: Return the calculated value
-    eResult = I2CMeasure_eMeasure(&sI2C.sInterface, &fValue, 0.0f, 0);
+    // Third call: Return the raw bytes
+    u8Size = 6;
+    eResult = I2CMeasure_eMeasure(&sI2C.sInterface, au8Buffer, &u8Size, 0);
     TEST_ASSERT_EQUAL(ISENSORMEASURE_OK_E, eResult);
-    TEST_ASSERT_EQUAL(400.0f, fValue);
+    TEST_ASSERT_EQUAL(2, u8Size);
+    TEST_ASSERT_EQUAL(0x01, au8Buffer[0]);
+    TEST_ASSERT_EQUAL(0x90, au8Buffer[1]);
     TEST_ASSERT_EQUAL(I2CMEASURE_STATE_IDLE_E, sI2C.eState);
     
     // Can repeat measurement
     WireMock_vSetResponse(au8ResponseData, 2);
-    eResult = I2CMeasure_eMeasure(&sI2C.sInterface, &fValue, 0.0f, 0);
+    u8Size = 6;
+    eResult = I2CMeasure_eMeasure(&sI2C.sInterface, au8Buffer, &u8Size, 0);
     TEST_ASSERT_EQUAL(ISENSORMEASURE_PENDING_E, eResult);
 }
 
@@ -1928,44 +1942,52 @@ void test_vI2CMeasure_SimpleRead(void)
 void test_vI2CMeasure_CommandMode(void)
 {
     I2CMEASURE_T sI2C;
-    float fValue = 0.0f;
+    uint8_t au8Buffer[6];
+    uint8_t u8Size = 6;
     ISENSORMEASURE_RESULT_T eResult;
     uint8_t au8Cmd[] = {0xAC, 0x33, 0x00};
     uint8_t au8ResponseData[] = {0x1C, 0x5E, 0x33, 0x7F, 0xF0, 0x00};
+    STRING_POINT_T sName;
     
     // Initialize for command mode with conversion delay
-    I2CMeasure_eInit(&sI2C, MEASUREMENT_TYPE_I2C_E, "aht10", 0x38, au8Cmd, 3, 6, 80);
+    PinCfgStr_vInitStrPoint(&sName, "aht10", 5);
+    I2CMeasure_eInit(&sI2C, &sName, 0x38, au8Cmd, 3, 6, 80);
     
     WireMock_vReset();
     mock_millis_u32Return = 0;
     
     // First call: Send command, start waiting
-    eResult = I2CMeasure_eMeasure(&sI2C.sInterface, &fValue, 0.0f, 0);
+    eResult = I2CMeasure_eMeasure(&sI2C.sInterface, au8Buffer, &u8Size, 0);
     TEST_ASSERT_EQUAL(ISENSORMEASURE_PENDING_E, eResult);
     TEST_ASSERT_EQUAL(I2CMEASURE_STATE_COMMAND_SENT_E, sI2C.eState);
     TEST_ASSERT_EQUAL(0x38, WireMock_u8GetLastAddress());
     
     // Second call: Still waiting for conversion delay
     mock_millis_u32Return = 50;  // Only 50ms elapsed
-    eResult = I2CMeasure_eMeasure(&sI2C.sInterface, &fValue, 0.0f, 0);
+    u8Size = 6;
+    eResult = I2CMeasure_eMeasure(&sI2C.sInterface, au8Buffer, &u8Size, 0);
     TEST_ASSERT_EQUAL(ISENSORMEASURE_PENDING_E, eResult);
     TEST_ASSERT_EQUAL(I2CMEASURE_STATE_COMMAND_SENT_E, sI2C.eState);  // Stays in COMMAND_SENT until delay expires
     
     // Third call: Conversion delay complete, request data
     mock_millis_u32Return = 85;  // >80ms elapsed
     WireMock_vSetResponse(au8ResponseData, 6);
-    eResult = I2CMeasure_eMeasure(&sI2C.sInterface, &fValue, 0.0f, 0);
+    u8Size = 6;
+    eResult = I2CMeasure_eMeasure(&sI2C.sInterface, au8Buffer, &u8Size, 0);
     TEST_ASSERT_EQUAL(ISENSORMEASURE_PENDING_E, eResult);
     TEST_ASSERT_EQUAL(I2CMEASURE_STATE_REQUEST_SENT_E, sI2C.eState);
     
     // Fourth call: Read data
-    eResult = I2CMeasure_eMeasure(&sI2C.sInterface, &fValue, 0.0f, 0);
+    u8Size = 6;
+    eResult = I2CMeasure_eMeasure(&sI2C.sInterface, au8Buffer, &u8Size, 0);
     TEST_ASSERT_EQUAL(ISENSORMEASURE_PENDING_E, eResult);
     TEST_ASSERT_EQUAL(I2CMEASURE_STATE_DATA_READY_E, sI2C.eState);
     
-    // Fifth call: Return value
-    eResult = I2CMeasure_eMeasure(&sI2C.sInterface, &fValue, 0.0f, 0);
+    // Fifth call: Return raw bytes
+    u8Size = 6;
+    eResult = I2CMeasure_eMeasure(&sI2C.sInterface, au8Buffer, &u8Size, 0);
     TEST_ASSERT_EQUAL(ISENSORMEASURE_OK_E, eResult);
+    TEST_ASSERT_EQUAL(6, u8Size);
     TEST_ASSERT_EQUAL(I2CMEASURE_STATE_IDLE_E, sI2C.eState);
 }
 
@@ -1975,29 +1997,34 @@ void test_vI2CMeasure_CommandMode(void)
 void test_vI2CMeasure_Timeout(void)
 {
     I2CMEASURE_T sI2C;
-    float fValue = 0.0f;
+    uint8_t au8Buffer[6];
+    uint8_t u8Size = 6;
     ISENSORMEASURE_RESULT_T eResult;
     uint8_t u8RegAddr = 0x00;
+    STRING_POINT_T sName;
     
     // Initialize with default timeout
-    I2CMeasure_eInit(&sI2C, MEASUREMENT_TYPE_I2C_E, "temp", 0x48, &u8RegAddr, 1, 2, 0);
+    PinCfgStr_vInitStrPoint(&sName, "temp", 4);
+    I2CMeasure_eInit(&sI2C, &sName, 0x48, &u8RegAddr, 1, 2, 0);
     
     WireMock_vReset();
     WireMock_vSimulateTimeout(true);  // Never return data
     mock_millis_u32Return = 0;
     
     // Start request
-    eResult = I2CMeasure_eMeasure(&sI2C.sInterface, &fValue, 0.0f, 0);
+    eResult = I2CMeasure_eMeasure(&sI2C.sInterface, au8Buffer, &u8Size, 0);
     TEST_ASSERT_EQUAL(ISENSORMEASURE_PENDING_E, eResult);
     
     // Still waiting, no timeout yet
     mock_millis_u32Return = 50;
-    eResult = I2CMeasure_eMeasure(&sI2C.sInterface, &fValue, 0.0f, 0);
+    u8Size = 6;
+    eResult = I2CMeasure_eMeasure(&sI2C.sInterface, au8Buffer, &u8Size, 0);
     TEST_ASSERT_EQUAL(ISENSORMEASURE_PENDING_E, eResult);
     
     // Timeout occurs (default 100ms)
     mock_millis_u32Return = 150;
-    eResult = I2CMeasure_eMeasure(&sI2C.sInterface, &fValue, 0.0f, 0);
+    u8Size = 6;
+    eResult = I2CMeasure_eMeasure(&sI2C.sInterface, au8Buffer, &u8Size, 0);
     TEST_ASSERT_EQUAL(ISENSORMEASURE_ERROR_E, eResult);
     TEST_ASSERT_EQUAL(I2CMEASURE_STATE_ERROR_E, sI2C.eState);  // State is ERROR after timeout
     
@@ -2008,12 +2035,14 @@ void test_vI2CMeasure_Timeout(void)
     mock_millis_u32Return = 200;  // Reset time for new request
     
     // First call after error: Resets state to IDLE, still returns ERROR
-    eResult = I2CMeasure_eMeasure(&sI2C.sInterface, &fValue, 0.0f, 0);
+    u8Size = 6;
+    eResult = I2CMeasure_eMeasure(&sI2C.sInterface, au8Buffer, &u8Size, 0);
     TEST_ASSERT_EQUAL(ISENSORMEASURE_ERROR_E, eResult);  // Still ERROR during reset
     TEST_ASSERT_EQUAL(I2CMEASURE_STATE_IDLE_E, sI2C.eState);  // Now in IDLE
     
     // Second call: Now starts new transaction
-    eResult = I2CMeasure_eMeasure(&sI2C.sInterface, &fValue, 0.0f, 0);
+    u8Size = 6;
+    eResult = I2CMeasure_eMeasure(&sI2C.sInterface, au8Buffer, &u8Size, 0);
     TEST_ASSERT_EQUAL(ISENSORMEASURE_PENDING_E, eResult);
     TEST_ASSERT_EQUAL(I2CMEASURE_STATE_REQUEST_SENT_E, sI2C.eState);
 }
@@ -2024,23 +2053,27 @@ void test_vI2CMeasure_Timeout(void)
 void test_vI2CMeasure_DeviceError(void)
 {
     I2CMEASURE_T sI2C;
-    float fValue = 0.0f;
+    uint8_t au8Buffer[6];
+    uint8_t u8Size = 6;
     ISENSORMEASURE_RESULT_T eResult;
     uint8_t u8RegAddr = 0x00;
+    STRING_POINT_T sName;
     
-    I2CMeasure_eInit(&sI2C, MEASUREMENT_TYPE_I2C_E, "temp", 0x48, &u8RegAddr, 1, 2, 0);
+    PinCfgStr_vInitStrPoint(&sName, "temp", 4);
+    I2CMeasure_eInit(&sI2C, &sName, 0x48, &u8RegAddr, 1, 2, 0);
     
     WireMock_vReset();
     WireMock_vSimulateError(true);  // Device doesn't ACK
     mock_millis_u32Return = 0;
     
     // Request should fail immediately
-    eResult = I2CMeasure_eMeasure(&sI2C.sInterface, &fValue, 0.0f, 0);
+    eResult = I2CMeasure_eMeasure(&sI2C.sInterface, au8Buffer, &u8Size, 0);
     TEST_ASSERT_EQUAL(ISENSORMEASURE_PENDING_E, eResult);
     
     // Should detect error and reset
     mock_millis_u32Return = 10;
-    eResult = I2CMeasure_eMeasure(&sI2C.sInterface, &fValue, 0.0f, 0);
+    u8Size = 6;
+    eResult = I2CMeasure_eMeasure(&sI2C.sInterface, au8Buffer, &u8Size, 0);
     // State depends on implementation - either ERROR or retry
     TEST_ASSERT_TRUE(eResult == ISENSORMEASURE_ERROR_E || eResult == ISENSORMEASURE_PENDING_E);
 }
@@ -2056,23 +2089,27 @@ void test_vI2CMeasure_RawData(void)
     ISENSORMEASURE_RESULT_T eResult;
     uint8_t au8ResponseData[] = {0x1C, 0x5E, 0x33, 0x7F, 0xF0, 0x00};
     uint8_t u8RegAddr = 0x00;
+    STRING_POINT_T sName;
     
     // Initialize for 6-byte read
-    I2CMeasure_eInit(&sI2C, MEASUREMENT_TYPE_I2C_E, "aht10", 0x38, &u8RegAddr, 1, 6, 0);
+    PinCfgStr_vInitStrPoint(&sName, "aht10", 5);
+    I2CMeasure_eInit(&sI2C, &sName, 0x38, &u8RegAddr, 1, 6, 0);
     
     WireMock_vReset();
     WireMock_vSetResponse(au8ResponseData, 6);
     
     // Request data
-    eResult = I2CMeasure_eMeasureRaw(&sI2C.sInterface, au8Buffer, &u8Size, 0);
+    eResult = I2CMeasure_eMeasure(&sI2C.sInterface, au8Buffer, &u8Size, 0);
     TEST_ASSERT_EQUAL(ISENSORMEASURE_PENDING_E, eResult);
     
     // Data ready
-    eResult = I2CMeasure_eMeasureRaw(&sI2C.sInterface, au8Buffer, &u8Size, 0);
+    u8Size = 6;
+    eResult = I2CMeasure_eMeasure(&sI2C.sInterface, au8Buffer, &u8Size, 0);
     TEST_ASSERT_EQUAL(ISENSORMEASURE_PENDING_E, eResult);
     
     // Get raw bytes
-    eResult = I2CMeasure_eMeasureRaw(&sI2C.sInterface, au8Buffer, &u8Size, 0);
+    u8Size = 6;
+    eResult = I2CMeasure_eMeasure(&sI2C.sInterface, au8Buffer, &u8Size, 0);
     TEST_ASSERT_EQUAL(ISENSORMEASURE_OK_E, eResult);
     TEST_ASSERT_EQUAL(6, u8Size);
     TEST_ASSERT_EQUAL(0x1C, au8Buffer[0]);
@@ -2084,6 +2121,299 @@ void test_vI2CMeasure_RawData(void)
 }
 
 #endif // FEATURE_I2C_MEASUREMENT
+
+// =============================================================================
+// ANALOG MEASUREMENT TESTS
+// =============================================================================
+
+#ifdef FEATURE_ANALOG_MEASUREMENT
+
+/**
+ * Test AnalogMeasure initialization
+ */
+void test_vAnalogMeasure_Init(void)
+{
+    ANALOGMEASURE_T sAnalog;
+    STRING_POINT_T sName;
+    ANALOGMEASURE_RESULT_T eResult;
+    
+    // Test valid initialization
+    PinCfgStr_vInitStrPoint(&sName, "analog", 6);
+    eResult = AnalogMeasure_eInit(&sAnalog, &sName, 0);
+    TEST_ASSERT_EQUAL(ANALOGMEASURE_OK_E, eResult);
+    TEST_ASSERT_EQUAL(MEASUREMENT_TYPE_ANALOG_E, sAnalog.sSensorMeasure.eType);
+    TEST_ASSERT_NOT_NULL(sAnalog.sSensorMeasure.eMeasure);
+    TEST_ASSERT_EQUAL(0, sAnalog.u8Pin);
+    TEST_ASSERT_EQUAL_STRING("analog", sAnalog.sSensorMeasure.pcName);
+    
+    // Test different pin number
+    PinCfgStr_vInitStrPoint(&sName, "a3", 2);
+    eResult = AnalogMeasure_eInit(&sAnalog, &sName, 3);
+    TEST_ASSERT_EQUAL(ANALOGMEASURE_OK_E, eResult);
+    TEST_ASSERT_EQUAL(3, sAnalog.u8Pin);
+    TEST_ASSERT_EQUAL_STRING("a3", sAnalog.sSensorMeasure.pcName);
+    
+    // Test NULL handle
+    eResult = AnalogMeasure_eInit(NULL, &sName, 0);
+    TEST_ASSERT_EQUAL(ANALOGMEASURE_NULLPTR_ERROR_E, eResult);
+    
+    // Test NULL name
+    eResult = AnalogMeasure_eInit(&sAnalog, NULL, 0);
+    TEST_ASSERT_EQUAL(ANALOGMEASURE_NULLPTR_ERROR_E, eResult);
+}
+
+/**
+ * Test AnalogMeasure simple reading
+ */
+void test_vAnalogMeasure_SimpleRead(void)
+{
+    ANALOGMEASURE_T sAnalog;
+    STRING_POINT_T sName;
+    uint8_t au8Buffer[4];
+    uint8_t u8Size = 4;
+    ISENSORMEASURE_RESULT_T eResult;
+    
+    // Initialize for analog pin A0
+    PinCfgStr_vInitStrPoint(&sName, "analog", 6);
+    AnalogMeasure_eInit(&sAnalog, &sName, 0);
+    
+    // Mock: Set ADC value to 512 (mid-range 10-bit)
+    mock_analogRead_u16Return = 512;
+    mock_analogRead_u32Called = 0;
+    
+    // Read analog value
+    eResult = sAnalog.sSensorMeasure.eMeasure(&sAnalog.sSensorMeasure, au8Buffer, &u8Size, 0);
+    TEST_ASSERT_EQUAL(ISENSORMEASURE_OK_E, eResult);
+    TEST_ASSERT_EQUAL(2, u8Size);  // Returns 2 bytes
+    TEST_ASSERT_EQUAL(1, mock_analogRead_u32Called);
+    TEST_ASSERT_EQUAL(0, mock_analogRead_u8LastPin);
+    
+    // Verify big-endian format
+    uint16_t u16Value = ((uint16_t)au8Buffer[0] << 8) | au8Buffer[1];
+    TEST_ASSERT_EQUAL(512, u16Value);
+    
+    // Test different ADC value
+    mock_analogRead_u16Return = 1023;  // Max 10-bit value
+    eResult = sAnalog.sSensorMeasure.eMeasure(&sAnalog.sSensorMeasure, au8Buffer, &u8Size, 0);
+    TEST_ASSERT_EQUAL(ISENSORMEASURE_OK_E, eResult);
+    u16Value = ((uint16_t)au8Buffer[0] << 8) | au8Buffer[1];
+    TEST_ASSERT_EQUAL(1023, u16Value);
+    
+    // Test minimum value
+    mock_analogRead_u16Return = 0;
+    eResult = sAnalog.sSensorMeasure.eMeasure(&sAnalog.sSensorMeasure, au8Buffer, &u8Size, 0);
+    TEST_ASSERT_EQUAL(ISENSORMEASURE_OK_E, eResult);
+    u16Value = ((uint16_t)au8Buffer[0] << 8) | au8Buffer[1];
+    TEST_ASSERT_EQUAL(0, u16Value);
+    
+    // Test 12-bit ADC value (STM32)
+    mock_analogRead_u16Return = 4095;  // Max 12-bit value
+    eResult = sAnalog.sSensorMeasure.eMeasure(&sAnalog.sSensorMeasure, au8Buffer, &u8Size, 0);
+    TEST_ASSERT_EQUAL(ISENSORMEASURE_OK_E, eResult);
+    u16Value = ((uint16_t)au8Buffer[0] << 8) | au8Buffer[1];
+    TEST_ASSERT_EQUAL(4095, u16Value);
+}
+
+/**
+ * Test AnalogMeasure error handling
+ */
+void test_vAnalogMeasure_ErrorHandling(void)
+{
+    ANALOGMEASURE_T sAnalog;
+    STRING_POINT_T sName;
+    uint8_t au8Buffer[4];
+    uint8_t u8Size = 4;
+    ISENSORMEASURE_RESULT_T eResult;
+    
+    // Initialize
+    PinCfgStr_vInitStrPoint(&sName, "analog", 6);
+    AnalogMeasure_eInit(&sAnalog, &sName, 0);
+    
+    // Test NULL self pointer
+    eResult = sAnalog.sSensorMeasure.eMeasure(NULL, au8Buffer, &u8Size, 0);
+    TEST_ASSERT_EQUAL(ISENSORMEASURE_NULLPTR_ERROR_E, eResult);
+    
+    // Test NULL buffer
+    eResult = sAnalog.sSensorMeasure.eMeasure(&sAnalog.sSensorMeasure, NULL, &u8Size, 0);
+    TEST_ASSERT_EQUAL(ISENSORMEASURE_NULLPTR_ERROR_E, eResult);
+    
+    // Test NULL size pointer
+    eResult = sAnalog.sSensorMeasure.eMeasure(&sAnalog.sSensorMeasure, au8Buffer, NULL, 0);
+    TEST_ASSERT_EQUAL(ISENSORMEASURE_NULLPTR_ERROR_E, eResult);
+    
+    // Test buffer too small
+    u8Size = 1;
+    eResult = sAnalog.sSensorMeasure.eMeasure(&sAnalog.sSensorMeasure, au8Buffer, &u8Size, 0);
+    TEST_ASSERT_EQUAL(ISENSORMEASURE_ERROR_E, eResult);
+}
+
+/**
+ * Test AnalogMeasure with different pins
+ */
+void test_vAnalogMeasure_MultiplePins(void)
+{
+    ANALOGMEASURE_T sAnalog0, sAnalog3, sAnalog7;
+    STRING_POINT_T sName;
+    uint8_t au8Buffer[4];
+    uint8_t u8Size = 4;
+    
+    // Initialize multiple analog measurements
+    PinCfgStr_vInitStrPoint(&sName, "a0", 2);
+    AnalogMeasure_eInit(&sAnalog0, &sName, 0);
+    
+    PinCfgStr_vInitStrPoint(&sName, "a3", 2);
+    AnalogMeasure_eInit(&sAnalog3, &sName, 3);
+    
+    PinCfgStr_vInitStrPoint(&sName, "a7", 2);
+    AnalogMeasure_eInit(&sAnalog7, &sName, 7);
+    
+    // Read from pin 0
+    mock_analogRead_u16Return = 100;
+    sAnalog0.sSensorMeasure.eMeasure(&sAnalog0.sSensorMeasure, au8Buffer, &u8Size, 0);
+    TEST_ASSERT_EQUAL(0, mock_analogRead_u8LastPin);
+    
+    // Read from pin 3
+    mock_analogRead_u16Return = 300;
+    sAnalog3.sSensorMeasure.eMeasure(&sAnalog3.sSensorMeasure, au8Buffer, &u8Size, 0);
+    TEST_ASSERT_EQUAL(3, mock_analogRead_u8LastPin);
+    
+    // Read from pin 7
+    mock_analogRead_u16Return = 700;
+    sAnalog7.sSensorMeasure.eMeasure(&sAnalog7.sSensorMeasure, au8Buffer, &u8Size, 0);
+    TEST_ASSERT_EQUAL(7, mock_analogRead_u8LastPin);
+}
+
+/**
+ * Test AnalogMeasure CSV parsing
+ */
+void test_vAnalogMeasure_CSVParsing(void)
+{
+    PINCFG_RESULT_T eResult;
+    LINKEDLIST_RESULT_T eLinkedListResult;
+    char acOutStr[OUT_STR_MAX_LEN_D];
+    size_t szMemoryRequired;
+    
+    // Format: MS,1,name,pin/
+    // 1 = MEASUREMENT_TYPE_ANALOG_E
+    const char *pcCfg = "MS,1,battery,0/"
+                        "MS,1,temp_sens,1/"
+                        "MS,1,light,2/";
+    
+    // First pass: calculate memory requirements
+    PINCFG_PARSE_PARAMS_T sParams = {
+        .pcConfig = pcCfg,
+        .eAddToLoopables = PinCfgCsv_eAddToTempLoopables,
+        .eAddToPresentables = PinCfgCsv_eAddToTempPresentables,
+        .pszMemoryRequired = &szMemoryRequired,
+        .pcOutString = acOutStr,
+        .u16OutStrMaxLen = (uint16_t)OUT_STR_MAX_LEN_D,
+        .bValidate = false};
+    
+    eResult = PinCfgCsv_eParse(&sParams);
+    if (eResult != PINCFG_OK_E) {
+        printf("\n=== Analog Parse Error (pass 1) ===\nResult: %d\nOutput: %s\n", eResult, acOutStr);
+    }
+    TEST_ASSERT_EQUAL(PINCFG_OK_E, eResult);
+    
+    // Second pass: actually create objects
+    memset(acOutStr, 0, OUT_STR_MAX_LEN_D);
+    sParams.pszMemoryRequired = NULL;
+    eResult = PinCfgCsv_eParse(&sParams);
+    if (eResult != PINCFG_OK_E) {
+        printf("\n=== Analog Parse Error ===\nResult: %d\nOutput: %s\n", eResult, acOutStr);
+    }
+    TEST_ASSERT_EQUAL(PINCFG_OK_E, eResult);
+    
+    eLinkedListResult =
+        LinkedList_eLinkedListToArray((LINKEDLIST_ITEM_T **)(&psGlobals->ppsLoopables), &psGlobals->u8LoopablesCount);
+    TEST_ASSERT_EQUAL(LINKEDLIST_OK_E, eLinkedListResult);
+    
+    eLinkedListResult = LinkedList_eLinkedListToArray(
+        (LINKEDLIST_ITEM_T **)(&psGlobals->ppsPresentables), &psGlobals->u8PresentablesCount);
+    TEST_ASSERT_EQUAL(LINKEDLIST_OK_E, eLinkedListResult);
+    
+    // Verify analog measurement sources were created
+    // Note: The measurement sources are stored in global registry, not as presentables
+    // We'll verify them by using them with sensors
+}
+
+/**
+ * Test AnalogMeasure with Sensor integration
+ */
+void test_vAnalogMeasure_SensorIntegration(void)
+{
+    PINCFG_RESULT_T eResult;
+    LINKEDLIST_RESULT_T eLinkedListResult;
+    char acOutStr[OUT_STR_MAX_LEN_D];
+    size_t szMemoryRequired;
+    
+    // Create analog measurement and sensor that uses it
+    // MS,1,name,pin/
+    // SR,sensorName,measurementName,vType,sType,enableable,cumulative,sampMs,reportSec[,offset]/
+    // V_VOLTAGE=38, S_POWER=0
+    // Note: cumulative=1 so sensor samples at sampling interval (1000ms), not report interval (60s)
+    // Note: fOffset=1.0 (index 9) is required to prevent measurements from being multiplied by 0
+    const char *pcCfg = "MS,1,battery,0/"
+                        "SR,BatteryVolt,battery,38,0,0,1,1000,60,1.0/";
+    
+    // First pass: calculate memory
+    PINCFG_PARSE_PARAMS_T sParams = {
+        .pcConfig = pcCfg,
+        .eAddToLoopables = PinCfgCsv_eAddToTempLoopables,
+        .eAddToPresentables = PinCfgCsv_eAddToTempPresentables,
+        .pszMemoryRequired = &szMemoryRequired,
+        .pcOutString = acOutStr,
+        .u16OutStrMaxLen = (uint16_t)OUT_STR_MAX_LEN_D,
+        .bValidate = false};
+    
+    eResult = PinCfgCsv_eParse(&sParams);
+    if (eResult != PINCFG_OK_E) {
+        printf("\n=== Analog Sensor Parse Error (pass 1) ===\nResult: %d\nOutput: %s\n", eResult, acOutStr);
+    }
+    TEST_ASSERT_EQUAL(PINCFG_OK_E, eResult);
+    
+    // Second pass: create objects
+    memset(acOutStr, 0, OUT_STR_MAX_LEN_D);
+    sParams.pszMemoryRequired = NULL;
+    eResult = PinCfgCsv_eParse(&sParams);
+    if (eResult != PINCFG_OK_E) {
+        printf("\n=== Analog Sensor Parse Error ===\nResult: %d\nOutput: %s\n", eResult, acOutStr);
+    }
+    TEST_ASSERT_EQUAL(PINCFG_OK_E, eResult);
+    
+    eLinkedListResult =
+        LinkedList_eLinkedListToArray((LINKEDLIST_ITEM_T **)(&psGlobals->ppsLoopables), &psGlobals->u8LoopablesCount);
+    TEST_ASSERT_EQUAL(LINKEDLIST_OK_E, eLinkedListResult);
+    
+    eLinkedListResult = LinkedList_eLinkedListToArray(
+        (LINKEDLIST_ITEM_T **)(&psGlobals->ppsPresentables), &psGlobals->u8PresentablesCount);
+    TEST_ASSERT_EQUAL(LINKEDLIST_OK_E, eLinkedListResult);
+    
+    // Verify sensor was created
+    // Presentables: [0]=CLI, [1]=CLI, [2]=BatteryVolt sensor
+    SENSOR_T *psSensor = (SENSOR_T *)psGlobals->ppsPresentables[2];
+    TEST_ASSERT_EQUAL_STRING("BatteryVolt", psSensor->sPresentable.pcName);
+    TEST_ASSERT_EQUAL(38, psSensor->sVtab.eVType);  // V_VOLTAGE
+    TEST_ASSERT_EQUAL(0, psSensor->sVtab.eSType);   // S_POWER
+    TEST_ASSERT_EQUAL(1000, psSensor->u16SamplingIntervalMs);
+    TEST_ASSERT_EQUAL(60, psSensor->u16ReportIntervalSec);
+    
+    // Mock analog reading and test sensor
+    mock_analogRead_u16Return = 512;  // Mid-range value
+    mock_analogRead_u32Called = 0;
+    
+    // Simulate sensor loop - sensor should read from analog measurement
+    mock_millis_u32Return = 0;
+    PinCfgCsv_vLoop(mock_millis_u32Return);
+    
+    mock_millis_u32Return = 1000;  // After sampling interval
+    PinCfgCsv_vLoop(mock_millis_u32Return);
+    
+    // Verify analog read was called
+    TEST_ASSERT_GREATER_THAN(0, mock_analogRead_u32Called);
+}
+
+#endif // FEATURE_ANALOG_MEASUREMENT
 
 // =============================================================================
 // SENSOR TESTS (Enhanced)
@@ -2223,28 +2553,30 @@ void test_vLoopTimeMeasure_Init(void)
 {
     LOOPTIMEMEASURE_T sMeasure;
     LOOPTIMEMEASURE_RESULT_T eResult;
+    STRING_POINT_T sName;
     
     // Test NULL handle
-    eResult = LoopTimeMeasure_eInit(NULL, MEASUREMENT_TYPE_LOOPTIME_E, "test");
+    PinCfgStr_vInitStrPoint(&sName, "test", 4);
+    eResult = LoopTimeMeasure_eInit(NULL, &sName);
     TEST_ASSERT_EQUAL(LOOPTIMEMEASURE_NULLPTR_ERROR_E, eResult);
     
     // Test NULL name
-    eResult = LoopTimeMeasure_eInit(&sMeasure, MEASUREMENT_TYPE_LOOPTIME_E, NULL);
+    eResult = LoopTimeMeasure_eInit(&sMeasure, NULL);
     TEST_ASSERT_EQUAL(LOOPTIMEMEASURE_NULLPTR_ERROR_E, eResult);
     
     // Test valid initialization
-    eResult = LoopTimeMeasure_eInit(&sMeasure, MEASUREMENT_TYPE_LOOPTIME_E, "looptime");
+    PinCfgStr_vInitStrPoint(&sName, "looptime", 8);
+    eResult = LoopTimeMeasure_eInit(&sMeasure, &sName);
     TEST_ASSERT_EQUAL(LOOPTIMEMEASURE_OK_E, eResult);
     
     // Verify interface setup
     TEST_ASSERT_EQUAL(MEASUREMENT_TYPE_LOOPTIME_E, sMeasure.sSensorMeasure.eType);
     TEST_ASSERT_NOT_NULL(sMeasure.sSensorMeasure.eMeasure);
-    TEST_ASSERT_NULL(sMeasure.sSensorMeasure.eMeasureRaw);
     
     // Verify state initialization
     TEST_ASSERT_EQUAL(0, sMeasure.u32LastCallTime);
     TEST_ASSERT_TRUE(sMeasure.bFirstCall);
-    TEST_ASSERT_EQUAL_STRING("looptime", sMeasure.pcName);
+    TEST_ASSERT_EQUAL_STRING("looptime", sMeasure.sSensorMeasure.pcName);
 }
 
 /**
@@ -2253,60 +2585,84 @@ void test_vLoopTimeMeasure_Init(void)
 void test_vLoopTimeMeasure_TimeDelta(void)
 {
     LOOPTIMEMEASURE_T sMeasure;
-    float fValue = 0.0f;
+    uint8_t au8Buffer[4];
+    uint8_t u8Size = 4;
     ISENSORMEASURE_RESULT_T eResult;
+    STRING_POINT_T sName;
     
     // Initialize measurement
-    LoopTimeMeasure_eInit(&sMeasure, MEASUREMENT_TYPE_LOOPTIME_E, "looptime");
+    PinCfgStr_vInitStrPoint(&sName, "looptime", 8);
+    LoopTimeMeasure_eInit(&sMeasure, &sName);
     
     // First call should return error (no previous timestamp)
-    eResult = sMeasure.sSensorMeasure.eMeasure(&sMeasure.sSensorMeasure, &fValue, 0.0f, 1000);
+    eResult = sMeasure.sSensorMeasure.eMeasure(&sMeasure.sSensorMeasure, au8Buffer, &u8Size, 1000);
     TEST_ASSERT_EQUAL(ISENSORMEASURE_ERROR_E, eResult);
     TEST_ASSERT_FALSE(sMeasure.bFirstCall);
     TEST_ASSERT_EQUAL(1000, sMeasure.u32LastCallTime);
     
-    // Second call should return delta
-    eResult = sMeasure.sSensorMeasure.eMeasure(&sMeasure.sSensorMeasure, &fValue, 0.0f, 1010);
+    // Second call should return delta as 4 bytes
+    u8Size = 4;
+    eResult = sMeasure.sSensorMeasure.eMeasure(&sMeasure.sSensorMeasure, au8Buffer, &u8Size, 1010);
     TEST_ASSERT_EQUAL(ISENSORMEASURE_OK_E, eResult);
-    TEST_ASSERT_EQUAL_FLOAT(10.0f, fValue);
+    TEST_ASSERT_EQUAL(4, u8Size);
+    // Extract uint32 from big-endian bytes
+    uint32_t u32Delta = ((uint32_t)au8Buffer[0] << 24) | ((uint32_t)au8Buffer[1] << 16) | 
+                        ((uint32_t)au8Buffer[2] << 8) | au8Buffer[3];
+    TEST_ASSERT_EQUAL(10, u32Delta);
     TEST_ASSERT_EQUAL(1010, sMeasure.u32LastCallTime);
     
     // Third call with different delta
-    eResult = sMeasure.sSensorMeasure.eMeasure(&sMeasure.sSensorMeasure, &fValue, 0.0f, 1025);
+    u8Size = 4;
+    eResult = sMeasure.sSensorMeasure.eMeasure(&sMeasure.sSensorMeasure, au8Buffer, &u8Size, 1025);
     TEST_ASSERT_EQUAL(ISENSORMEASURE_OK_E, eResult);
-    TEST_ASSERT_EQUAL_FLOAT(15.0f, fValue);
+    u32Delta = ((uint32_t)au8Buffer[0] << 24) | ((uint32_t)au8Buffer[1] << 16) | 
+               ((uint32_t)au8Buffer[2] << 8) | au8Buffer[3];
+    TEST_ASSERT_EQUAL(15, u32Delta);
     TEST_ASSERT_EQUAL(1025, sMeasure.u32LastCallTime);
     
     // Test with zero delta (same timestamp)
-    eResult = sMeasure.sSensorMeasure.eMeasure(&sMeasure.sSensorMeasure, &fValue, 0.0f, 1025);
+    u8Size = 4;
+    eResult = sMeasure.sSensorMeasure.eMeasure(&sMeasure.sSensorMeasure, au8Buffer, &u8Size, 1025);
     TEST_ASSERT_EQUAL(ISENSORMEASURE_OK_E, eResult);
-    TEST_ASSERT_EQUAL_FLOAT(0.0f, fValue);
+    u32Delta = ((uint32_t)au8Buffer[0] << 24) | ((uint32_t)au8Buffer[1] << 16) | 
+               ((uint32_t)au8Buffer[2] << 8) | au8Buffer[3];
+    TEST_ASSERT_EQUAL(0, u32Delta);
 }
 
 /**
  * Test LoopTimeMeasure with offset
+ * Note: LoopTime returns raw uint32 ms; offset is applied at Sensor layer
  */
 void test_vLoopTimeMeasure_Offset(void)
 {
     LOOPTIMEMEASURE_T sMeasure;
-    float fValue = 0.0f;
+    uint8_t au8Buffer[4];
+    uint8_t u8Size = 4;
     ISENSORMEASURE_RESULT_T eResult;
+    STRING_POINT_T sName;
     
     // Initialize measurement
-    LoopTimeMeasure_eInit(&sMeasure, MEASUREMENT_TYPE_LOOPTIME_E, "looptime");
+    PinCfgStr_vInitStrPoint(&sName, "looptime", 8);
+    LoopTimeMeasure_eInit(&sMeasure, &sName);
     
     // First call (skip)
-    sMeasure.sSensorMeasure.eMeasure(&sMeasure.sSensorMeasure, &fValue, 0.0f, 1000);
+    sMeasure.sSensorMeasure.eMeasure(&sMeasure.sSensorMeasure, au8Buffer, &u8Size, 1000);
     
-    // Second call with positive offset
-    eResult = sMeasure.sSensorMeasure.eMeasure(&sMeasure.sSensorMeasure, &fValue, 5.0f, 1010);
+    // Second call - verify raw delta is returned (offset not applied here)
+    u8Size = 4;
+    eResult = sMeasure.sSensorMeasure.eMeasure(&sMeasure.sSensorMeasure, au8Buffer, &u8Size, 1010);
     TEST_ASSERT_EQUAL(ISENSORMEASURE_OK_E, eResult);
-    TEST_ASSERT_EQUAL_FLOAT(15.0f, fValue);  // 10ms + 5ms offset
+    uint32_t u32Delta = ((uint32_t)au8Buffer[0] << 24) | ((uint32_t)au8Buffer[1] << 16) | 
+                        ((uint32_t)au8Buffer[2] << 8) | au8Buffer[3];
+    TEST_ASSERT_EQUAL(10, u32Delta);  // Raw 10ms delta
     
-    // Third call with negative offset
-    eResult = sMeasure.sSensorMeasure.eMeasure(&sMeasure.sSensorMeasure, &fValue, -3.0f, 1020);
+    // Third call - another raw delta
+    u8Size = 4;
+    eResult = sMeasure.sSensorMeasure.eMeasure(&sMeasure.sSensorMeasure, au8Buffer, &u8Size, 1020);
     TEST_ASSERT_EQUAL(ISENSORMEASURE_OK_E, eResult);
-    TEST_ASSERT_EQUAL_FLOAT(7.0f, fValue);  // 10ms - 3ms offset
+    u32Delta = ((uint32_t)au8Buffer[0] << 24) | ((uint32_t)au8Buffer[1] << 16) | 
+               ((uint32_t)au8Buffer[2] << 8) | au8Buffer[3];
+    TEST_ASSERT_EQUAL(10, u32Delta);  // Raw 10ms delta
 }
 
 /**
@@ -2315,22 +2671,28 @@ void test_vLoopTimeMeasure_Offset(void)
 void test_vLoopTimeMeasure_Overflow(void)
 {
     LOOPTIMEMEASURE_T sMeasure;
-    float fValue = 0.0f;
+    uint8_t au8Buffer[4];
+    uint8_t u8Size = 4;
     ISENSORMEASURE_RESULT_T eResult;
+    STRING_POINT_T sName;
     
     // Initialize measurement
-    LoopTimeMeasure_eInit(&sMeasure, MEASUREMENT_TYPE_LOOPTIME_E, "looptime");
+    PinCfgStr_vInitStrPoint(&sName, "looptime", 8);
+    LoopTimeMeasure_eInit(&sMeasure, &sName);
     
     // First call near overflow
     uint32_t u32NearMax = UINT32_MAX - 5;
-    sMeasure.sSensorMeasure.eMeasure(&sMeasure.sSensorMeasure, &fValue, 0.0f, u32NearMax);
+    sMeasure.sSensorMeasure.eMeasure(&sMeasure.sSensorMeasure, au8Buffer, &u8Size, u32NearMax);
     
     // Second call after overflow
     uint32_t u32AfterOverflow = 10;  // Wrapped around
-    eResult = sMeasure.sSensorMeasure.eMeasure(&sMeasure.sSensorMeasure, &fValue, 0.0f, u32AfterOverflow);
+    u8Size = 4;
+    eResult = sMeasure.sSensorMeasure.eMeasure(&sMeasure.sSensorMeasure, au8Buffer, &u8Size, u32AfterOverflow);
     TEST_ASSERT_EQUAL(ISENSORMEASURE_OK_E, eResult);
     // Delta should be 16 (5 to max + 1 + 10 after overflow)
-    TEST_ASSERT_EQUAL_FLOAT(16.0f, fValue);
+    uint32_t u32Delta = ((uint32_t)au8Buffer[0] << 24) | ((uint32_t)au8Buffer[1] << 16) | 
+                        ((uint32_t)au8Buffer[2] << 8) | au8Buffer[3];
+    TEST_ASSERT_EQUAL(16, u32Delta);
 }
 
 /**
@@ -2339,18 +2701,25 @@ void test_vLoopTimeMeasure_Overflow(void)
 void test_vLoopTimeMeasure_NullParams(void)
 {
     LOOPTIMEMEASURE_T sMeasure;
-    float fValue = 0.0f;
+    uint8_t au8Buffer[4];
+    uint8_t u8Size = 4;
     ISENSORMEASURE_RESULT_T eResult;
+    STRING_POINT_T sName;
     
     // Initialize measurement
-    LoopTimeMeasure_eInit(&sMeasure, MEASUREMENT_TYPE_LOOPTIME_E, "looptime");
+    PinCfgStr_vInitStrPoint(&sName, "looptime", 8);
+    LoopTimeMeasure_eInit(&sMeasure, &sName);
     
     // Test NULL self pointer
-    eResult = sMeasure.sSensorMeasure.eMeasure(NULL, &fValue, 0.0f, 1000);
+    eResult = sMeasure.sSensorMeasure.eMeasure(NULL, au8Buffer, &u8Size, 1000);
     TEST_ASSERT_EQUAL(ISENSORMEASURE_NULLPTR_ERROR_E, eResult);
     
-    // Test NULL value pointer
-    eResult = sMeasure.sSensorMeasure.eMeasure(&sMeasure.sSensorMeasure, NULL, 0.0f, 1000);
+    // Test NULL buffer pointer
+    eResult = sMeasure.sSensorMeasure.eMeasure(&sMeasure.sSensorMeasure, NULL, &u8Size, 1000);
+    TEST_ASSERT_EQUAL(ISENSORMEASURE_NULLPTR_ERROR_E, eResult);
+    
+    // Test NULL size pointer
+    eResult = sMeasure.sSensorMeasure.eMeasure(&sMeasure.sSensorMeasure, au8Buffer, NULL, 1000);
     TEST_ASSERT_EQUAL(ISENSORMEASURE_NULLPTR_ERROR_E, eResult);
 }
 
@@ -2391,26 +2760,19 @@ void test_vLoopTimeMeasure_CSVParsing(void)
     TEST_ASSERT_EQUAL(PINCFG_OK_E, eResult);
     
     // Convert linked lists to arrays
-    LinkedList_eLinkedListToArray((LINKEDLIST_ITEM_T **)(&psGlobals->ppsMeasurements), &psGlobals->u8MeasurementsCount);
     LinkedList_eLinkedListToArray((LINKEDLIST_ITEM_T **)(&psGlobals->ppsLoopables), &psGlobals->u8LoopablesCount);
     LinkedList_eLinkedListToArray((LINKEDLIST_ITEM_T **)(&psGlobals->ppsPresentables), &psGlobals->u8PresentablesCount);
     
-    // Verify measurement source was created
-    TEST_ASSERT_NOT_NULL(psGlobals->ppsMeasurements);
-    TEST_ASSERT_EQUAL(1, psGlobals->u8MeasurementsCount);
-    
-    ISENSORMEASURE_T *psMeasure = psGlobals->ppsMeasurements[0];
-    TEST_ASSERT_NOT_NULL(psMeasure);
-    TEST_ASSERT_EQUAL(MEASUREMENT_TYPE_LOOPTIME_E, psMeasure->eType);
-    
-    // Verify sensor was created (presentables: [0]=MySensors, [1]=CLI, [2]=LoopTime)
+    // Note: Measurement sources are now stored internally and accessed via sensors
+    // Verify sensor was created (presentables: [0]=CLI, [1]=CLI, [2]=LoopTime)
     SENSOR_T *psSensor = (SENSOR_T *)psGlobals->ppsPresentables[2];
     TEST_ASSERT_EQUAL_STRING("LoopTime", psSensor->sPresentable.pcName);
     TEST_ASSERT_EQUAL(99, psSensor->sVtab.eVType);
     TEST_ASSERT_EQUAL(99, psSensor->sVtab.eSType);
     TEST_ASSERT_NOT_EQUAL(0, psSensor->u8Flags & SENSOR_FLAG_CUMULATIVE);  // cumulative=1
     TEST_ASSERT_EQUAL(5, psSensor->u16ReportIntervalSec);
-    TEST_ASSERT_EQUAL(psMeasure, psSensor->psSensorMeasure);
+    TEST_ASSERT_NOT_NULL(psSensor->psSensorMeasure);
+    TEST_ASSERT_EQUAL(MEASUREMENT_TYPE_LOOPTIME_E, psSensor->psSensorMeasure->eType);
 #else
     // Test skipped in static allocation mode - requires more memory
     TEST_PASS();
@@ -2427,8 +2789,9 @@ void test_vLoopTimeMeasure_SensorIntegration(void)
     size_t szMemoryRequired;
     
     // Configuration with loop time measurement (enableable=0, cumulative=1 for loop measurements)
+    // Note: fOffset=1.0 (index 9) is required to prevent measurements from being multiplied by 0
     const char *pcCfg = "MS,5,looptime/"
-                        "SR,LoopTime,looptime,99,99,0,1,100,5/";
+                        "SR,LoopTime,looptime,99,99,0,1,100,5,1.0/";
     
     // Use two-pass parsing like other tests
     PINCFG_PARSE_PARAMS_T sParams = {
@@ -2450,43 +2813,60 @@ void test_vLoopTimeMeasure_SensorIntegration(void)
     TEST_ASSERT_EQUAL(PINCFG_OK_E, eResult);
     
     // Convert linked lists to arrays
-    LinkedList_eLinkedListToArray((LINKEDLIST_ITEM_T **)(&psGlobals->ppsMeasurements), &psGlobals->u8MeasurementsCount);
     LinkedList_eLinkedListToArray((LINKEDLIST_ITEM_T **)(&psGlobals->ppsLoopables), &psGlobals->u8LoopablesCount);
     LinkedList_eLinkedListToArray((LINKEDLIST_ITEM_T **)(&psGlobals->ppsPresentables), &psGlobals->u8PresentablesCount);
     
-    // Get the sensor (should be at index 2: [0]=MySensors, [1]=CLI, [2]=LoopTime)
+    // Get the sensor (should be at index 2: [0]=CLI, [1]=CLI, [2]=LoopTime)
     SENSOR_T *psSensor = (SENSOR_T *)psGlobals->ppsPresentables[2];
     TEST_ASSERT_NOT_NULL(psSensor);
     
+    // Verify cumulative mode is set (critical for this test to work)
+    TEST_ASSERT_TRUE((psSensor->u8Flags & 0x01) != 0);  // SENSOR_FLAG_CUMULATIVE
+    
     // Simulate loop iterations
+    // Note: Sampling interval is 100ms, so sensor measures at intervals of >= 100ms
     mock_millis_u32Return = 0;
     
     // Loop 1 (time 0) - First call initializes timestamp, no measurement yet
     PinCfgCsv_vLoop(mock_millis_u32Return);
     TEST_ASSERT_EQUAL(0, psSensor->u32SamplesCount);
     
-    // Loop 2 (time 1ms) - Should measure (delta = 1ms), first real sample
-    mock_millis_u32Return = 1;
+    // Loop 2 (time 100ms) - Should measure (delta = 100ms), first real sample
+    mock_millis_u32Return = 100;
     PinCfgCsv_vLoop(mock_millis_u32Return);
     TEST_ASSERT_EQUAL(1, psSensor->u32SamplesCount);  // First successful measurement
     
-    // Loop 3 (time 2ms) - Should measure again (delta = 1ms)
-    mock_millis_u32Return = 2;
+    // Loop 3 (time 200ms) - Should measure again (delta = 100ms)
+    mock_millis_u32Return = 200;
     PinCfgCsv_vLoop(mock_millis_u32Return);
     TEST_ASSERT_EQUAL(2, psSensor->u32SamplesCount);
     
-    // Loop 4 (time 3ms) - Should measure (delta = 1ms)
-    mock_millis_u32Return = 3;
+    // Loop 4 (time 300ms) - Should measure (delta = 100ms)
+    mock_millis_u32Return = 300;
     PinCfgCsv_vLoop(mock_millis_u32Return);
     TEST_ASSERT_EQUAL(3, psSensor->u32SamplesCount);
     
-    // Loop 5 (time 6ms) - Should measure (delta = 3ms)
-    mock_millis_u32Return = 6;
+    // Loop 5 (time 600ms) - Should measure (delta = 300ms)
+    mock_millis_u32Return = 600;
     PinCfgCsv_vLoop(mock_millis_u32Return);
+    
+    // Debug: print actual values
+    if (psSensor->u32SamplesCount != 4 || psSensor->fCumulatedValue < 599.0 || psSensor->fCumulatedValue > 601.0) {
+        printf("\n=== LoopTime Sensor Debug ===\n");
+        printf("Samples count: %lu (expected 4)\n", (unsigned long)psSensor->u32SamplesCount);
+        printf("Cumulated value: %f (expected 600.0)\n", psSensor->fCumulatedValue);
+        printf("Sensor flags: 0x%02X\n", psSensor->u8Flags);
+        printf("Sampling interval: %u ms\n", psSensor->u16SamplingIntervalMs);
+        printf("Report interval: %u sec\n", psSensor->u16ReportIntervalSec);
+        printf("fOffset (scale factor): %f\n", psSensor->fOffset);
+        printf("Data byte offset: %u\n", psSensor->u8DataByteOffset);
+        printf("Data byte count: %u\n", psSensor->u8DataByteCount);
+    }
+    
     TEST_ASSERT_EQUAL(4, psSensor->u32SamplesCount);
     
-    // Verify cumulative value (1ms + 1ms + 1ms + 3ms = 6ms)
-    TEST_ASSERT_EQUAL_FLOAT(6.0, psSensor->fCumulatedValue);
+    // Verify cumulative value (100ms + 100ms + 100ms + 300ms = 600ms)
+    TEST_ASSERT_EQUAL_FLOAT(600.0, psSensor->fCumulatedValue);
     
     // Continue loops until report interval (5 seconds = 5000ms)
     for (uint32_t i = 6; i <= 5000; i++) {
@@ -2536,22 +2916,21 @@ void test_vLoopTimeMeasure_MultipleSensors(void)
     TEST_ASSERT_EQUAL(PINCFG_OK_E, eResult);
     
     // Convert linked lists to arrays
-    LinkedList_eLinkedListToArray((LINKEDLIST_ITEM_T **)(&psGlobals->ppsMeasurements), &psGlobals->u8MeasurementsCount);
     LinkedList_eLinkedListToArray((LINKEDLIST_ITEM_T **)(&psGlobals->ppsLoopables), &psGlobals->u8LoopablesCount);
     LinkedList_eLinkedListToArray((LINKEDLIST_ITEM_T **)(&psGlobals->ppsPresentables), &psGlobals->u8PresentablesCount);
     
-    // Verify two measurements created
-    TEST_ASSERT_EQUAL(2, psGlobals->u8MeasurementsCount);
-    TEST_ASSERT_EQUAL(MEASUREMENT_TYPE_LOOPTIME_E, psGlobals->ppsMeasurements[0]->eType);
-    TEST_ASSERT_EQUAL(MEASUREMENT_TYPE_LOOPTIME_E, psGlobals->ppsMeasurements[1]->eType);
-    
-    // Verify two sensors created (presentables: [0]=MySensors, [1]=CLI, [2]=Loop1, [3]=Loop2)
+    // Note: Measurements are now internal, accessed via sensors
+    // Verify two sensors created (presentables: [0]=CLI, [1]=CLI, [2]=Loop1, [3]=Loop2)
     SENSOR_T *psSensor1 = (SENSOR_T *)psGlobals->ppsPresentables[2];
     SENSOR_T *psSensor2 = (SENSOR_T *)psGlobals->ppsPresentables[3];
     TEST_ASSERT_EQUAL_STRING("Loop1", psSensor1->sPresentable.pcName);
     TEST_ASSERT_EQUAL_STRING("Loop2", psSensor2->sPresentable.pcName);
     TEST_ASSERT_EQUAL(5, psSensor1->u16ReportIntervalSec);
     TEST_ASSERT_EQUAL(10, psSensor2->u16ReportIntervalSec);
+    TEST_ASSERT_NOT_NULL(psSensor1->psSensorMeasure);
+    TEST_ASSERT_NOT_NULL(psSensor2->psSensorMeasure);
+    TEST_ASSERT_EQUAL(MEASUREMENT_TYPE_LOOPTIME_E, psSensor1->psSensorMeasure->eType);
+    TEST_ASSERT_EQUAL(MEASUREMENT_TYPE_LOOPTIME_E, psSensor2->psSensorMeasure->eType);
 #else
     // Test skipped in static allocation mode - requires more memory
     TEST_PASS();
@@ -2700,6 +3079,16 @@ int test_main(void)
     RUN_TEST(test_vI2CMeasure_Timeout);
     RUN_TEST(test_vI2CMeasure_DeviceError);
     RUN_TEST(test_vI2CMeasure_RawData);
+#endif
+
+#ifdef FEATURE_ANALOG_MEASUREMENT
+    // Analog measurement tests
+    RUN_TEST(test_vAnalogMeasure_Init);
+    RUN_TEST(test_vAnalogMeasure_SimpleRead);
+    RUN_TEST(test_vAnalogMeasure_ErrorHandling);
+    RUN_TEST(test_vAnalogMeasure_MultiplePins);
+    RUN_TEST(test_vAnalogMeasure_CSVParsing);
+    RUN_TEST(test_vAnalogMeasure_SensorIntegration);
 #endif
 
     // Enhanced sensor tests

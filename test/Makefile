@@ -32,6 +32,7 @@ CFLAGS_BASE += -Wno-misleading-indentation
 CFLAGS_BASE += -DUNIT_TEST
 CFLAGS_BASE += -DFEATURE_I2C_MEASUREMENT
 CFLAGS_BASE += -DFEATURE_LOOPTIME_MEASUREMENT
+CFLAGS_BASE += -DFEATURE_ANALOG_MEASUREMENT
 #CFLAGS_BASE += -Wstack-usage=200 #-D'F(x)=((const char*)x)'
 #CFLAGS_BASE += -fsanitize=vptr -fsanitize=address -static-libasan
 
@@ -50,6 +51,18 @@ CFLAGS4 = $(CFLAGS_BASE)
 .PHONY: all
 
 all: $(EXE1) $(EXE2) $(EXE3) $(EXE4)
+
+debug:
+	@echo "=== Source Files ==="
+	@echo "SRCC: $(SRCC)"
+	@echo "MOCKSC: $(MOCKSC)"
+	@echo "SRCCPP: $(SRCCPP)"
+	@echo "MOCKSCPP: $(MOCKSCPP)"
+	@echo ""
+	@echo "=== test_malloc_errcode Objects ==="
+	@echo "test_malloc_errcode_OBJC: $(test_malloc_errcode_OBJC)"
+	@echo ""
+	@echo "test_malloc_errcode_OBJCPP: $(test_malloc_errcode_OBJCPP)"
 
 echo:
 	@echo $(SRCCPP)

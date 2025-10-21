@@ -5,31 +5,30 @@
 
 #include "LoopTimeMeasure.h"
 #include "PinCfgUtils.h"
+#include "SensorMeasure.h"
 
 // Forward declaration of measurement function
 static ISENSORMEASURE_RESULT_T LoopTimeMeasure_eMeasure(
     ISENSORMEASURE_T *pSelf,
-    float *pfValue,
-    const float fOffset,
+    uint8_t *pu8Buffer,
+    uint8_t *pu8Size,
     uint32_t u32ms);
 
 LOOPTIMEMEASURE_RESULT_T LoopTimeMeasure_eInit(
     LOOPTIMEMEASURE_T *psHandle,
-    MEASUREMENT_TYPE_T eType,
-    const char *pcName)
+    STRING_POINT_T *psName)
 {
-    if (psHandle == NULL || pcName == NULL)
+    if (psHandle == NULL || psName == NULL)
         return LOOPTIMEMEASURE_NULLPTR_ERROR_E;
 
-    // Initialize ISensorMeasure interface
-    psHandle->sSensorMeasure.eType = eType;
+    // Initialize base interface (allocates and copies name)
+    if (SensorMeasure_eInit(&psHandle->sSensorMeasure, psName, MEASUREMENT_TYPE_LOOPTIME_E) != SENSORMEASURE_OK_E)
+        return LOOPTIMEMEASURE_ERROR_E;
+
+    // Set measurement function pointer
     psHandle->sSensorMeasure.eMeasure = LoopTimeMeasure_eMeasure;
-    psHandle->sSensorMeasure.eMeasureRaw = NULL;  // Loop time doesn't support raw byte access
     
-    // Store name for lookup
-    psHandle->pcName = pcName;
-    
-    // Initialize state
+    // Initialize measurement-specific state
     psHandle->u32LastCallTime = 0U;
     psHandle->bFirstCall = true;
 
@@ -38,12 +37,15 @@ LOOPTIMEMEASURE_RESULT_T LoopTimeMeasure_eInit(
 
 static ISENSORMEASURE_RESULT_T LoopTimeMeasure_eMeasure(
     ISENSORMEASURE_T *pSelf,
-    float *pfValue,
-    const float fOffset,
+    uint8_t *pu8Buffer,
+    uint8_t *pu8Size,
     uint32_t u32ms)
 {
-    if (pSelf == NULL || pfValue == NULL)
+    if (pSelf == NULL || pu8Buffer == NULL || pu8Size == NULL)
         return ISENSORMEASURE_NULLPTR_ERROR_E;
+
+    if (*pu8Size < 4)
+        return ISENSORMEASURE_ERROR_E;  // Buffer too small
 
     LOOPTIMEMEASURE_T *psHandle = (LOOPTIMEMEASURE_T *)pSelf;
     
@@ -61,8 +63,12 @@ static ISENSORMEASURE_RESULT_T LoopTimeMeasure_eMeasure(
     // Store timestamp for next iteration
     psHandle->u32LastCallTime = u32ms;
     
-    // Return loop duration in milliseconds, with offset applied
-    *pfValue = (float)u32LoopDuration + fOffset;
+    // Return loop duration in big-endian format (4 bytes)
+    pu8Buffer[0] = (uint8_t)(u32LoopDuration >> 24);
+    pu8Buffer[1] = (uint8_t)(u32LoopDuration >> 16);
+    pu8Buffer[2] = (uint8_t)(u32LoopDuration >> 8);
+    pu8Buffer[3] = (uint8_t)(u32LoopDuration & 0xFF);
+    *pu8Size = 4;
     
     return ISENSORMEASURE_OK_E;
 }

@@ -23,6 +23,18 @@ uint32_t millis()
     return mock_millis_u32Return;
 }
 
+// Analog mock functions
+uint16_t mock_analogRead_u16Return = 512;  // Default mid-range (10-bit)
+uint32_t mock_analogRead_u32Called = 0;
+uint8_t mock_analogRead_u8LastPin = 0;
+
+uint16_t analogRead(uint8_t pin)
+{
+    mock_analogRead_u32Called++;
+    mock_analogRead_u8LastPin = pin;
+    return mock_analogRead_u16Return;
+}
+
 void _delay_milliseconds(unsigned int millis)
 {
     struct timespec sleeper;

@@ -27,11 +27,25 @@ typedef enum ISENSORMEASURE_RESULT_E
 } ISENSORMEASURE_RESULT_T;
 
 typedef struct ISENSORMEASURE_S ISENSORMEASURE_T;
+
+/**
+ * @brief Sensor measurement interface structure
+ * 
+ * Base interface for all measurement sources.
+ * Similar to PRESENTABLE_T pattern - contains common fields.
+ * 
+ * Universal raw bytes interface:
+ * - All measurements return raw bytes in big-endian format
+ * - Sensor layer handles byte extraction and conversion to float
+ * - Consistent processing for all measurement types
+ * 
+ * Size: ~12 bytes (32-bit) / ~16 bytes (64-bit)
+ */
 typedef struct ISENSORMEASURE_S
 {
-    ISENSORMEASURE_RESULT_T (*eMeasure)(ISENSORMEASURE_T *pSelf, float *pfValue, const float fOffset, uint32_t u32ms);
-    ISENSORMEASURE_RESULT_T (*eMeasureRaw)(ISENSORMEASURE_T *pSelf, uint8_t *pu8Buffer, uint8_t *pu8Size, uint32_t u32ms);  // Get raw bytes
+    ISENSORMEASURE_RESULT_T (*eMeasure)(ISENSORMEASURE_T *pSelf, uint8_t *pu8Buffer, uint8_t *pu8Size, uint32_t u32ms);
     MEASUREMENT_TYPE_T eType;  // Measurement type (part of interface contract)
+    const char *pcName;        // Measurement source name for lookup (allocated/copied during init)
 } ISENSORMEASURE_T;
 
 #endif // ISENSORMEASURE_H

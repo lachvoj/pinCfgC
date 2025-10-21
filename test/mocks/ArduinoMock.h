@@ -48,6 +48,12 @@ extern uint32_t mock_millis_u32Called;
 extern uint32_t mock_millis_u32Return;
 uint32_t millis();
 
+// Analog functions
+extern uint16_t mock_analogRead_u16Return;
+extern uint32_t mock_analogRead_u32Called;
+extern uint8_t mock_analogRead_u8LastPin;
+uint16_t analogRead(uint8_t pin);
+
 void init_ArduinoMock(void);
 
 #endif // ARDUINOMOCK_H

@@ -2,6 +2,7 @@
 #define CPUTEMPMEASURE_H
 
 #include "ISensorMeasure.h"
+#include "PinCfgStr.h"
 #include "Types.h"
 
 typedef enum CPUTEMPMEASURE_RESULT_E
@@ -13,20 +14,18 @@ typedef enum CPUTEMPMEASURE_RESULT_E
 
 typedef struct CPUTEMPMEASURE_S
 {
-    ISENSORMEASURE_T sSensorMeasure;  // Interface (includes eType)
-    const char *pcName;               // Measurement source name for lookup
+    ISENSORMEASURE_T sSensorMeasure;  // Interface (includes eType and pcName)
 } CPUTEMPMEASURE_T;
 
 /**
  * @brief Initialize CPU temperature measurement source
+ * 
  * @param psHandle Pointer to CPUTEMPMEASURE_T structure
- * @param eType Measurement type (should be MEASUREMENT_TYPE_CPUTEMP_E)
- * @param pcName Name of this measurement source (for lookup)
+ * @param psName Pointer to STRING_POINT_T containing name (will be copied)
  * @return CPUTEMPMEASURE_RESULT_T status
  */
 CPUTEMPMEASURE_RESULT_T CPUTempMeasure_eInit(
     CPUTEMPMEASURE_T *psHandle,
-    MEASUREMENT_TYPE_T eType,
-    const char *pcName);
+    STRING_POINT_T *psName);
 
 #endif // CPUTEMPMEASURE_H

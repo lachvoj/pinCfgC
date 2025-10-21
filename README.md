@@ -19,6 +19,7 @@ The goal of this library is to provide a CSV-based configuration that specifies 
    1. [CPU Temperature Measurement](#cpu-temperature-measurement)
    2. [I2C Measurement](#i2c-measurement-compile-time-optional)
    3. [Loop Time Measurement](#loop-time-measurement-debug)
+   4. [Analog Measurement](#analog-measurement-compile-time-optional)
 9. [Sensor Reporters](#sensor-reporters)
 
 ## Format Overview
@@ -488,6 +489,158 @@ Reports average loop execution time every 5 seconds.
 ⚠️ **Note:** High loop times (>50ms) may indicate blocking operations (delays, synchronous I2C, etc.)
 
 📖 **Detailed Documentation:** See `LOOP_TIME_MEASUREMENT.md` for implementation details and troubleshooting.
+
+### Analog Measurement (Compile-Time Optional)
+
+Measures analog input voltages from ADC pins. Returns raw ADC values - voltage conversion and scaling handled by Sensor layer using offset parameter.
+
+#### Format
+```
+MS,1,<name>,<pin>/
+```
+
+#### Parameters
+- **Type:** `1` = Analog measurement
+- **Name:** Identifier for this measurement (e.g., "battery", "temp_sensor")
+- **Pin:** Analog pin number
+  - **Arduino:** 0-7 for A0-A7 (or use actual pin numbers)
+  - **STM32:** Configured pin number (via AnalogWrapper)
+
+#### Architecture
+- **Measurement Layer:** Returns raw ADC values (0-1023, 0-4095, etc.) via single read
+- **Sensor Layer:** Handles timing, averaging (via sampling interval), and voltage conversion (via offset)
+- **No Internal Averaging:** Measurement does one read per call - Sensor handles averaging
+- **Platform Abstraction:** Uses AnalogWrapper for Arduino/STM32/Mock compatibility
+
+#### Voltage Conversion via Offset
+
+The offset parameter in SR line acts as a **scaling factor** for voltage conversion:
+
+**Formula:** `result = raw_adc_value * offset`
+
+**Common ADC Configurations:**
+
+| Platform | Bits | Max Value | Vref | Offset (V) |
+|----------|------|-----------|------|------------|
+| Arduino Uno/Nano | 10 | 1023 | 5.0V | 0.00489 |
+| Arduino (3.3V) | 10 | 1023 | 3.3V | 0.00323 |
+| STM32 / Due | 12 | 4095 | 3.3V | 0.000806 |
+| External 16-bit ADC | 16 | 65535 | 3.3V | 0.0000504 |
+
+**Calculation:** `offset = V_reference / ADC_max_value`
+
+#### Example Configurations
+
+**Battery Voltage Monitor:**
+```csv
+# Measure battery voltage on pin A0 (10-bit, 3.3V reference)
+MS,1,battery,0/
+SR,BatteryVolt,battery,38,37,0,0,1000,60,0.00323/
+# Reports voltage in volts every 60 seconds
+# Raw 512 → 512 * 0.00323 = 1.65V
+```
+
+**Temperature Sensor (LM35 - 10mV/°C):**
+```csv
+# LM35 on pin A1 (10-bit, 5V reference)
+MS,1,lm35,1/
+SR,RoomTemp,lm35,0,6,0,0,2000,120,0.489/
+# Scaling: (5.0/1023) / 0.01V/°C = 0.489°C per ADC step
+# Raw 205 → 205 * 0.489 = 100.2°C
+```
+
+**Soil Moisture Sensor (0-100%):**
+```csv
+# Moisture sensor on pin A2 (10-bit ADC)
+MS,1,moisture,2/
+SR,SoilMoisture,moisture,2,35,0,0,5000,300,0.09775/
+# Scaling: 100.0 / 1023 = 0.09775% per ADC step
+# Raw 512 → 512 * 0.09775 = 50.05%
+```
+
+**Light Sensor (Photoresistor):**
+```csv
+# Light sensor on pin A3 (scale to 0-100 arbitrary units)
+MS,1,light,3/
+SR,LightLevel,light,3,16,0,0,1000,60,0.09775/
+# Same scaling as percentage
+```
+
+**Current Sensor (ACS712-5A):**
+```csv
+# ACS712 on pin A4 (185mV/A, centered at 2.5V, 5V ref)
+MS,1,acs712,4/
+SR,Current,acs712,39,37,0,0,500,30,0.0264/
+# Scaling: (5.0/1023) / 0.185 = 0.0264A per step
+# Note: Subtract 512 in application for center offset (2.5V = 0A)
+```
+
+#### Sensor-Specific Scaling
+
+**LM35 Temperature (10mV/°C):**
+- Voltage per ADC step: `V_ref / ADC_max`
+- Temperature per ADC step: `voltage_per_step / 0.01V/°C`
+- Example (5V, 10-bit): `(5.0/1023) / 0.01 = 0.489`
+
+**TMP36 Temperature (10mV/°C, 500mV offset):**
+- Same scaling as LM35: `0.489`
+- Requires subtracting 50°C in application (500mV offset)
+
+**ACS712 Current Sensor (185mV/A):**
+- Voltage per ADC step: `5.0 / 1023 = 0.00489V`
+- Current per ADC step: `0.00489 / 0.185 = 0.0264A`
+- Centered at 2.5V (ADC 512) = 0A
+
+#### Multiple Analog Sensors
+
+```csv
+# Define three analog measurement sources
+MS,1,analog0,0/
+MS,1,analog1,1/
+MS,1,analog2,2/
+
+# Voltage sensor (3.3V ref, 12-bit ADC: 0-4095)
+SR,Voltage,analog0,38,37,0,0,1000,60,0.000806/
+
+# Current sensor (ACS712, 5V ref, 10-bit)
+SR,Current,analog1,39,37,0,0,500,30,0.0264/
+
+# Temperature (LM35, 5V ref, 10-bit)
+SR,Temperature,analog2,0,6,0,0,2000,120,0.489/
+```
+
+#### MySensors Types for Analog
+
+Common `vType` (variable type) and `sType` (sensor type) combinations:
+
+| Measurement | vType | sType | Description |
+|------------|-------|-------|-------------|
+| Voltage | 38 (V_VOLTAGE) | 37 (S_MULTIMETER) | Voltage in volts |
+| Current | 39 (V_CURRENT) | 37 (S_MULTIMETER) | Current in amps |
+| Temperature | 0 (V_TEMP) | 6 (S_TEMP) | Temperature in °C |
+| Humidity | 1 (V_HUM) | 7 (S_HUM) | Humidity in % |
+| Percentage | 2 (V_STATUS) | 35 (S_MOISTURE) | Generic 0-100% |
+| Light Level | 3 (V_LIGHT_LEVEL) | 16 (S_LIGHT_LEVEL) | Light in % |
+
+#### Compile-Time Configuration
+
+Enable analog measurement support:
+
+**In `Globals.h`:**
+```c
+#define FEATURE_ANALOG_MEASUREMENT
+```
+
+**Or in `platformio.ini`:**
+```ini
+[env:myboard]
+build_flags = 
+    -DFEATURE_ANALOG_MEASUREMENT
+```
+
+**Binary Size:** +200-300 bytes when enabled, +0 bytes when disabled.
+
+📖 **Detailed Documentation:** See `ANALOG_MEASUREMENT_USAGE.md` for more examples and platform-specific notes.
 
 ## Sensor Reporters
 Sensor reporters define timing, averaging, and MySensors reporting behavior. They reference measurement sources by name.

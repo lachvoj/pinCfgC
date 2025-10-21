@@ -15,6 +15,7 @@
 #include "PinCfgMessages.h"
 #include "PinCfgParse.h"
 #include "Sensor.h"
+#include "SensorMeasure.h"
 #include "Switch.h"
 #include "Trigger.h"
 
@@ -24,6 +25,10 @@
 
 #ifdef FEATURE_LOOPTIME_MEASUREMENT
 #include "LoopTimeMeasure.h"
+#endif
+
+#ifdef FEATURE_ANALOG_MEASUREMENT
+#include "AnalogMeasure.h"
 #endif
 
 // Forward declarations
@@ -41,7 +46,9 @@ static PINCFG_RESULT_T PinCfgCsv_ParseGlobalConfigItems(PINCFG_PARSE_SUBFN_PARAM
 
 static PRESENTABLE_T *PinCfgCsv_psFindInPresentablesById(uint8_t u8Id);
 static PRESENTABLE_T *PinCfgCsv_psFindInTempPresentablesByName(const STRING_POINT_T *psName);
-static ISENSORMEASURE_T *PinCfgCsv_psFindMeasurementByName(const char *pcName, size_t szNameLen);
+static ISENSORMEASURE_T *PinCfgCsv_psFindMeasurementByName(
+    PINCFG_PARSE_SUBFN_PARAMS_T *psPrms,
+    const STRING_POINT_T *psName);
 static inline size_t szGetSize(size_t a, size_t b);
 
 #ifdef MY_CONTROLLER_HA
@@ -193,10 +200,9 @@ PINCFG_RESULT_T PinCfgCsv_eInit(uint8_t *pu8Memory, size_t szMemorySize, const c
         if (eLinkedListResult != LINKEDLIST_OK_E)
             return PINCFG_OUTOFMEMORY_ERROR_E;
         
-        eLinkedListResult = LinkedList_eLinkedListToArray(
-            (LINKEDLIST_ITEM_T **)&(psGlobals->ppsMeasurements), &(psGlobals->u8MeasurementsCount));
-        if (eLinkedListResult != LINKEDLIST_OK_E)
-            return PINCFG_OUTOFMEMORY_ERROR_E;
+        // Note: Measurements are NOT converted to array
+        // They remain in linked list during parsing only
+        // Sensors store direct pointers, so no array needed at runtime
     }
 
     Memory_vTempFree();
@@ -212,7 +218,8 @@ PINCFG_RESULT_T PinCfgCsv_eParse(PINCFG_PARSE_PARAMS_T *psParams)
         .u16LinesProcessed = 0,
         .u8LineItemsLen = 0,
         .u8PresentablesCount = 0,
-        .szNumberOfWarnings = 0};
+        .szNumberOfWarnings = 0,
+        .psMeasurementsListHead = NULL};  // Initialize measurement list
 
     uint16_t u16LinesLen;
     PINCFG_RESULT_T eResult = PINCFG_ERROR_E;
@@ -775,13 +782,15 @@ static PINCFG_RESULT_T PinCfgCsv_ParseTriggers(PINCFG_PARSE_SUBFN_PARAMS_T *psPr
 }
 
 // Phase 2: Parse Measurement Source (MS)
-// Format: MS,<type_enum>,<name>/
+// Format: MS,<type_enum>,<name>[,additional_params]/
 // Example: MS,0,temp0/  (0 = MEASUREMENT_TYPE_CPUTEMP_E)
+// Example: MS,1,battery,0/ (1 = MEASUREMENT_TYPE_ANALOG_E, pin 0)
 static PINCFG_RESULT_T PinCfgCsv_ParseMeasurementSource(PINCFG_PARSE_SUBFN_PARAMS_T *psPrms)
 {
-    // MS,<type_enum>,<name>
-    // Required: MS,0,name = 3 items (0 = MEASUREMENT_TYPE_CPUTEMP_E)
-    if (psPrms->u8LineItemsLen != 3)
+    // MS,<type_enum>,<name>[,additional_params]
+    // Required: At least 3 items (MS, type, name)
+    // Each measurement type validates its own parameter count
+    if (psPrms->u8LineItemsLen < 3)
     {
         psPrms->pcOutStringLast += LOG_WARNING(psPrms, PinCfgMessages_getString(MS_E), ERR_INVALID_ARGS);
         return PINCFG_OK_E;
@@ -825,6 +834,11 @@ static PINCFG_RESULT_T PinCfgCsv_ParseMeasurementSource(PINCFG_PARSE_SUBFN_PARAM
                 szMeasurementSize = sizeof(I2CMEASURE_T);
                 break;
 #endif
+#ifdef FEATURE_ANALOG_MEASUREMENT
+            case MEASUREMENT_TYPE_ANALOG_E:
+                szMeasurementSize = sizeof(ANALOGMEASURE_T);
+                break;
+#endif
             default:
                 szMeasurementSize = sizeof(CPUTEMPMEASURE_T); // Use as default
                 break;
@@ -838,17 +852,6 @@ static PINCFG_RESULT_T PinCfgCsv_ParseMeasurementSource(PINCFG_PARSE_SUBFN_PARAM
 
     if (psPrms->psParsePrms->bValidate)
         return PINCFG_OK_E;
-
-    // Allocate and copy name string
-    char *pcName = (char *)Memory_vpAlloc(psPrms->sTempStrPt.szLen + 1);
-    if (pcName == NULL)
-    {
-        Memory_eReset();
-        psPrms->pcOutStringLast += LOG_ERROR(psPrms, PinCfgMessages_getString(MS_E), ERR_OOM);
-        return PINCFG_OUTOFMEMORY_ERROR_E;
-    }
-    strncpy(pcName, psPrms->sTempStrPt.pcStrStart, psPrms->sTempStrPt.szLen);
-    pcName[psPrms->sTempStrPt.szLen] = '\0';
 
     // Create measurement source based on type
     ISENSORMEASURE_T *psGenericMeasurement = NULL;
@@ -865,7 +868,8 @@ static PINCFG_RESULT_T PinCfgCsv_ParseMeasurementSource(PINCFG_PARSE_SUBFN_PARAM
             return PINCFG_OUTOFMEMORY_ERROR_E;
         }
 
-        if (CPUTempMeasure_eInit(psMeasurement, eType, pcName) != CPUTEMPMEASURE_OK_E)
+        // Initialize measurement (name allocation happens inside)
+        if (CPUTempMeasure_eInit(psMeasurement, &(psPrms->sTempStrPt)) != CPUTEMPMEASURE_OK_E)
         {
             psPrms->pcOutStringLast += LOG_WARNING(psPrms, PinCfgMessages_getString(MS_E), ERR_INIT_FAILED);
             return PINCFG_OK_E;
@@ -998,8 +1002,8 @@ static PINCFG_RESULT_T PinCfgCsv_ParseMeasurementSource(PINCFG_PARSE_SUBFN_PARAM
             return PINCFG_OUTOFMEMORY_ERROR_E;
         }
         
-        // Initialize I2C measurement
-        if (I2CMeasure_eInit(psMeasurement, eType, pcName, u8DeviceAddress, 
+        // Initialize I2C measurement (name allocation happens inside)
+        if (I2CMeasure_eInit(psMeasurement, &(psPrms->sTempStrPt), u8DeviceAddress, 
                              au8CommandBytes, u8CommandLength, u8DataSize, 
                              u16ConversionDelayMs) != PINCFG_OK_E)
         {
@@ -1023,7 +1027,8 @@ static PINCFG_RESULT_T PinCfgCsv_ParseMeasurementSource(PINCFG_PARSE_SUBFN_PARAM
             return PINCFG_OUTOFMEMORY_ERROR_E;
         }
 
-        if (LoopTimeMeasure_eInit(psMeasurement, eType, pcName) != LOOPTIMEMEASURE_OK_E)
+        // Initialize measurement (name allocation happens inside)
+        if (LoopTimeMeasure_eInit(psMeasurement, &(psPrms->sTempStrPt)) != LOOPTIMEMEASURE_OK_E)
         {
             psPrms->pcOutStringLast += LOG_WARNING(psPrms, PinCfgMessages_getString(MS_E), ERR_INIT_FAILED);
             return PINCFG_OK_E;
@@ -1034,10 +1039,59 @@ static PINCFG_RESULT_T PinCfgCsv_ParseMeasurementSource(PINCFG_PARSE_SUBFN_PARAM
     }
 #endif // FEATURE_LOOPTIME_MEASUREMENT
     
+#ifdef FEATURE_ANALOG_MEASUREMENT
     case MEASUREMENT_TYPE_ANALOG_E:
+    {
+        // Parse analog-specific parameters
+        // Format: MS,1,name,pin/
+        // Required: MS, type(1), name, pin = 4 items
+        if (psPrms->u8LineItemsLen != 4)
+        {
+            psPrms->pcOutStringLast += LOG_WARNING(psPrms, PinCfgMessages_getString(MS_E), ERR_INVALID_ARGS);
+            return PINCFG_OK_E;
+        }
+        
+        // Parameter 3: Analog pin number
+        psPrms->sTempStrPt = psPrms->sLine;
+        PinCfgStr_vGetSplitElemByIndex(&(psPrms->sTempStrPt), PINCFG_VALUE_SEPARATOR_D, 3);
+        uint8_t u8Pin = 0;
+        if (PinCfgStr_eAtoU8(&(psPrms->sTempStrPt), &u8Pin) != PINCFG_STR_OK_E)
+        {
+            psPrms->pcOutStringLast += LOG_WARNING(psPrms, PinCfgMessages_getString(MS_E), ERR_INVALID_PIN);
+            return PINCFG_OK_E;
+        }
+        
+        // Allocate analog measurement structure
+        ANALOGMEASURE_T *psMeasurement = (ANALOGMEASURE_T *)Memory_vpAlloc(sizeof(ANALOGMEASURE_T));
+        if (psMeasurement == NULL)
+        {
+            Memory_eReset();
+            psPrms->pcOutStringLast += LOG_ERROR(psPrms, PinCfgMessages_getString(MS_E), ERR_OOM);
+            return PINCFG_OUTOFMEMORY_ERROR_E;
+        }
+        
+        // Get name from index 2 (already in psPrms->sTempStrPt from earlier)
+        psPrms->sTempStrPt = psPrms->sLine;
+        PinCfgStr_vGetSplitElemByIndex(&(psPrms->sTempStrPt), PINCFG_VALUE_SEPARATOR_D, 2);
+        
+        // Initialize analog measurement (name allocation happens inside)
+        if (AnalogMeasure_eInit(psMeasurement, &(psPrms->sTempStrPt), u8Pin) != ANALOGMEASURE_OK_E)
+        {
+            psPrms->pcOutStringLast += LOG_WARNING(psPrms, PinCfgMessages_getString(MS_E), ERR_INIT_FAILED);
+            return PINCFG_OK_E;
+        }
+        
+        psGenericMeasurement = &(psMeasurement->sSensorMeasure);
+        break;
+    }
+#endif // FEATURE_ANALOG_MEASUREMENT
+    
     case MEASUREMENT_TYPE_DIGITAL_E:
 #ifndef FEATURE_I2C_MEASUREMENT
     case MEASUREMENT_TYPE_I2C_E:
+#endif
+#ifndef FEATURE_ANALOG_MEASUREMENT
+    case MEASUREMENT_TYPE_ANALOG_E:
 #endif
     case MEASUREMENT_TYPE_CALCULATED_E:
     default:
@@ -1050,7 +1104,7 @@ static PINCFG_RESULT_T PinCfgCsv_ParseMeasurementSource(PINCFG_PARSE_SUBFN_PARAM
     if (psGenericMeasurement != NULL)
     {
         PINCFG_RESULT_T eAddResult = PinCfgCsv_eAddToLinkedList(
-            (LINKEDLIST_ITEM_T **)&(psGlobals->ppsMeasurements), 
+            (LINKEDLIST_ITEM_T **)&(psPrms->psMeasurementsListHead), 
             (void *)psGenericMeasurement);
         
         if (eAddResult != PINCFG_OK_E)
@@ -1092,8 +1146,8 @@ static PINCFG_RESULT_T PinCfgCsv_ParseSensorReporter(PINCFG_PARSE_SUBFN_PARAMS_T
     if (psPrms->psParsePrms->pszMemoryRequired == NULL)
     {
         psMeasurement = PinCfgCsv_psFindMeasurementByName(
-            sMeasurementName.pcStrStart, 
-            sMeasurementName.szLen);
+            psPrms,
+            &sMeasurementName);
     }
     
     if (psMeasurement == NULL && 
@@ -1340,101 +1394,33 @@ static PRESENTABLE_T *PinCfgCsv_psFindInPresentablesById(uint8_t u8Id)
     return (psGlobals->ppsPresentables)[u8Id];
 }
 
-static ISENSORMEASURE_T *PinCfgCsv_psFindMeasurementByName(const char *pcName, size_t szNameLen)
+static ISENSORMEASURE_T *PinCfgCsv_psFindMeasurementByName(
+    PINCFG_PARSE_SUBFN_PARAMS_T *psPrms,
+    const STRING_POINT_T *psName)
 {
-    if (pcName == NULL || szNameLen == 0)
+    if (psName == NULL || psName->pcStrStart == NULL || psName->szLen == 0)
         return NULL;
 
-    // During parsing, measurements are in a linked list
-    // After parsing, they're in an array
-    // Try array first (post-parse), then linked list (during parse)
+    // During parsing: Search linked list only
+    // No array conversion - sensors store direct pointers
+    LINKEDLIST_ITEM_T *psCurrent = psPrms->psMeasurementsListHead;
     
-    if (psGlobals->ppsMeasurements != NULL && psGlobals->u8MeasurementsCount > 0)
+    while (psCurrent != NULL)
     {
-        // Post-parse: Search array
-        for (uint8_t i = 0; i < psGlobals->u8MeasurementsCount; i++)
+        // Get the actual measurement from the linked list item
+        ISENSORMEASURE_T *psMeasure = (ISENSORMEASURE_T *)psCurrent->pvItem;
+        if (psMeasure != NULL && psMeasure->pcName != NULL)
         {
-            ISENSORMEASURE_T *psMeasure = psGlobals->ppsMeasurements[i];
-            if (psMeasure == NULL)
-                continue;
-
-            const char *pcStoredName = NULL;
-            switch (psMeasure->eType)
+            // Name is now in base interface - much simpler!
+            size_t szStoredLen = strlen(psMeasure->pcName);
+            if (szStoredLen == psName->szLen && 
+                strncmp(psMeasure->pcName, psName->pcStrStart, psName->szLen) == 0)
             {
-            case MEASUREMENT_TYPE_CPUTEMP_E:
-                pcStoredName = ((CPUTEMPMEASURE_T *)psMeasure)->pcName;
-                break;
-#ifdef FEATURE_LOOPTIME_MEASUREMENT
-            case MEASUREMENT_TYPE_LOOPTIME_E:
-                pcStoredName = ((LOOPTIMEMEASURE_T *)psMeasure)->pcName;
-                break;
-#endif
-            case MEASUREMENT_TYPE_ANALOG_E:
-            case MEASUREMENT_TYPE_DIGITAL_E:
-            case MEASUREMENT_TYPE_I2C_E:
-            case MEASUREMENT_TYPE_CALCULATED_E:
-            default:
-                continue;
-            }
-            
-            if (pcStoredName != NULL)
-            {
-                size_t szStoredLen = strlen(pcStoredName);
-                if (szStoredLen == szNameLen && 
-                    strncmp(pcStoredName, pcName, szNameLen) == 0)
-                {
-                    return psMeasure;
-                }
+                return psMeasure;
             }
         }
-    }
-    else
-    {
-        // During parse: Search linked list
-        LINKEDLIST_ITEM_T *psCurrent = (LINKEDLIST_ITEM_T *)psGlobals->ppsMeasurements;
         
-        while (psCurrent != NULL)
-        {
-            // Get the actual measurement from the linked list item
-            ISENSORMEASURE_T *psMeasure = (ISENSORMEASURE_T *)psCurrent->pvItem;
-            if (psMeasure == NULL)
-            {
-                psCurrent = (LINKEDLIST_ITEM_T *)psCurrent->pvNext;
-                continue;
-            }
-            
-            const char *pcStoredName = NULL;
-            switch (psMeasure->eType)
-            {
-            case MEASUREMENT_TYPE_CPUTEMP_E:
-                pcStoredName = ((CPUTEMPMEASURE_T *)psMeasure)->pcName;
-                break;
-#ifdef FEATURE_LOOPTIME_MEASUREMENT
-            case MEASUREMENT_TYPE_LOOPTIME_E:
-                pcStoredName = ((LOOPTIMEMEASURE_T *)psMeasure)->pcName;
-                break;
-#endif
-            case MEASUREMENT_TYPE_ANALOG_E:
-            case MEASUREMENT_TYPE_DIGITAL_E:
-            case MEASUREMENT_TYPE_I2C_E:
-            case MEASUREMENT_TYPE_CALCULATED_E:
-            default:
-                psCurrent = (LINKEDLIST_ITEM_T *)psCurrent->pvNext;
-                continue;
-            }
-            
-            if (pcStoredName != NULL)
-            {
-                size_t szStoredLen = strlen(pcStoredName);
-                if (szStoredLen == szNameLen && 
-                    strncmp(pcStoredName, pcName, szNameLen) == 0)
-                {
-                    return psMeasure;
-                }
-            }
-            
-            psCurrent = (LINKEDLIST_ITEM_T *)psCurrent->pvNext;
-        }
+        psCurrent = (LINKEDLIST_ITEM_T *)psCurrent->pvNext;
     }
 
     return NULL;  // Not found
