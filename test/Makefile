@@ -2,7 +2,6 @@
 SHELL = /bin/sh
 
 BUILDDIR=build
-OBJDIR=$(BUILDDIR)
 SRCDIR=../src
 UNITY_ROOT=Unity
 MOCKDIR=mocks
@@ -11,58 +10,62 @@ CC = gcc
 CPP = g++
 
 SRCC = $(wildcard $(SRCDIR)/*.c)
-OBJC = $(patsubst $(SRCDIR)/%.c, $(OBJDIR)/%.o, $(SRCC))
 MOCKSC = $(wildcard $(MOCKDIR)/*.c)
-OBJC += $(patsubst $(MOCKDIR)/%.c, $(OBJDIR)/%.o, $(MOCKSC))
-OBJC += $(UNITY_ROOT)/src/unity.o
-OBJC += $(OBJDIR)/test.o
-
 SRCCPP = $(wildcard $(SRCDIR)/*.cpp)
-OBJCPP = $(patsubst $(SRCDIR)/%.cpp, $(OBJDIR)/%.o, $(SRCCPP))
 MOCKSCPP = $(wildcard $(MOCKDIR)/*.cpp)
-OBJCPP += $(patsubst $(MOCKDIR)/%.cpp, $(OBJDIR)/%.o, $(MOCKSCPP))
-
-EXE = test
 
 INCLUDES = -I. -I../include -I$(MOCKDIR) -I$(UNITY_ROOT)/src -I$(SRCDIR)
 LIBS = -lm
 
-# Set USE_ERROR_MESSAGES=1 to enable full error messages, otherwise use compact error codes
-# Example: make USE_ERROR_MESSAGES=1
-ifdef USE_ERROR_MESSAGES
-CFLAGS = -g -DUSE_ERROR_MESSAGES
-else
-CFLAGS = -g
-endif 
-CFLAGS += -Wall
-CFLAGS += -Wextra
-CFLAGS += -Wpointer-arith
-CFLAGS += -Wcast-align
-CFLAGS += -Wwrite-strings
-CFLAGS += -Wswitch-default
-CFLAGS += -Wunreachable-code
-CFLAGS += -Winit-self
-CFLAGS += -Wmissing-field-initializers
-CFLAGS += -Wno-unknown-pragmas
-CFLAGS += -Wno-misleading-indentation
-CFLAGS += -DUNIT_TEST
-CFLAGS += -DUSE_MALLOC
-#CFLAGS += -Wstack-usage=200 #-D'F(x)=((const char*)x)'
-#CFLAGS += -fsanitize=vptr -fsanitize=address -static-libasan
+CFLAGS_BASE = -g
+CFLAGS_BASE += -Wall
+CFLAGS_BASE += -Wextra
+CFLAGS_BASE += -Wpointer-arith
+CFLAGS_BASE += -Wcast-align
+CFLAGS_BASE += -Wwrite-strings
+CFLAGS_BASE += -Wswitch-default
+CFLAGS_BASE += -Wunreachable-code
+CFLAGS_BASE += -Winit-self
+CFLAGS_BASE += -Wmissing-field-initializers
+CFLAGS_BASE += -Wno-unknown-pragmas
+CFLAGS_BASE += -Wno-misleading-indentation
+CFLAGS_BASE += -DUNIT_TEST
+CFLAGS_BASE += -DFEATURE_I2C_MEASUREMENT
+CFLAGS_BASE += -DFEATURE_LOOPTIME_MEASUREMENT
+#CFLAGS_BASE += -Wstack-usage=200 #-D'F(x)=((const char*)x)'
+#CFLAGS_BASE += -fsanitize=vptr -fsanitize=address -static-libasan
+
+# Test binary variants with different flag combinations
+EXE1 = test_malloc_errmsg
+EXE2 = test_malloc_errcode
+EXE3 = test_static_errmsg
+EXE4 = test_static_errcode
+
+# Flag combinations
+CFLAGS1 = $(CFLAGS_BASE) -DUSE_MALLOC -DUSE_ERROR_MESSAGES
+CFLAGS2 = $(CFLAGS_BASE) -DUSE_MALLOC
+CFLAGS3 = $(CFLAGS_BASE) -DUSE_ERROR_MESSAGES
+CFLAGS4 = $(CFLAGS_BASE)
 
 .PHONY: all
 
-all: $(EXE)
+all: $(EXE1) $(EXE2) $(EXE3) $(EXE4)
 
 echo:
 	@echo $(SRCCPP)
 	@echo 
 	@echo $(OBJCPP)
 
-run: test
-	@echo "\n"
-	@./$(BUILDDIR)/test
-	@echo "\n"
+run: all
+	@echo "\n=== Running test_malloc_errmsg (USE_MALLOC + USE_ERROR_MESSAGES) ==="
+	@./$(BUILDDIR)/$(EXE1) 2>&1 | tail -3
+	@echo "\n=== Running test_malloc_errcode (USE_MALLOC only) ==="
+	@./$(BUILDDIR)/$(EXE2) 2>&1 | tail -3
+	@echo "\n=== Running test_static_errmsg (USE_ERROR_MESSAGES only) ==="
+	@./$(BUILDDIR)/$(EXE3) 2>&1 | tail -3
+	@echo "\n=== Running test_static_errcode (No flags) ==="
+	@./$(BUILDDIR)/$(EXE4) 2>&1 | tail -3
+	@echo ""
 
 clean:
 	-rm -fr $(BUILDDIR)
@@ -70,26 +73,43 @@ clean:
 $(BUILDDIR):
 	mkdir -p $@
 
-# link
-$(EXE): $(OBJC) $(OBJCPP) | $(BUILDDIR)
-	$(CPP) $(CFLAGS) $(INCLUDES) -o $(OBJDIR)/$@ $(OBJC) $(OBJCPP) $(LIBS)
+# Helper function to compile with specific flags
+define compile_variant
+$(BUILDDIR)/$(1)_obj:
+	mkdir -p $$@
 
-# compile
-$(OBJDIR)/%.o: $(SRCDIR)/%.c | $(BUILDDIR)
-	$(CC) $(CFLAGS) $(INCLUDES) -c $^ -o $@
+$(BUILDDIR)/$(1)_obj/%.o: $(SRCDIR)/%.c | $(BUILDDIR)/$(1)_obj
+	$(CC) $(2) $(INCLUDES) -c $$< -o $$@
 
-$(OBJDIR)/%.o: $(MOCKDIR)/%.c | $(BUILDDIR)
-	$(CC) $(CFLAGS) $(INCLUDES) -c $^ -o $@
+$(BUILDDIR)/$(1)_obj/%.o: $(MOCKDIR)/%.c | $(BUILDDIR)/$(1)_obj
+	$(CC) $(2) $(INCLUDES) -c $$< -o $$@
 
-$(OBJDIR)/%.o: $(UNITY_ROOT)/src/%.c | $(BUILDDIR)
-	$(CC) $(CFLAGS) $(INCLUDES) -c $^ -o $@
+$(BUILDDIR)/$(1)_obj/%.o: $(UNITY_ROOT)/src/%.c | $(BUILDDIR)/$(1)_obj
+	$(CC) $(2) $(INCLUDES) -c $$< -o $$@
 
-$(OBJDIR)/%.o: %.c | $(BUILDDIR)
-	$(CC) $(CFLAGS) $(INCLUDES) -c $^ -o $@
+$(BUILDDIR)/$(1)_obj/test.o: test.c | $(BUILDDIR)/$(1)_obj
+	$(CC) $(2) $(INCLUDES) -c $$< -o $$@
 
-$(OBJDIR)/%.o: $(SRCDIR)/%.cpp | $(BUILDDIR)
-	$(CPP) $(CFLAGS) $(INCLUDES) -c $^ -o $@
+$(BUILDDIR)/$(1)_obj/%.o: $(SRCDIR)/%.cpp | $(BUILDDIR)/$(1)_obj
+	$(CPP) $(2) $(INCLUDES) -c $$< -o $$@
 
-$(OBJDIR)/%.o: $(MOCKDIR)/%.cpp | $(BUILDDIR)
-	$(CPP) $(CFLAGS) $(INCLUDES) -c $^ -o $@
+$(BUILDDIR)/$(1)_obj/%.o: $(MOCKDIR)/%.cpp | $(BUILDDIR)/$(1)_obj
+	$(CPP) $(2) $(INCLUDES) -c $$< -o $$@
+
+$(1)_OBJC = $$(patsubst $(SRCDIR)/%.c, $(BUILDDIR)/$(1)_obj/%.o, $(SRCC))
+$(1)_OBJC += $$(patsubst $(MOCKDIR)/%.c, $(BUILDDIR)/$(1)_obj/%.o, $(MOCKSC))
+$(1)_OBJC += $(BUILDDIR)/$(1)_obj/unity.o
+$(1)_OBJC += $(BUILDDIR)/$(1)_obj/test.o
+$(1)_OBJCPP = $$(patsubst $(SRCDIR)/%.cpp, $(BUILDDIR)/$(1)_obj/%.o, $(SRCCPP))
+$(1)_OBJCPP += $$(patsubst $(MOCKDIR)/%.cpp, $(BUILDDIR)/$(1)_obj/%.o, $(MOCKSCPP))
+
+$(1): $$($(1)_OBJC) $$($(1)_OBJCPP) | $(BUILDDIR)
+	$(CPP) $(2) $(INCLUDES) -o $(BUILDDIR)/$$@ $$($(1)_OBJC) $$($(1)_OBJCPP) $(LIBS)
+endef
+
+# Generate build rules for each variant
+$(eval $(call compile_variant,$(EXE1),$(CFLAGS1)))
+$(eval $(call compile_variant,$(EXE2),$(CFLAGS2)))
+$(eval $(call compile_variant,$(EXE3),$(CFLAGS3)))
+$(eval $(call compile_variant,$(EXE4),$(CFLAGS4)))
 

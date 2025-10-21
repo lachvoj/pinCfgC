@@ -14,6 +14,7 @@ typedef enum MEASUREMENT_TYPE_E
     MEASUREMENT_TYPE_DIGITAL_E = 2,  // Digital input (reserved for Phase 3)
     MEASUREMENT_TYPE_I2C_E = 3,      // I2C sensor (reserved for Phase 3)
     MEASUREMENT_TYPE_CALCULATED_E = 4, // Calculated/formula (reserved for Phase 3)
+    MEASUREMENT_TYPE_LOOPTIME_E = 5, // Loop execution time (debug measurement, bypasses sampling interval)
     MEASUREMENT_TYPE_COUNT_E         // Number of types (for validation)
 } MEASUREMENT_TYPE_T;
 

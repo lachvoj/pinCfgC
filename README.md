@@ -18,6 +18,7 @@ The goal of this library is to provide a CSV-based configuration that specifies 
 8. [Measurement Sources](#measurement-sources)
    1. [CPU Temperature Measurement](#cpu-temperature-measurement)
    2. [I2C Measurement](#i2c-measurement-compile-time-optional)
+   3. [Loop Time Measurement](#loop-time-measurement-debug)
 9. [Sensor Reporters](#sensor-reporters)
 
 ## Format Overview
@@ -450,6 +451,43 @@ build_flags =
 **Binary Size:** +800-1000 bytes when enabled, +0 bytes when disabled.
 
 **Compatibility:** Both 5-parameter (simple) and 6-7 parameter (command) formats are supported.
+
+### Loop Time Measurement (Debug)
+
+Measures main loop execution time for debugging and performance monitoring. Unlike other measurements, loop time is measured **every loop iteration** regardless of sampling interval.
+
+#### Format
+```
+MS,5,<name>/
+```
+
+#### Parameters
+- **Type:** `5` = Loop time measurement
+- **Name:** Identifier for this measurement (e.g., "looptime")
+
+#### Example Configuration
+```
+MS,5,looptime/
+SR,LoopTime,looptime,99,99,1,0,0,5/
+```
+
+Reports average loop execution time every 5 seconds.
+
+#### Key Characteristics
+- **Always Measured:** Called every loop iteration (bypasses sampling interval)
+- **Requires Cumulative Mode:** Use `cumulative=1` for meaningful statistics
+- **Low Overhead:** ~1 µs per loop iteration
+- **Time Units:** Milliseconds
+- **First Sample Skipped:** No delta available on first measurement
+
+#### Typical Values
+- **Arduino Uno/Nano:** 0.5-2 ms (simple configuration)
+- **ESP8266:** 0.2-1 ms (WiFi can cause spikes)
+- **ESP32:** 0.1-0.5 ms (dual-core benefits)
+
+⚠️ **Note:** High loop times (>50ms) may indicate blocking operations (delays, synchronous I2C, etc.)
+
+📖 **Detailed Documentation:** See `LOOP_TIME_MEASUREMENT.md` for implementation details and troubleshooting.
 
 ## Sensor Reporters
 Sensor reporters define timing, averaging, and MySensors reporting behavior. They reference measurement sources by name.

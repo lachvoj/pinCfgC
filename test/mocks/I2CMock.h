@@ -6,6 +6,10 @@
 #include <stdint.h>
 #include <stdbool.h>
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 /**
  * @brief I2C Wire library mock for testing
  * 
@@ -131,6 +135,10 @@ uint8_t WireMock_u8GetLastAddress(void);
  * @return Last byte written via Wire_write (typically register address)
  */
 uint8_t WireMock_u8GetLastRegister(void);
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif // FEATURE_I2C_MEASUREMENT
 

@@ -15,6 +15,7 @@
 #ifdef FEATURE_I2C_MEASUREMENT
 
 #include "WireWrapper.h"
+#include <stddef.h>  // For NULL
 
 // Detect STM32 HAL mode
 #if defined(ARDUINO_ARCH_STM32) || defined(ARDUINO_ARCH_STM32F1) || \

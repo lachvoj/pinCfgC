@@ -1,3 +1,4 @@
+#include "Globals.h"
 #include "Memory.h"
 #include "PinCfgUtils.h"
 #include "Sensor.h"
@@ -183,11 +184,26 @@ static void Sensor_vLoop(LOOPABLE_T *psLoopableHandle, uint32_t u32ms)
     // Handle cumulative mode
     if (psHandle->u8Flags & SENSOR_FLAG_CUMULATIVE)
     {
-        // Check sampling interval (in milliseconds)
+        // Determine if we should measure this loop
+        bool bShouldMeasure = false;
+        
+        // Special case: LOOPTIME always measures every loop (bypasses sampling interval)
+#ifdef FEATURE_LOOPTIME_MEASUREMENT
+        if (psHandle->psSensorMeasure->eType == MEASUREMENT_TYPE_LOOPTIME_E)
+        {
+            bShouldMeasure = true;
+        }
+        // Normal case: check sampling interval
+        else
+#endif
         if (PinCfg_u32GetElapsedTime(psHandle->u32LastSamplingMs, u32ms) >= psHandle->u16SamplingIntervalMs)
         {
             psHandle->u32LastSamplingMs = u32ms;
-            
+            bShouldMeasure = true;
+        }
+        
+        if (bShouldMeasure)
+        {
             // Take a sample
             float fValue = 0.0f;
             ISENSORMEASURE_RESULT_T eResult;

@@ -9,6 +9,10 @@
 // Adds ~600-800 bytes to binary when enabled
 // #define FEATURE_I2C_MEASUREMENT
 
+// Uncomment to enable loop time measurement support (for debugging/profiling)
+// Adds ~200-300 bytes to binary when enabled
+// #define FEATURE_LOOPTIME_MEASUREMENT
+
 // ============================================================================
 
 #include "ILoopable.h"

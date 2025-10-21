@@ -6,6 +6,7 @@
 #include "CPUTempMeasure.h"
 #include "Globals.h"
 #include "InPin.h"
+#include "LoopTimeMeasure.h"
 #include "Memory.h"
 #include "MySensorsWrapper.h"
 #include "PersistentConfigiration.h"
@@ -19,6 +20,10 @@
 
 #ifdef FEATURE_I2C_MEASUREMENT
 #include "I2CMeasure.h"
+#endif
+
+#ifdef FEATURE_LOOPTIME_MEASUREMENT
+#include "LoopTimeMeasure.h"
 #endif
 
 // Forward declarations
@@ -803,8 +808,30 @@ static PINCFG_RESULT_T PinCfgCsv_ParseMeasurementSource(PINCFG_PARSE_SUBFN_PARAM
     // Calculate memory
     if (psPrms->psParsePrms->pszMemoryRequired != NULL)
     {
+        // Calculate memory based on measurement type
+        size_t szMeasurementSize = 0;
+        switch (eType)
+        {
+            case MEASUREMENT_TYPE_CPUTEMP_E:
+                szMeasurementSize = sizeof(CPUTEMPMEASURE_T);
+                break;
+#ifdef FEATURE_LOOPTIME_MEASUREMENT
+            case MEASUREMENT_TYPE_LOOPTIME_E:
+                szMeasurementSize = sizeof(LOOPTIMEMEASURE_T);
+                break;
+#endif
+#ifdef FEATURE_I2C_MEASUREMENT
+            case MEASUREMENT_TYPE_I2C_E:
+                szMeasurementSize = sizeof(I2CMEASURE_T);
+                break;
+#endif
+            default:
+                szMeasurementSize = sizeof(CPUTEMPMEASURE_T); // Use as default
+                break;
+        }
+        
         *(psPrms->psParsePrms->pszMemoryRequired) +=
-            Memory_szGetAllocatedSize(sizeof(CPUTEMPMEASURE_T)) +
+            Memory_szGetAllocatedSize(szMeasurementSize) +
             Memory_szGetAllocatedSize(psPrms->sTempStrPt.szLen + 1);
         return PINCFG_OK_E;
     }
@@ -984,6 +1011,28 @@ static PINCFG_RESULT_T PinCfgCsv_ParseMeasurementSource(PINCFG_PARSE_SUBFN_PARAM
         break;
     }
 #endif // FEATURE_I2C_MEASUREMENT
+    
+#ifdef FEATURE_LOOPTIME_MEASUREMENT
+    case MEASUREMENT_TYPE_LOOPTIME_E:
+    {
+        LOOPTIMEMEASURE_T *psMeasurement = (LOOPTIMEMEASURE_T *)Memory_vpAlloc(sizeof(LOOPTIMEMEASURE_T));
+        if (psMeasurement == NULL)
+        {
+            Memory_eReset();
+            psPrms->pcOutStringLast += LOG_ERROR(psPrms, PinCfgMessages_getString(MS_E), ERR_OOM);
+            return PINCFG_OUTOFMEMORY_ERROR_E;
+        }
+
+        if (LoopTimeMeasure_eInit(psMeasurement, eType, pcName) != LOOPTIMEMEASURE_OK_E)
+        {
+            psPrms->pcOutStringLast += LOG_WARNING(psPrms, PinCfgMessages_getString(MS_E), ERR_INIT_FAILED);
+            return PINCFG_OK_E;
+        }
+        
+        psGenericMeasurement = &(psMeasurement->sSensorMeasure);
+        break;
+    }
+#endif // FEATURE_LOOPTIME_MEASUREMENT
     
     case MEASUREMENT_TYPE_ANALOG_E:
     case MEASUREMENT_TYPE_DIGITAL_E:
@@ -1315,6 +1364,11 @@ static ISENSORMEASURE_T *PinCfgCsv_psFindMeasurementByName(const char *pcName, s
             case MEASUREMENT_TYPE_CPUTEMP_E:
                 pcStoredName = ((CPUTEMPMEASURE_T *)psMeasure)->pcName;
                 break;
+#ifdef FEATURE_LOOPTIME_MEASUREMENT
+            case MEASUREMENT_TYPE_LOOPTIME_E:
+                pcStoredName = ((LOOPTIMEMEASURE_T *)psMeasure)->pcName;
+                break;
+#endif
             case MEASUREMENT_TYPE_ANALOG_E:
             case MEASUREMENT_TYPE_DIGITAL_E:
             case MEASUREMENT_TYPE_I2C_E:
@@ -1355,6 +1409,11 @@ static ISENSORMEASURE_T *PinCfgCsv_psFindMeasurementByName(const char *pcName, s
             case MEASUREMENT_TYPE_CPUTEMP_E:
                 pcStoredName = ((CPUTEMPMEASURE_T *)psMeasure)->pcName;
                 break;
+#ifdef FEATURE_LOOPTIME_MEASUREMENT
+            case MEASUREMENT_TYPE_LOOPTIME_E:
+                pcStoredName = ((LOOPTIMEMEASURE_T *)psMeasure)->pcName;
+                break;
+#endif
             case MEASUREMENT_TYPE_ANALOG_E:
             case MEASUREMENT_TYPE_DIGITAL_E:
             case MEASUREMENT_TYPE_I2C_E:
