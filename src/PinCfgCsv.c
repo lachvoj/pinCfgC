@@ -160,19 +160,26 @@ PINCFG_RESULT_T PinCfgCsv_eInit(uint8_t *pu8Memory, size_t szMemorySize, const c
         .bValidate = false};
 
     PINCFG_RESULT_T ePincfgResult = PINCFG_ERROR_E;
-    size_t szCfg;
-    PERCFG_RESULT_T eLoadResult = PersistentCfg_eGetSize((uint16_t *)&szCfg);
+    size_t szCfg = 0;
+    PERCFG_RESULT_T eLoadResult = PersistentCfg_eGetConfigSize((uint16_t *)&szCfg);
     if (eLoadResult == PERCFG_OK_E)
     {
-        sParseParams.pcConfig = (char *)Memory_vpTempAlloc(szCfg);
-        if (sParseParams.pcConfig == NULL)
-            return ePincfgResult;
+        if (szCfg == 0)
+        {
+            // Empty EEPROM - set result to error so it falls through to pcDefaultCfg
+            eLoadResult = PERCFG_ERROR_E;
+        }
+        else
+        {
+            sParseParams.pcConfig = (char *)Memory_vpTempAlloc(szCfg + 1);
+            if (sParseParams.pcConfig == NULL)
+                return ePincfgResult;
 
-        eLoadResult = PersistentCfg_eLoad(sParseParams.pcConfig);
+            eLoadResult = PersistentCfg_eLoadConfig(sParseParams.pcConfig);
+            if (eLoadResult == PERCFG_OK_E)
+                ePincfgResult = PinCfgCsv_eParse(&sParseParams);
+        }
     }
-
-    if (eLoadResult == PERCFG_OK_E)
-        ePincfgResult = PinCfgCsv_eParse(&sParseParams);
 
     if (pcDefaultCfg != NULL &&
         (eLoadResult != PERCFG_OK_E || (ePincfgResult != PINCFG_OK_E && ePincfgResult != PINCFG_WARNINGS_E)))
@@ -189,20 +196,26 @@ PINCFG_RESULT_T PinCfgCsv_eInit(uint8_t *pu8Memory, size_t szMemorySize, const c
 
     if (ePincfgResult == PINCFG_OK_E)
     {
-        // move loopables, presentables, and measurements from linked list to array
-        LINKEDLIST_RESULT_T eLinkedListResult = LinkedList_eLinkedListToArray(
-            (LINKEDLIST_ITEM_T **)&(psGlobals->ppsLoopables), &(psGlobals->u8LoopablesCount));
-        if (eLinkedListResult != LINKEDLIST_OK_E)
-            return PINCFG_OUTOFMEMORY_ERROR_E;
+        // Only convert linked lists to arrays if they were actually created
+        // Empty config doesn't create linked lists, so skip conversion
+        // Check if the lists are still NULL (indicating no items were added)
+        if (psGlobals->ppsLoopables != NULL || psGlobals->ppsPresentables != NULL)
+        {
+            // move loopables, presentables, and measurements from linked list to array
+            LINKEDLIST_RESULT_T eLinkedListResult = LinkedList_eLinkedListToArray(
+                (LINKEDLIST_ITEM_T **)&(psGlobals->ppsLoopables), &(psGlobals->u8LoopablesCount));
+            if (eLinkedListResult != LINKEDLIST_OK_E)
+                return PINCFG_OUTOFMEMORY_ERROR_E;
 
-        eLinkedListResult = LinkedList_eLinkedListToArray(
-            (LINKEDLIST_ITEM_T **)&(psGlobals->ppsPresentables), &(psGlobals->u8PresentablesCount));
-        if (eLinkedListResult != LINKEDLIST_OK_E)
-            return PINCFG_OUTOFMEMORY_ERROR_E;
-        
-        // Note: Measurements are NOT converted to array
-        // They remain in linked list during parsing only
-        // Sensors store direct pointers, so no array needed at runtime
+            eLinkedListResult = LinkedList_eLinkedListToArray(
+                (LINKEDLIST_ITEM_T **)&(psGlobals->ppsPresentables), &(psGlobals->u8PresentablesCount));
+            if (eLinkedListResult != LINKEDLIST_OK_E)
+                return PINCFG_OUTOFMEMORY_ERROR_E;
+            
+            // Note: Measurements are NOT converted to array
+            // They remain in linked list during parsing only
+            // Sensors store direct pointers, so no array needed at runtime
+        }
     }
 
     Memory_vTempFree();
@@ -225,15 +238,22 @@ PINCFG_RESULT_T PinCfgCsv_eParse(PINCFG_PARSE_PARAMS_T *psParams)
     PINCFG_RESULT_T eResult = PINCFG_ERROR_E;
 
     if (sPrms.psParsePrms->pszMemoryRequired != NULL)
+    {
+        // Initialize with base memory (GLOBALS_T)
+        // CLI and linked list items will be added by CreateCli and other creation functions
         *(sPrms.psParsePrms->pszMemoryRequired) = Memory_szGetAllocatedSize(sizeof(GLOBALS_T));
+    }
 
     if (sPrms.psParsePrms->pcOutString != NULL && sPrms.psParsePrms->u16OutStrMaxLen > 0)
         sPrms.psParsePrms->pcOutString[0] = '\0';
 
+    // Try to create CLI first - this allows OOM detection even with invalid config
+    // This is important for memory requirement validation in test scenarios
     eResult = PinCfgCsv_CreateCli(&sPrms);
     if (eResult != PINCFG_OK_E)
         return eResult;
 
+    // Now check for NULL config after CLI creation attempt
     if (psParams->pcConfig == NULL)
     {
         sPrms.pcOutStringLast += LOG_SIMPLE_ERROR(
@@ -244,10 +264,12 @@ PINCFG_RESULT_T PinCfgCsv_eParse(PINCFG_PARSE_PARAMS_T *psParams)
         return PINCFG_NULLPTR_ERROR_E;
     }
 
+    // Check for empty config after CLI creation
     PinCfgStr_vInitStrPoint(&(sPrms.sTempStrPt), psParams->pcConfig, strlen(psParams->pcConfig));
     u16LinesLen = (uint8_t)PinCfgStr_szGetSplitCount(&(sPrms.sTempStrPt), PINCFG_LINE_SEPARATOR_D);
-    if (u16LinesLen == 1 && sPrms.sTempStrPt.szLen == 0)
+    if (u16LinesLen == 0 || (u16LinesLen == 1 && sPrms.sTempStrPt.szLen == 0))
     {
+        // Empty config is an error - CLI already created but that's OK
         sPrms.pcOutStringLast += LOG_SIMPLE_ERROR(
             sPrms.psParsePrms->pcOutString,
             sPrms.pcOutStringLast,

@@ -13,6 +13,11 @@ void PinCfgStr_vInitStrPoint(STRING_POINT_T *psStrPoint, const char *pcStrStart,
 size_t PinCfgStr_szGetSplitCount(const STRING_POINT_T *psInStrPt, const char cDelimiter)
 {
     size_t szCount = 0;
+    
+    // Handle empty string
+    if (psInStrPt->szLen == 0)
+        return 0;
+    
     for (size_t i = 0; i < psInStrPt->szLen; i++)
     {
         if (psInStrPt->pcStrStart[i] == cDelimiter)

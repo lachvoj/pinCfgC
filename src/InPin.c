@@ -45,6 +45,7 @@ INPIN_RESULT_T InPin_eInit(INPIN_T *psHandle, STRING_POINT_T *sName, uint8_t u8I
     psHandle->u8InPin = u8InPin;
     psHandle->u32TimerDebounceStarted--;
     psHandle->u32timerMultiStarted--;
+    psHandle->psFirstSubscriber = NULL;
 
     pinMode(u8InPin, INPUT_PULLUP);
     digitalWrite(u8InPin, HIGH); // enabling pullup

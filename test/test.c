@@ -2,6 +2,7 @@
 #include <unity.h>
 
 #include "ArduinoMock.h"
+#include "CliAuth.h"
 #include "CPUTempMeasure.h"
 #include "Cli.h"
 #include "Globals.h"
@@ -12,6 +13,7 @@
 #endif
 #include "Memory.h"
 #include "MySensorsMock.h"
+#include "PersistentConfigiration.h"
 #include "PinCfgCsv.h"
 #include "PinCfgStr.h"
 #include "Presentable.h"
@@ -49,10 +51,16 @@
 #define OUT_STR_MAX_LEN_D 250
 #endif
 
+// Forward declarations for helper functions
+static void init_mock_EEPROM(void);
+static void init_mock_EEPROM_with_default_password(void);
+
 static uint8_t testMemory[MEMORY_SZ];
 
 void setUp(void)
 {
+    init_mock_EEPROM();  // Initialize EEPROM to empty state (0xFF)
+    
     PinCfgCsv_eInit(testMemory, MEMORY_SZ, NULL);
 
     init_MySensorsMock();
@@ -368,6 +376,8 @@ void test_vInPin(void)
     // add subscirber
     PINSUBSCRIBER_IF_T *psPinSubscriber1 = (PINSUBSCRIBER_IF_T *)Memory_vpAlloc(sizeof(PINSUBSCRIBER_IF_T));
     PINSUBSCRIBER_IF_T *psPinSubscriber2 = (PINSUBSCRIBER_IF_T *)Memory_vpAlloc(sizeof(PINSUBSCRIBER_IF_T));
+    psPinSubscriber1->psNext = NULL;
+    psPinSubscriber2->psNext = NULL;
     eResult = InPin_eAddSubscriber(NULL, psPinSubscriber1);
     TEST_ASSERT_EQUAL(INPIN_NULLPTR_ERROR_E, eResult);
     eResult = InPin_eAddSubscriber(psInPinHandle, NULL);
@@ -771,10 +781,11 @@ void test_vPinCfgCsv(void)
 
 void test_vCLI(void)
 {
+    init_mock_EEPROM_with_default_password();
     CLI_T *psCli = (CLI_T *)Memory_vpAlloc(sizeof(CLI_T));
     Cli_eInit(psCli, 0);
 
-    Cli_vRcvMessage((PRESENTABLE_T *)psCli, "#[S,o1,13/");
+    Cli_vRcvMessage((PRESENTABLE_T *)psCli, "#[PWD:admin123/S,o1,13/");
     TEST_ASSERT_EQUAL(1, mock_send_u32Called);
     TEST_ASSERT_EQUAL_STRING("RECEIVING", mock_MyMessage_set_char_value);
     TEST_ASSERT_EQUAL_STRING("S,o1,13/", psCli->pcCfgBuf);
@@ -783,30 +794,30 @@ void test_vCLI(void)
     Cli_vRcvMessage((PRESENTABLE_T *)psCli, "I,i1,16/");
     TEST_ASSERT_EQUAL_STRING("S,o1,13/I,i1,16/", psCli->pcCfgBuf);
     Cli_vRcvMessage((PRESENTABLE_T *)psCli, "T,vtl11,i1,0,1,o2,2/]#");
-    TEST_ASSERT_EQUAL_STRING("VALIDATION_OK;Save of cfg unsucessfull.;LISTENING;", mock_send_message);
-    TEST_ASSERT_EQUAL(4, mock_send_u32Called);
+    TEST_ASSERT_EQUAL_STRING("VALIDATION_OK;LISTENING;", mock_send_message);
+    TEST_ASSERT_EQUAL(3, mock_send_u32Called);
     TEST_ASSERT_EQUAL_STRING("LISTENING", mock_MyMessage_set_char_value);
 
     memset(mock_send_message, 0, sizeof(mock_send_message));
     Cli_eInit(psCli, 0);
-    Cli_vRcvMessage((PRESENTABLE_T *)psCli, "#[T,o1,13/]#");
+    Cli_vRcvMessage((PRESENTABLE_T *)psCli, "#[PWD:admin123/T,o1,13/]#");
 #ifdef USE_ERROR_MESSAGES
     TEST_ASSERT_EQUAL_STRING(
-        "RECEIVING;W:L:0:Trigger:Invalid num;ber of arguments\nW:L:1:Un;known type\nI: Configurati;on "
-        "parsed.\n;VALIDATION_ERROR;LISTENING;",
+        "RECEIVING;W:L:0:Trigger:Invalid num;ber of arguments\nW:L:1:No;t defined or invalid form;at\nW:L:2:Trigger:Invalid ;number of arguments\nI: Co;nfiguration parsed.\n;VALIDATION_ERROR;LISTENING;",
         mock_send_message);
 #else
     // In compact mode, errors are shown and validation fails
-    // ERR_INVALID_ARGS=5 (was 6), ERR_UNKNOWN_TYPE=4 (was 5)
+    // ERR_INVALID_ARGS=5, ERR_UNDEFINED_FORMAT=3
     TEST_ASSERT_EQUAL_STRING(
-        "RECEIVING;L0:W5;L1:W4;W2\n;VALIDATION_ERROR;LISTENING;",
+        "RECEIVING;L0:W5;L1:W3;L2:W5;W3\n;VALIDATION_ERROR;LISTENING;",
         mock_send_message);
 #endif
 
     memset(mock_send_message, 0, sizeof(mock_send_message));
     Cli_eInit(psCli, 0);
-    Cli_vRcvMessage((PRESENTABLE_T *)psCli, "#C:GET_CFG");
-    TEST_ASSERT_EQUAL_STRING("Unable to read cfg size.;LISTENING;", mock_send_message);
+    Cli_vRcvMessage((PRESENTABLE_T *)psCli, "#C:PWD:admin123:GET_CFG");
+    // Config was saved earlier in test, so it should be returned
+    TEST_ASSERT_EQUAL_STRING("S,o1,13/I,i1,16/T,vtl11,i;1,0,1,o2,2/;LISTENING;", mock_send_message);
 }
 
 void test_vGlobalConfig(void)
@@ -1040,6 +1051,7 @@ void test_vCPUTemp(void)
 
 void test_vFlow_timedSwitch(void)
 {
+    init_mock_EEPROM_with_default_password();
     PINCFG_RESULT_T eResult;
 
     // Configuration string: input pin -> trigger -> timed switch
@@ -1047,9 +1059,13 @@ void test_vFlow_timedSwitch(void)
                         "ST,sw1,13,5000/"     // Timed switch on pin 13 with 5s timeout
                         "T,t1,i1,4,1,sw1,3/"; // Trigger that connects i1 to sw1
 
-    // To use this configuration disable loading stored one
-    uint16_t u16OverMaxCfgLenght = PINCFG_CONFIG_MAX_SZ_D + 1;
-    mock_hwReadConfigBlock_buf = (void *)&u16OverMaxCfgLenght;
+    // To use this configuration, make EEPROM config size return invalid (too large)
+    // This ensures PinCfgCsv_eInit uses the provided pcCfg instead of loading from EEPROM
+    static uint8_t mockConfigBuffer[512];  // Large enough for password (32) + oversized config indicator
+    memset(mockConfigBuffer, 0, sizeof(mockConfigBuffer));
+    uint16_t *pu16Size = (uint16_t *)&mockConfigBuffer[32];  // Put size after password area
+    *pu16Size = PINCFG_CONFIG_MAX_SZ_D + 1;  // Oversized config
+    mock_hwReadConfigBlock_buf = mockConfigBuffer;
 
     eResult = PinCfgCsv_eInit(testMemory, MEMORY_SZ, pcCfg);
     TEST_ASSERT_EQUAL(PINCFG_OK_E, eResult);
@@ -1076,6 +1092,7 @@ void test_vFlow_timedSwitch(void)
     mock_digitalWrite_u32Called = 0;
     mock_MyMessage_set_uint8_t_value = 0;
     mock_send_u32Called = 0;
+    mock_millis_u32Return = 0;
     uint32_t u32Time = 0;
 
     // Simulate input pin activation
@@ -1474,6 +1491,10 @@ void test_vSwitch_EdgeCases(void)
     char acOutStr[OUT_STR_MAX_LEN_D];
     size_t szMemoryRequired;
 
+    // Initialize memory at start of test
+    Memory_eReset();
+    PinCfgCsv_eInit(testMemory, MEMORY_SZ, NULL);
+
     PINCFG_PARSE_PARAMS_T sParams = {
         .eAddToLoopables = PinCfgCsv_eAddToTempLoopables,
         .eAddToPresentables = PinCfgCsv_eAddToTempPresentables,
@@ -1574,6 +1595,10 @@ void test_vInPin_EdgeCases(void)
     char acOutStr[OUT_STR_MAX_LEN_D];
     size_t szMemoryRequired;
 
+    // Initialize memory at start of test
+    Memory_eReset();
+    PinCfgCsv_eInit(testMemory, MEMORY_SZ, NULL);
+
     PINCFG_PARSE_PARAMS_T sParams = {
         .eAddToLoopables = PinCfgCsv_eAddToTempLoopables,
         .eAddToPresentables = PinCfgCsv_eAddToTempPresentables,
@@ -1627,6 +1652,10 @@ void test_vTrigger_EdgeCases(void)
     PINCFG_RESULT_T eParseResult;
     char acOutStr[OUT_STR_MAX_LEN_D];
     size_t szMemoryRequired;
+
+    // Initialize memory at start of test
+    Memory_eReset();
+    PinCfgCsv_eInit(testMemory, MEMORY_SZ, NULL);
 
     PINCFG_PARSE_PARAMS_T sParams = {
         .eAddToLoopables = PinCfgCsv_eAddToTempLoopables,
@@ -1709,6 +1738,10 @@ void test_vPinCfgCsv_EdgeCases(void)
     char acOutStr[OUT_STR_MAX_LEN_D];
     size_t szMemoryRequired;
 
+    // Initialize memory at start of test
+    Memory_eReset();
+    PinCfgCsv_eInit(testMemory, MEMORY_SZ, NULL);
+
     PINCFG_PARSE_PARAMS_T sParams = {
         .eAddToLoopables = PinCfgCsv_eAddToTempLoopables,
         .eAddToPresentables = PinCfgCsv_eAddToTempPresentables,
@@ -1771,11 +1804,16 @@ void test_vPinCfgCsv_EdgeCases(void)
  */
 void test_vCLI_EdgeCases(void)
 {
+    // Initialize memory at start of test
+    Memory_eReset();
+    PinCfgCsv_eInit(testMemory, MEMORY_SZ, NULL);
+    
+    init_mock_EEPROM_with_default_password();
     CLI_T *psCli = (CLI_T *)Memory_vpAlloc(sizeof(CLI_T));
     Cli_eInit(psCli, 0);
 
     // Test receiving configuration in small chunks
-    Cli_vRcvMessage((PRESENTABLE_T *)psCli, "#[S,");
+    Cli_vRcvMessage((PRESENTABLE_T *)psCli, "#[PWD:admin123/S,");
     TEST_ASSERT_EQUAL_STRING("S,", psCli->pcCfgBuf);
     
     Cli_vRcvMessage((PRESENTABLE_T *)psCli, "o1");
@@ -2950,6 +2988,9 @@ void test_vLoopTimeMeasure_MultipleSensors(void)
 void test_vIntegration_CompleteSystem(void)
 {
 #ifdef USE_MALLOC
+    // Initialize clean EEPROM to ensure we use the test config, not stored config
+    init_mock_EEPROM_with_default_password();
+    
     const char *pcCfg = 
         "# Complete system test/"
         "CD,50/"                              // Config: 50ms debounce
@@ -2994,13 +3035,14 @@ void test_vIntegration_CompleteSystem(void)
 void test_vIntegration_MemoryExhaustion(void)
 {
 #ifndef USE_MALLOC
-    // Test that system gracefully handles out-of-memory - both during parsing AND during loop
-    // This is a critical embedded systems requirement: NO SEGFAULTS EVER
-    char acLargeCfg[3000];
+    // Test that the system correctly detects when memory is exhausted
+    // The system should fail gracefully with PINCFG_OUTOFMEMORY_ERROR_E
+    
+    char acLargeCfg[5000];
     strcpy(acLargeCfg, "");
     
-    // Test: Create configuration that definitely WON'T fit (should fail during parsing)
-    printf("\n=== Testing OOM handling with large configuration ===\n");
+    // Create a configuration that should exhaust the 8KB memory
+    // With 80 bytes per switch, ~100 switches should fill 8KB
     for (int i = 0; i < 100; i++)
     {
         char acSwitch[50];
@@ -3008,20 +3050,560 @@ void test_vIntegration_MemoryExhaustion(void)
         strcat(acLargeCfg, acSwitch);
     }
     
-    printf("Config size: %zu bytes (100 switches)\n", strlen(acLargeCfg));
+    // Reinit EEPROM to ensure config is parsed (not loaded from EEPROM)
+    init_mock_EEPROM();
     PINCFG_RESULT_T eResult = PinCfgCsv_eInit(testMemory, MEMORY_SZ, acLargeCfg);
-    printf("Parse result: %d (0=OK, 8=ERROR, 9=OOM)\n", eResult);
     
-    // System MUST handle OOM gracefully - return error, never segfault
-    TEST_ASSERT_TRUE(
-        eResult == PINCFG_ERROR_E || 
-        eResult == PINCFG_OUTOFMEMORY_ERROR_E
-    );
-    printf("Large config correctly rejected\n");
+    // Should fail with out of memory error
+    TEST_ASSERT_EQUAL(PINCFG_OUTOFMEMORY_ERROR_E, eResult);
 #else
-    // Test skipped in malloc mode - specific to static allocation
+    // Test skipped in malloc mode - requires static allocation for precise control
     TEST_PASS();
 #endif
+}
+
+// ============================================================================
+// PERSISTENT CONFIGURATION TESTS (New Password/Config API)
+// ============================================================================
+
+// Mock EEPROM storage (must be non-static for EEPROMMock.cpp to access)
+uint8_t mock_EEPROM[1024];
+
+// Helper: Initialize mock EEPROM
+static void init_mock_EEPROM(void)
+{
+    memset(mock_EEPROM, 0xFF, sizeof(mock_EEPROM)); // 0xFF is typical EEPROM erased state
+}
+
+// Helper: Initialize EEPROM with default password (for CLI tests that need authentication)
+static void init_mock_EEPROM_with_default_password(void)
+{
+    init_mock_EEPROM();
+    // Write default password to EEPROM using persistent config API
+    PersistentCfg_eWritePassword(CLI_AUTH_DEFAULT_PASSWORD);
+}
+
+// Helper: Corrupt a specific byte in mock EEPROM
+static void corrupt_EEPROM_byte(uint16_t address, uint8_t bit_position)
+{
+    mock_EEPROM[address] ^= (1 << bit_position);
+}
+
+// Helper: Corrupt a specific address range
+static void corrupt_EEPROM_range(uint16_t start, uint16_t end)
+{
+    for (uint16_t i = start; i < end; i++)
+    {
+        mock_EEPROM[i] ^= 0x55; // Flip multiple bits
+    }
+}
+
+/**
+ * Test: Password-only operations (no config data)
+ */
+void test_vPersistentCfg_PasswordOnly(void)
+{
+    init_mock_EEPROM();
+    
+    const char *test_password = "admin123";
+    char password_buffer[PINCFG_AUTH_PASSWORD_MAX_LEN_D];
+    char config_buffer[PINCFG_CONFIG_MAX_SZ_D];
+    
+    // Write password only
+    PERCFG_RESULT_T result = PersistentCfg_eWritePassword(test_password);
+    TEST_ASSERT_EQUAL(PERCFG_OK_E, result);
+    
+    // Read password back
+    memset(password_buffer, 0, sizeof(password_buffer));
+    result = PersistentCfg_eReadPassword(password_buffer);
+    TEST_ASSERT_EQUAL(PERCFG_OK_E, result);
+    TEST_ASSERT_EQUAL_STRING(test_password, password_buffer);
+    
+    // Config should be empty
+    memset(config_buffer, 0, sizeof(config_buffer));
+    result = PersistentCfg_eLoadConfig(config_buffer);
+    TEST_ASSERT_EQUAL(PERCFG_OK_E, result);
+    TEST_ASSERT_EQUAL_STRING("", config_buffer);
+    
+    // Config size should be 0
+    uint16_t config_size = 99;
+    result = PersistentCfg_eGetConfigSize(&config_size);
+    TEST_ASSERT_EQUAL(PERCFG_OK_E, result);
+    TEST_ASSERT_EQUAL(0, config_size);
+}
+
+/**
+ * Test: Config-only operations (with empty password)
+ */
+void test_vPersistentCfg_ConfigOnly(void)
+{
+    init_mock_EEPROM();
+    
+    const char *test_config = "pin1=A0,sensor,temp/pin2=A1,switch";
+    char password_buffer[PINCFG_AUTH_PASSWORD_MAX_LEN_D];
+    char config_buffer[PINCFG_CONFIG_MAX_SZ_D];
+    
+    // Write empty password first (required for memory layout)
+    PERCFG_RESULT_T result = PersistentCfg_eWritePassword("");
+    TEST_ASSERT_EQUAL(PERCFG_OK_E, result);
+    
+    // Write config
+    result = PersistentCfg_eSaveConfig(test_config, strlen(test_config) + 1);
+    TEST_ASSERT_EQUAL(PERCFG_OK_E, result);
+    
+    // Read config back
+    memset(config_buffer, 0, sizeof(config_buffer));
+    result = PersistentCfg_eLoadConfig(config_buffer);
+    TEST_ASSERT_EQUAL(PERCFG_OK_E, result);
+    TEST_ASSERT_EQUAL_STRING(test_config, config_buffer);
+    
+    // Password should be empty
+    memset(password_buffer, 0, sizeof(password_buffer));
+    result = PersistentCfg_eReadPassword(password_buffer);
+    TEST_ASSERT_EQUAL(PERCFG_OK_E, result);
+    TEST_ASSERT_EQUAL_STRING("", password_buffer);
+    
+    // Config size should match
+    uint16_t config_size = 0;
+    result = PersistentCfg_eGetConfigSize(&config_size);
+    TEST_ASSERT_EQUAL(PERCFG_OK_E, result);
+    TEST_ASSERT_EQUAL(strlen(test_config) + 1, config_size);
+}
+
+/**
+ * Test: Password + Config together
+ */
+void test_vPersistentCfg_PasswordAndConfig(void)
+{
+    init_mock_EEPROM();
+    
+    const char *test_password = "secure_pass";
+    const char *test_config = "pin1=A0,sensor/pin2=D2,switch";
+    char password_buffer[PINCFG_AUTH_PASSWORD_MAX_LEN_D];
+    char config_buffer[PINCFG_CONFIG_MAX_SZ_D];
+    
+    // Write password
+    PERCFG_RESULT_T result = PersistentCfg_eWritePassword(test_password);
+    TEST_ASSERT_EQUAL(PERCFG_OK_E, result);
+    
+    // Write config
+    result = PersistentCfg_eSaveConfig(test_config, strlen(test_config) + 1);
+    TEST_ASSERT_EQUAL(PERCFG_OK_E, result);
+    
+    // Read both back
+    memset(password_buffer, 0, sizeof(password_buffer));
+    result = PersistentCfg_eReadPassword(password_buffer);
+    TEST_ASSERT_EQUAL(PERCFG_OK_E, result);
+    TEST_ASSERT_EQUAL_STRING(test_password, password_buffer);
+    
+    memset(config_buffer, 0, sizeof(config_buffer));
+    result = PersistentCfg_eLoadConfig(config_buffer);
+    TEST_ASSERT_EQUAL(PERCFG_OK_E, result);
+    TEST_ASSERT_EQUAL_STRING(test_config, config_buffer);
+}
+
+/**
+ * Test: Update password while preserving config
+ */
+void test_vPersistentCfg_UpdatePasswordKeepConfig(void)
+{
+    init_mock_EEPROM();
+    
+    const char *original_password = "oldpass";
+    const char *new_password = "newpass123";
+    const char *test_config = "pin1=A0/pin2=A1";
+    char password_buffer[PINCFG_AUTH_PASSWORD_MAX_LEN_D];
+    char config_buffer[PINCFG_CONFIG_MAX_SZ_D];
+    
+    // Set initial password and config
+    PERCFG_RESULT_T result = PersistentCfg_eWritePassword(original_password);
+    TEST_ASSERT_EQUAL(PERCFG_OK_E, result);
+    result = PersistentCfg_eSaveConfig(test_config, strlen(test_config) + 1);
+    TEST_ASSERT_EQUAL(PERCFG_OK_E, result);
+    
+    // Update password
+    result = PersistentCfg_eWritePassword(new_password);
+    TEST_ASSERT_EQUAL(PERCFG_OK_E, result);
+    
+    // Verify new password
+    memset(password_buffer, 0, sizeof(password_buffer));
+    result = PersistentCfg_eReadPassword(password_buffer);
+    TEST_ASSERT_EQUAL(PERCFG_OK_E, result);
+    TEST_ASSERT_EQUAL_STRING(new_password, password_buffer);
+    
+    // Verify config unchanged
+    memset(config_buffer, 0, sizeof(config_buffer));
+    result = PersistentCfg_eLoadConfig(config_buffer);
+    TEST_ASSERT_EQUAL(PERCFG_OK_E, result);
+    TEST_ASSERT_EQUAL_STRING(test_config, config_buffer);
+}
+
+/**
+ * Test: Update config while preserving password
+ */
+void test_vPersistentCfg_UpdateConfigKeepPassword(void)
+{
+    init_mock_EEPROM();
+    
+    const char *test_password = "mypassword";
+    const char *original_config = "pin1=A0";
+    const char *new_config = "pin1=A0/pin2=A1/pin3=D2";
+    char password_buffer[PINCFG_AUTH_PASSWORD_MAX_LEN_D];
+    char config_buffer[PINCFG_CONFIG_MAX_SZ_D];
+    
+    // Set initial password and config
+    PERCFG_RESULT_T result = PersistentCfg_eWritePassword(test_password);
+    TEST_ASSERT_EQUAL(PERCFG_OK_E, result);
+    result = PersistentCfg_eSaveConfig(original_config, strlen(original_config) + 1);
+    TEST_ASSERT_EQUAL(PERCFG_OK_E, result);
+    
+    // Update config
+    result = PersistentCfg_eSaveConfig(new_config, strlen(new_config) + 1);
+    TEST_ASSERT_EQUAL(PERCFG_OK_E, result);
+    
+    // Verify new config
+    memset(config_buffer, 0, sizeof(config_buffer));
+    result = PersistentCfg_eLoadConfig(config_buffer);
+    TEST_ASSERT_EQUAL(PERCFG_OK_E, result);
+    TEST_ASSERT_EQUAL_STRING(new_config, config_buffer);
+    
+    // Verify password unchanged
+    memset(password_buffer, 0, sizeof(password_buffer));
+    result = PersistentCfg_eReadPassword(password_buffer);
+    TEST_ASSERT_EQUAL(PERCFG_OK_E, result);
+    TEST_ASSERT_EQUAL_STRING(test_password, password_buffer);
+}
+
+/**
+ * Test: Password corruption - MUST be 100% recoverable!
+ */
+void test_vPersistentCfg_PasswordCorruption_FullRecovery(void)
+{
+    init_mock_EEPROM();
+    
+    const char *test_password = "critical_password";
+    const char *test_config = "some_config_data";
+    char password_buffer[PINCFG_AUTH_PASSWORD_MAX_LEN_D];
+    
+    // Save password and config
+    PERCFG_RESULT_T result = PersistentCfg_eWritePassword(test_password);
+    TEST_ASSERT_EQUAL(PERCFG_OK_E, result);
+    result = PersistentCfg_eSaveConfig(test_config, strlen(test_config) + 1);
+    TEST_ASSERT_EQUAL(PERCFG_OK_E, result);
+    
+    // Corrupt password section (password is 32 bytes, fully backed up in 61-byte backup)
+    uint16_t password_start = EEPROM_LOCAL_CONFIG_ADDRESS + 6; // After CRC16×3
+    corrupt_EEPROM_byte(password_start + 5, 3);
+    corrupt_EEPROM_byte(password_start + 10, 7);
+    corrupt_EEPROM_byte(password_start + 20, 2);
+    
+    // Read password - MUST succeed (100% recovery guarantee!)
+    memset(password_buffer, 0, sizeof(password_buffer));
+    result = PersistentCfg_eReadPassword(password_buffer);
+    TEST_ASSERT_EQUAL(PERCFG_OK_E, result);
+    TEST_ASSERT_EQUAL_STRING(test_password, password_buffer);
+}
+
+/**
+ * Test: Config corruption in first 29 bytes (backed up region)
+ */
+void test_vPersistentCfg_ConfigCorruption_BackedUpRegion(void)
+{
+    init_mock_EEPROM();
+    
+    const char *test_password = "pass123";
+    const char *test_config = "pin1=A0,sensor,temp/pin2=A1"; // ~28 bytes
+    char config_buffer[PINCFG_CONFIG_MAX_SZ_D];
+    
+    // Save password and config
+    PERCFG_RESULT_T result = PersistentCfg_eWritePassword(test_password);
+    TEST_ASSERT_EQUAL(PERCFG_OK_E, result);
+    result = PersistentCfg_eSaveConfig(test_config, strlen(test_config) + 1);
+    TEST_ASSERT_EQUAL(PERCFG_OK_E, result);
+    
+    // Corrupt config in first 29 bytes (backed up)
+    uint16_t config_start = EEPROM_LOCAL_CONFIG_ADDRESS + 6 + PINCFG_AUTH_PASSWORD_MAX_LEN_D;
+    corrupt_EEPROM_byte(config_start + 10, 4);
+    corrupt_EEPROM_byte(config_start + 20, 5);
+    
+    // Read config - should succeed (within backup)
+    memset(config_buffer, 0, sizeof(config_buffer));
+    result = PersistentCfg_eLoadConfig(config_buffer);
+    TEST_ASSERT_EQUAL(PERCFG_OK_E, result);
+    TEST_ASSERT_EQUAL_STRING(test_config, config_buffer);
+}
+
+/**
+ * Test: Config corruption beyond 29 bytes (unrecoverable)
+ */
+void test_vPersistentCfg_ConfigCorruption_BeyondBackup(void)
+{
+    init_mock_EEPROM();
+    
+    const char *test_password = "pass";
+    char test_config[200];
+    memset(test_config, 'X', 150);
+    test_config[150] = '\0';
+    
+    // Save password and config
+    PERCFG_RESULT_T result = PersistentCfg_eWritePassword(test_password);
+    TEST_ASSERT_EQUAL(PERCFG_OK_E, result);
+    result = PersistentCfg_eSaveConfig(test_config, strlen(test_config) + 1);
+    TEST_ASSERT_EQUAL(PERCFG_OK_E, result);
+    
+    // Corrupt config beyond 29 bytes (not backed up)
+    uint16_t config_start = EEPROM_LOCAL_CONFIG_ADDRESS + 6 + PINCFG_AUTH_PASSWORD_MAX_LEN_D;
+    corrupt_EEPROM_byte(config_start + 100, 3);
+    
+    // Read config - should fail (beyond backup)
+    char config_buffer[PINCFG_CONFIG_MAX_SZ_D];
+    memset(config_buffer, 0, sizeof(config_buffer));
+    result = PersistentCfg_eLoadConfig(config_buffer);
+    TEST_ASSERT_EQUAL(PERCFG_READ_FAILED_E, result);
+}
+
+/**
+ * Test: Password with null terminator handling
+ */
+void test_vPersistentCfg_PasswordNullTerminator(void)
+{
+    init_mock_EEPROM();
+    
+    // Test various password lengths
+    const char *passwords[] = {
+        "a",           // 1 char
+        "short",       // 5 chars
+        "medium_password",  // 15 chars
+        "this_is_a_very_long_password_31"  // 31 chars (max-1)
+    };
+    
+    for (int i = 0; i < 4; i++)
+    {
+        init_mock_EEPROM();
+        
+        char password_buffer[PINCFG_AUTH_PASSWORD_MAX_LEN_D];
+        PERCFG_RESULT_T result = PersistentCfg_eWritePassword(passwords[i]);
+        TEST_ASSERT_EQUAL(PERCFG_OK_E, result);
+        
+        memset(password_buffer, 0, sizeof(password_buffer));
+        result = PersistentCfg_eReadPassword(password_buffer);
+        TEST_ASSERT_EQUAL(PERCFG_OK_E, result);
+        TEST_ASSERT_EQUAL_STRING(passwords[i], password_buffer);
+    }
+}
+
+/**
+ * Test: Config with null terminator handling
+ */
+void test_vPersistentCfg_ConfigNullTerminator(void)
+{
+    init_mock_EEPROM();
+    
+    const char *test_password = "pass";
+    
+    // Config with explicit null
+    const char *config_with_null = "pin1=A0\0extra_data";
+    char config_buffer[PINCFG_CONFIG_MAX_SZ_D];
+    
+    PERCFG_RESULT_T result = PersistentCfg_eWritePassword(test_password);
+    TEST_ASSERT_EQUAL(PERCFG_OK_E, result);
+    
+    result = PersistentCfg_eSaveConfig(config_with_null, strlen(config_with_null) + 1);
+    TEST_ASSERT_EQUAL(PERCFG_OK_E, result);
+    
+    memset(config_buffer, 0, sizeof(config_buffer));
+    result = PersistentCfg_eLoadConfig(config_buffer);
+    TEST_ASSERT_EQUAL(PERCFG_OK_E, result);
+    TEST_ASSERT_EQUAL_STRING("pin1=A0", config_buffer);  // Should stop at null
+}
+
+/**
+ * Test: Password maximum length (32 bytes including null)
+ */
+void test_vPersistentCfg_PasswordMaxLength(void)
+{
+    init_mock_EEPROM();
+    
+    // 31 characters + null terminator = 32 bytes (max)
+    char max_password[PINCFG_AUTH_PASSWORD_MAX_LEN_D];
+    memset(max_password, 'P', PINCFG_AUTH_PASSWORD_MAX_LEN_D - 1);
+    max_password[PINCFG_AUTH_PASSWORD_MAX_LEN_D - 1] = '\0';
+    
+    char password_buffer[PINCFG_AUTH_PASSWORD_MAX_LEN_D];
+    
+    PERCFG_RESULT_T result = PersistentCfg_eWritePassword(max_password);
+    TEST_ASSERT_EQUAL(PERCFG_OK_E, result);
+    
+    memset(password_buffer, 0, sizeof(password_buffer));
+    result = PersistentCfg_eReadPassword(password_buffer);
+    TEST_ASSERT_EQUAL(PERCFG_OK_E, result);
+    TEST_ASSERT_EQUAL_STRING(max_password, password_buffer);
+}
+
+/**
+ * Test: Config maximum length (480 bytes including null)
+ */
+void test_vPersistentCfg_ConfigMaxLength(void)
+{
+    init_mock_EEPROM();
+    
+    const char *test_password = "pass";
+    
+    // 479 characters + null terminator = 480 bytes (max)
+    char max_config[PINCFG_CONFIG_MAX_SZ_D];
+    memset(max_config, 'C', PINCFG_CONFIG_MAX_SZ_D - 1);
+    max_config[PINCFG_CONFIG_MAX_SZ_D - 1] = '\0';
+    
+    char config_buffer[PINCFG_CONFIG_MAX_SZ_D];
+    
+    PERCFG_RESULT_T result = PersistentCfg_eWritePassword(test_password);
+    TEST_ASSERT_EQUAL(PERCFG_OK_E, result);
+    
+    result = PersistentCfg_eSaveConfig(max_config, PINCFG_CONFIG_MAX_SZ_D);
+    TEST_ASSERT_EQUAL(PERCFG_OK_E, result);
+    
+    memset(config_buffer, 0, sizeof(config_buffer));
+    result = PersistentCfg_eLoadConfig(config_buffer);
+    TEST_ASSERT_EQUAL(PERCFG_OK_E, result);
+    TEST_ASSERT_EQUAL_STRING(max_config, config_buffer);
+}
+
+/**
+ * Test: Config size exceeds maximum (should fail)
+ */
+void test_vPersistentCfg_ConfigOversized(void)
+{
+    init_mock_EEPROM();
+    
+    const char *test_password = "pass";
+    char oversized_config[600];
+    memset(oversized_config, 'X', 599);
+    oversized_config[599] = '\0';
+    
+    PERCFG_RESULT_T result = PersistentCfg_eWritePassword(test_password);
+    TEST_ASSERT_EQUAL(PERCFG_OK_E, result);
+    
+    // Try to save oversized config - should fail
+    result = PersistentCfg_eSaveConfig(oversized_config, 600);
+    TEST_ASSERT_EQUAL(PERCFG_CFG_BIGGER_THAN_MAX_SZ_E, result);
+}
+
+/**
+ * Test: CRC16 3-way voting - one corrupted copy
+ */
+void test_vPersistentCfg_CRC16_ThreeWayVoting(void)
+{
+    init_mock_EEPROM();
+    
+    const char *test_password = "test_pass";
+    const char *test_config = "config_data";
+    char password_buffer[PINCFG_AUTH_PASSWORD_MAX_LEN_D];
+    
+    // Save data
+    PERCFG_RESULT_T result = PersistentCfg_eWritePassword(test_password);
+    TEST_ASSERT_EQUAL(PERCFG_OK_E, result);
+    result = PersistentCfg_eSaveConfig(test_config, strlen(test_config) + 1);
+    TEST_ASSERT_EQUAL(PERCFG_OK_E, result);
+    
+    // Corrupt one CRC16 copy (other 2 should vote it out)
+    uint16_t crc_addr = EEPROM_LOCAL_CONFIG_ADDRESS;
+    corrupt_EEPROM_byte(crc_addr, 0);
+    corrupt_EEPROM_byte(crc_addr + 1, 0);
+    
+    // Read - should auto-repair via voting
+    memset(password_buffer, 0, sizeof(password_buffer));
+    result = PersistentCfg_eReadPassword(password_buffer);
+    TEST_ASSERT_EQUAL(PERCFG_OK_E, result);
+    TEST_ASSERT_EQUAL_STRING(test_password, password_buffer);
+}
+
+/**
+ * Test: CRC16 3-way voting - all three different (should fail)
+ */
+void test_vPersistentCfg_CRC16_AllDifferent(void)
+{
+    init_mock_EEPROM();
+    
+    const char *test_password = "password";
+    char password_buffer[PINCFG_AUTH_PASSWORD_MAX_LEN_D];
+    
+    // Save data
+    PERCFG_RESULT_T result = PersistentCfg_eWritePassword(test_password);
+    TEST_ASSERT_EQUAL(PERCFG_OK_E, result);
+    
+    // Corrupt all three CRC16 copies differently
+    uint16_t crc_addr1 = EEPROM_LOCAL_CONFIG_ADDRESS;
+    uint16_t crc_addr2 = EEPROM_LOCAL_CONFIG_ADDRESS + 2;
+    uint16_t crc_addr3 = EEPROM_LOCAL_CONFIG_ADDRESS + 4;
+    
+    corrupt_EEPROM_byte(crc_addr1, 0);
+    corrupt_EEPROM_byte(crc_addr2, 1);
+    corrupt_EEPROM_byte(crc_addr3, 2);
+    
+    // Read - should fail (no majority vote possible)
+    memset(password_buffer, 0, sizeof(password_buffer));
+    result = PersistentCfg_eReadPassword(password_buffer);
+    TEST_ASSERT_EQUAL(PERCFG_READ_CHECKSUM_FAILED_E, result);
+}
+
+/**
+ * Test: Block CRC double redundancy repair
+ */
+void test_vPersistentCfg_BlockCRC_DoubleRedundancy(void)
+{
+    init_mock_EEPROM();
+    
+    const char *test_password = "mypass";
+    const char *test_config = "config_with_multiple_blocks_of_data";
+    char config_buffer[PINCFG_CONFIG_MAX_SZ_D];
+    
+    // Save data
+    PERCFG_RESULT_T result = PersistentCfg_eWritePassword(test_password);
+    TEST_ASSERT_EQUAL(PERCFG_OK_E, result);
+    result = PersistentCfg_eSaveConfig(test_config, strlen(test_config) + 1);
+    TEST_ASSERT_EQUAL(PERCFG_OK_E, result);
+    
+    // Corrupt first block CRC copy (should repair from second)
+    uint16_t block_crc_start = EEPROM_LOCAL_CONFIG_ADDRESS + 6 + PINCFG_AUTH_PASSWORD_MAX_LEN_D + PINCFG_CONFIG_MAX_SZ_D;
+    corrupt_EEPROM_byte(block_crc_start, 3);
+    
+    // Read - should detect and repair
+    memset(config_buffer, 0, sizeof(config_buffer));
+    result = PersistentCfg_eLoadConfig(config_buffer);
+    TEST_ASSERT_EQUAL(PERCFG_OK_E, result);
+    TEST_ASSERT_EQUAL_STRING(test_config, config_buffer);
+}
+
+/**
+ * Test: Config size query accuracy
+ */
+void test_vPersistentCfg_ConfigSizeQuery(void)
+{
+    init_mock_EEPROM();
+    
+    const char *test_password = "admin";
+    const char *configs[] = {
+        "short",
+        "medium_length_config_data",
+        "this_is_a_much_longer_configuration_with_many_pins_and_sensors"
+    };
+    
+    for (int i = 0; i < 3; i++)
+    {
+        init_mock_EEPROM();
+        
+        PERCFG_RESULT_T result = PersistentCfg_eWritePassword(test_password);
+        TEST_ASSERT_EQUAL(PERCFG_OK_E, result);
+        
+        uint16_t expected_size = strlen(configs[i]) + 1;
+        result = PersistentCfg_eSaveConfig(configs[i], expected_size);
+        TEST_ASSERT_EQUAL(PERCFG_OK_E, result);
+        
+        uint16_t actual_size = 0;
+        result = PersistentCfg_eGetConfigSize(&actual_size);
+        TEST_ASSERT_EQUAL(PERCFG_OK_E, result);
+        TEST_ASSERT_EQUAL(expected_size, actual_size);
+    }
 }
 
 #ifndef ARDUINO
@@ -3109,6 +3691,25 @@ int test_main(void)
     // Integration tests
     RUN_TEST(test_vIntegration_CompleteSystem);
     RUN_TEST(test_vIntegration_MemoryExhaustion);
+
+    // Persistent Configuration tests (New Password/Config API)
+    RUN_TEST(test_vPersistentCfg_PasswordOnly);
+    RUN_TEST(test_vPersistentCfg_ConfigOnly);
+    RUN_TEST(test_vPersistentCfg_PasswordAndConfig);
+    RUN_TEST(test_vPersistentCfg_UpdatePasswordKeepConfig);
+    RUN_TEST(test_vPersistentCfg_UpdateConfigKeepPassword);
+    RUN_TEST(test_vPersistentCfg_PasswordCorruption_FullRecovery);
+    RUN_TEST(test_vPersistentCfg_ConfigCorruption_BackedUpRegion);
+    RUN_TEST(test_vPersistentCfg_ConfigCorruption_BeyondBackup);
+    RUN_TEST(test_vPersistentCfg_PasswordNullTerminator);
+    RUN_TEST(test_vPersistentCfg_ConfigNullTerminator);
+    RUN_TEST(test_vPersistentCfg_PasswordMaxLength);
+    RUN_TEST(test_vPersistentCfg_ConfigMaxLength);
+    RUN_TEST(test_vPersistentCfg_ConfigOversized);
+    RUN_TEST(test_vPersistentCfg_CRC16_ThreeWayVoting);
+    RUN_TEST(test_vPersistentCfg_CRC16_AllDifferent);
+    RUN_TEST(test_vPersistentCfg_BlockCRC_DoubleRedundancy);
+    RUN_TEST(test_vPersistentCfg_ConfigSizeQuery);
 
     return UNITY_END();
 }

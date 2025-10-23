@@ -14,8 +14,14 @@
 #endif
 
 
+// Password section size
+#ifndef PINCFG_AUTH_PASSWORD_MAX_LEN_D
+#define PINCFG_AUTH_PASSWORD_MAX_LEN_D 32
+#endif
+
+// Config data section size
 #ifndef PINCFG_CONFIG_MAX_SZ_D
-#define PINCFG_CONFIG_MAX_SZ_D 512
+#define PINCFG_CONFIG_MAX_SZ_D 480
 #endif
 
 #ifndef PINCFG_TXTSTATE_MAX_SZ_D

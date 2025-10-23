@@ -40,6 +40,7 @@ typedef struct CLI_S
     uint16_t u16CfgNext;
     CLI_STATE_T eState;
     CLI_MODE_T eMode;
+    bool bAuthenticated;  // Authentication status
 } CLI_T;
 
 void Cli_vInitType(PRESENTABLE_VTAB_T *psVtab);

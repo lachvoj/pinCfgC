@@ -165,6 +165,7 @@ MEMORY_RESULT_T Memory_eInit(uint8_t *pu8Memory, size_t szSize)
         psGlobals = (GLOBALS_T *)malloc(sizeof(GLOBALS_T));
         if (psGlobals == NULL)
             return MEMORY_INSUFFICIENT_SIZE_ERROR_E;
+        memset(psGlobals, 0, sizeof(GLOBALS_T)); // Initialize newly allocated memory
     }
 
     return MEMORY_OK_E;

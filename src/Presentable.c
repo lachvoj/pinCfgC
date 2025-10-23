@@ -12,6 +12,7 @@ PRESENTABLE_RESULT_T Presentable_eInitReuseName(PRESENTABLE_T *psHandle, const c
 
     psHandle->pcName = pcName;
     psHandle->u8Id = u8Id;
+    psHandle->u8State = 0;
 #ifdef MY_CONTROLLER_HA
     psHandle->bStatePresented = false;
 #endif

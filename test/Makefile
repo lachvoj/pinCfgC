@@ -34,7 +34,7 @@ CFLAGS_BASE += -DFEATURE_I2C_MEASUREMENT
 CFLAGS_BASE += -DFEATURE_LOOPTIME_MEASUREMENT
 CFLAGS_BASE += -DFEATURE_ANALOG_MEASUREMENT
 #CFLAGS_BASE += -Wstack-usage=200 #-D'F(x)=((const char*)x)'
-#CFLAGS_BASE += -fsanitize=vptr -fsanitize=address -static-libasan
+# CFLAGS_BASE += -fsanitize=vptr -fsanitize=address -static-libasan
 
 # Test binary variants with different flag combinations
 EXE1 = test_malloc_errmsg
@@ -71,9 +71,9 @@ echo:
 
 run: all
 	@echo "\n=== Running test_malloc_errmsg (USE_MALLOC + USE_ERROR_MESSAGES) ==="
-	@./$(BUILDDIR)/$(EXE1) 2>&1 | tail -3
+	@ASAN_OPTIONS=detect_leaks=0 ./$(BUILDDIR)/$(EXE1) 2>&1 | tail -3
 	@echo "\n=== Running test_malloc_errcode (USE_MALLOC only) ==="
-	@./$(BUILDDIR)/$(EXE2) 2>&1 | tail -3
+	@ASAN_OPTIONS=detect_leaks=0 ./$(BUILDDIR)/$(EXE2) 2>&1 | tail -3
 	@echo "\n=== Running test_static_errmsg (USE_ERROR_MESSAGES only) ==="
 	@./$(BUILDDIR)/$(EXE3) 2>&1 | tail -3
 	@echo "\n=== Running test_static_errcode (No flags) ==="

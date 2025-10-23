@@ -84,12 +84,19 @@ extern "C"
         mock_wait_u32Called++;
     }
 
+    // Access the EEPROM mock from test.c
+    extern uint8_t mock_EEPROM[1024];
+
     void *mock_hwWriteConfigBlock_buf;
     void *mock_hwWriteConfigBlock_addr;
     size_t mock_hwWriteConfigBlock_length;
     uint32_t mock_hwWriteConfigBlock_u32Called;
     void hwWriteConfigBlock(void *buf, void *addr, size_t length)
     {
+        // addr is actually an integer address cast to pointer
+        size_t address = (size_t)addr;
+        memcpy(&mock_EEPROM[address], buf, length);
+        
         mock_hwWriteConfigBlock_buf = buf;
         mock_hwWriteConfigBlock_addr = addr;
         mock_hwWriteConfigBlock_length = length;
@@ -103,6 +110,10 @@ extern "C"
     uint32_t mock_hwReadConfigBlock_u32Called;
     void hwReadConfigBlock(void *buf, void *addr, size_t length)
     {
+        // addr is actually an integer address cast to pointer
+        size_t address = (size_t)addr;
+        memcpy(buf, &mock_EEPROM[address], length);
+        
         if (mock_hwReadConfigBlock_buf != NULL)
         {
             memcpy(buf, mock_hwReadConfigBlock_buf, length);

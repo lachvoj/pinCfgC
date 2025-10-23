@@ -133,8 +133,10 @@ extern "C"
         mock_MyMessage_clear_u32Called = 0;
         mock_MyMessage_setType_u32Called = 0;
         mock_MyMessage_set_uint8_t_u32Called = 0;
+        mock_MyMessage_set_uint8_t_value = 0;
         mock_MyMessage_set_pChar_u32Called = 0;
         mock_MyMessage_set_bool_u32Called = 0;
+        mock_MyMessage_set_bool_value = false;
         mock_MyMessage_getCustom_u32Called = 0;
         mock_MyMessage_getPayloadType_u32Called = 0;
         mock_MyMessage_getString_u32Called = 0;

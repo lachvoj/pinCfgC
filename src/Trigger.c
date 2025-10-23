@@ -15,6 +15,7 @@ TRIGGER_RESULT_T Trigger_eInit(
     if (u8SwActCount > PINCFG_TRIGGER_MAX_SWITCHES_D)
         return TRIGGER_MAX_SWITCH_ERROR_E;
 
+    psHandle->sPinSubscriber.psNext = NULL;
     psHandle->sPinSubscriber.vEventHandle = Trigger_vEventHandle;
 
     // parameters init
