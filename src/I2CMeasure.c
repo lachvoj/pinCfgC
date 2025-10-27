@@ -112,8 +112,6 @@ ISENSORMEASURE_RESULT_T I2CMeasure_eMeasure(
     // Cast to actual type
     I2CMEASURE_T *psHandle = (I2CMEASURE_T *)pSelf;
 
-    (void)u32ms;  // Not used
-
     // Run state machine (same as eMeasure, but don't convert to float)
     // We'll copy the buffer when in DATA_READY state
     
@@ -128,7 +126,7 @@ ISENSORMEASURE_RESULT_T I2CMeasure_eMeasure(
             Wire_u8Write(psHandle->au8CommandBytes[0]);
             Wire_u8EndTransmission(false);
             Wire_u8RequestFrom(psHandle->u8DeviceAddress, psHandle->u8DataSize);
-            psHandle->u32RequestTime = millis();
+            psHandle->u32RequestTime = u32ms;
             psHandle->eState = I2CMEASURE_STATE_REQUEST_SENT_E;
         }
         else
@@ -140,17 +138,17 @@ ISENSORMEASURE_RESULT_T I2CMeasure_eMeasure(
                 Wire_u8Write(psHandle->au8CommandBytes[i]);
             }
             Wire_u8EndTransmission(true);
-            psHandle->u32RequestTime = millis();
+            psHandle->u32RequestTime = u32ms;
             psHandle->eState = I2CMEASURE_STATE_COMMAND_SENT_E;
         }
         return ISENSORMEASURE_PENDING_E;
 
     case I2CMEASURE_STATE_COMMAND_SENT_E:
         // Wait for conversion delay
-        if ((millis() - psHandle->u32RequestTime) >= psHandle->u16ConversionDelayMs)
+        if ((u32ms - psHandle->u32RequestTime) >= psHandle->u16ConversionDelayMs)
         {
             Wire_u8RequestFrom(psHandle->u8DeviceAddress, psHandle->u8DataSize);
-            psHandle->u32RequestTime = millis();
+            psHandle->u32RequestTime = u32ms;
             psHandle->eState = I2CMEASURE_STATE_REQUEST_SENT_E;
         }
         return ISENSORMEASURE_PENDING_E;
@@ -170,7 +168,7 @@ ISENSORMEASURE_RESULT_T I2CMeasure_eMeasure(
         }
 
         // Check timeout
-        if ((millis() - psHandle->u32RequestTime) > psHandle->u16TimeoutMs)
+        if ((u32ms - psHandle->u32RequestTime) > psHandle->u16TimeoutMs)
         {
             psHandle->eState = I2CMEASURE_STATE_ERROR_E;
             return ISENSORMEASURE_ERROR_E;

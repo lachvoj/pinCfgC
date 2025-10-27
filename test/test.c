@@ -26,6 +26,11 @@
 #include "I2CMock.h"
 #endif
 
+#ifdef FEATURE_SPI_MEASUREMENT
+#include "SPIMeasure.h"
+#include "SPIMock.h"
+#endif
+
 #ifdef FEATURE_ANALOG_MEASUREMENT
 #include "AnalogMeasure.h"
 #endif
@@ -1995,7 +2000,7 @@ void test_vI2CMeasure_CommandMode(void)
     mock_millis_u32Return = 0;
     
     // First call: Send command, start waiting
-    eResult = I2CMeasure_eMeasure(&sI2C.sInterface, au8Buffer, &u8Size, 0);
+    eResult = I2CMeasure_eMeasure(&sI2C.sInterface, au8Buffer, &u8Size, mock_millis_u32Return);
     TEST_ASSERT_EQUAL(ISENSORMEASURE_PENDING_E, eResult);
     TEST_ASSERT_EQUAL(I2CMEASURE_STATE_COMMAND_SENT_E, sI2C.eState);
     TEST_ASSERT_EQUAL(0x38, WireMock_u8GetLastAddress());
@@ -2003,7 +2008,7 @@ void test_vI2CMeasure_CommandMode(void)
     // Second call: Still waiting for conversion delay
     mock_millis_u32Return = 50;  // Only 50ms elapsed
     u8Size = 6;
-    eResult = I2CMeasure_eMeasure(&sI2C.sInterface, au8Buffer, &u8Size, 0);
+    eResult = I2CMeasure_eMeasure(&sI2C.sInterface, au8Buffer, &u8Size, mock_millis_u32Return);
     TEST_ASSERT_EQUAL(ISENSORMEASURE_PENDING_E, eResult);
     TEST_ASSERT_EQUAL(I2CMEASURE_STATE_COMMAND_SENT_E, sI2C.eState);  // Stays in COMMAND_SENT until delay expires
     
@@ -2011,19 +2016,19 @@ void test_vI2CMeasure_CommandMode(void)
     mock_millis_u32Return = 85;  // >80ms elapsed
     WireMock_vSetResponse(au8ResponseData, 6);
     u8Size = 6;
-    eResult = I2CMeasure_eMeasure(&sI2C.sInterface, au8Buffer, &u8Size, 0);
+    eResult = I2CMeasure_eMeasure(&sI2C.sInterface, au8Buffer, &u8Size, mock_millis_u32Return);
     TEST_ASSERT_EQUAL(ISENSORMEASURE_PENDING_E, eResult);
     TEST_ASSERT_EQUAL(I2CMEASURE_STATE_REQUEST_SENT_E, sI2C.eState);
     
     // Fourth call: Read data
     u8Size = 6;
-    eResult = I2CMeasure_eMeasure(&sI2C.sInterface, au8Buffer, &u8Size, 0);
+    eResult = I2CMeasure_eMeasure(&sI2C.sInterface, au8Buffer, &u8Size, mock_millis_u32Return);
     TEST_ASSERT_EQUAL(ISENSORMEASURE_PENDING_E, eResult);
     TEST_ASSERT_EQUAL(I2CMEASURE_STATE_DATA_READY_E, sI2C.eState);
     
     // Fifth call: Return raw bytes
     u8Size = 6;
-    eResult = I2CMeasure_eMeasure(&sI2C.sInterface, au8Buffer, &u8Size, 0);
+    eResult = I2CMeasure_eMeasure(&sI2C.sInterface, au8Buffer, &u8Size, mock_millis_u32Return);
     TEST_ASSERT_EQUAL(ISENSORMEASURE_OK_E, eResult);
     TEST_ASSERT_EQUAL(6, u8Size);
     TEST_ASSERT_EQUAL(I2CMEASURE_STATE_IDLE_E, sI2C.eState);
@@ -2050,19 +2055,19 @@ void test_vI2CMeasure_Timeout(void)
     mock_millis_u32Return = 0;
     
     // Start request
-    eResult = I2CMeasure_eMeasure(&sI2C.sInterface, au8Buffer, &u8Size, 0);
+    eResult = I2CMeasure_eMeasure(&sI2C.sInterface, au8Buffer, &u8Size, mock_millis_u32Return);
     TEST_ASSERT_EQUAL(ISENSORMEASURE_PENDING_E, eResult);
     
     // Still waiting, no timeout yet
     mock_millis_u32Return = 50;
     u8Size = 6;
-    eResult = I2CMeasure_eMeasure(&sI2C.sInterface, au8Buffer, &u8Size, 0);
+    eResult = I2CMeasure_eMeasure(&sI2C.sInterface, au8Buffer, &u8Size, mock_millis_u32Return);
     TEST_ASSERT_EQUAL(ISENSORMEASURE_PENDING_E, eResult);
     
     // Timeout occurs (default 100ms)
     mock_millis_u32Return = 150;
     u8Size = 6;
-    eResult = I2CMeasure_eMeasure(&sI2C.sInterface, au8Buffer, &u8Size, 0);
+    eResult = I2CMeasure_eMeasure(&sI2C.sInterface, au8Buffer, &u8Size, mock_millis_u32Return);
     TEST_ASSERT_EQUAL(ISENSORMEASURE_ERROR_E, eResult);
     TEST_ASSERT_EQUAL(I2CMEASURE_STATE_ERROR_E, sI2C.eState);  // State is ERROR after timeout
     
@@ -2159,6 +2164,565 @@ void test_vI2CMeasure_RawData(void)
 }
 
 #endif // FEATURE_I2C_MEASUREMENT
+
+// =============================================================================
+// SPI MEASUREMENT TESTS
+// =============================================================================
+
+#ifdef FEATURE_SPI_MEASUREMENT
+
+/**
+ * Test SPI measurement initialization
+ */
+void test_vSPIMeasure_Init(void)
+{
+    SPIMEASURE_T sSPI;
+    uint8_t au8Cmd[] = {0x80};  // Read command for typical SPI sensor
+    uint8_t u8CSPin = 10;
+    PINCFG_RESULT_T eResult;
+    STRING_POINT_T sName;
+    
+    // Test simple mode initialization (no command, just read)
+    PinCfgStr_vInitStrPoint(&sName, "thermo", 6);
+    eResult = SPIMeasure_eInit(
+        &sSPI,
+        &sName,
+        u8CSPin,      // CS pin
+        NULL,         // No command (simple mode)
+        0,            // 0 byte command (simple mode)
+        4,            // Read 4 bytes (e.g., MAX31855)
+        0             // No conversion delay
+    );
+    
+    TEST_ASSERT_EQUAL(PINCFG_OK_E, eResult);
+    TEST_ASSERT_EQUAL(u8CSPin, sSPI.u8ChipSelectPin);
+    TEST_ASSERT_EQUAL(0, sSPI.u8CommandLength);
+    TEST_ASSERT_EQUAL(4, sSPI.u8DataSize);
+    TEST_ASSERT_EQUAL(SPIMEASURE_STATE_IDLE_E, sSPI.eState);
+    TEST_ASSERT_EQUAL(0, sSPI.u16ConversionDelayMs);
+    TEST_ASSERT_EQUAL(MEASUREMENT_TYPE_SPI_E, sSPI.sInterface.eType);
+
+    // Test command mode initialization (with command and delay)
+    uint8_t au8CmdMulti[] = {0xD0, 0x00, 0x00};  // Example command
+    PinCfgStr_vInitStrPoint(&sName, "accel", 5);
+    eResult = SPIMeasure_eInit(
+        &sSPI,
+        &sName,
+        9,            // Different CS pin
+        au8CmdMulti,  // Multi-byte command
+        3,            // Command length
+        6,            // Read 6 bytes
+        10            // 10ms conversion delay
+    );
+    
+    TEST_ASSERT_EQUAL(PINCFG_OK_E, eResult);
+    TEST_ASSERT_EQUAL(9, sSPI.u8ChipSelectPin);
+    TEST_ASSERT_EQUAL(0xD0, sSPI.au8CommandBytes[0]);
+    TEST_ASSERT_EQUAL(0x00, sSPI.au8CommandBytes[1]);
+    TEST_ASSERT_EQUAL(0x00, sSPI.au8CommandBytes[2]);
+    TEST_ASSERT_EQUAL(3, sSPI.u8CommandLength);
+    TEST_ASSERT_EQUAL(6, sSPI.u8DataSize);
+    TEST_ASSERT_EQUAL(10, sSPI.u16ConversionDelayMs);
+
+    // Test NULL pointer error
+    eResult = SPIMeasure_eInit(NULL, &sName, 10, au8Cmd, 1, 4, 0);
+    TEST_ASSERT_EQUAL(PINCFG_NULLPTR_ERROR_E, eResult);
+
+    // Test invalid data size (0 bytes)
+    PinCfgStr_vInitStrPoint(&sName, "test", 4);
+    eResult = SPIMeasure_eInit(&sSPI, &sName, 10, NULL, 0, 0, 0);
+    TEST_ASSERT_EQUAL(PINCFG_ERROR_E, eResult);
+
+    // Test invalid data size (>8 bytes)
+    eResult = SPIMeasure_eInit(&sSPI, &sName, 10, NULL, 0, 9, 0);
+    TEST_ASSERT_EQUAL(PINCFG_ERROR_E, eResult);
+
+    // Test invalid command length (>4 bytes)
+    uint8_t au8LongCmd[] = {0x01, 0x02, 0x03, 0x04, 0x05};
+    eResult = SPIMeasure_eInit(&sSPI, &sName, 10, au8LongCmd, 5, 4, 0);
+    TEST_ASSERT_EQUAL(PINCFG_ERROR_E, eResult);
+
+    // Test command length without command bytes (should fail)
+    eResult = SPIMeasure_eInit(&sSPI, &sName, 10, NULL, 1, 4, 0);
+    TEST_ASSERT_EQUAL(PINCFG_NULLPTR_ERROR_E, eResult);
+}
+
+/**
+ * Test SPI simple mode read (MAX31855-style: just read data)
+ */
+void test_vSPIMeasure_SimpleRead(void)
+{
+    SPIMEASURE_T sSPI;
+    uint8_t au8Buffer[8];
+    uint8_t u8Size = 8;
+    ISENSORMEASURE_RESULT_T eResult;
+    uint8_t au8ResponseData[] = {0x01, 0x91, 0x67, 0x00};  // MAX31855 format
+    STRING_POINT_T sName;
+    
+    // Initialize for simple 4-byte read
+    PinCfgStr_vInitStrPoint(&sName, "thermo", 6);
+    SPIMeasure_eInit(&sSPI, &sName, 10, NULL, 0, 4, 0);
+    
+    // Mock: Set up response data
+    SPIMock_vReset();
+    SPIMock_vSetResponse(au8ResponseData, 4);
+    init_ArduinoMock();  // Reset GPIO mock counters after init
+    
+    // First call: Should read immediately in simple mode and return PENDING
+    eResult = SPIMeasure_eMeasure(&sSPI.sInterface, au8Buffer, &u8Size, 0);
+    TEST_ASSERT_EQUAL(ISENSORMEASURE_PENDING_E, eResult);
+    TEST_ASSERT_EQUAL(SPIMEASURE_STATE_DATA_READY_E, sSPI.eState);
+    TEST_ASSERT_EQUAL(4, SPIMock_u32GetTransferCount());  // 4 bytes transferred
+    
+    // Verify CS pin was toggled (LOW then HIGH)
+    TEST_ASSERT_EQUAL(2, mock_digitalWrite_u32Called);  // CS LOW then HIGH
+    
+    // Second call: Return the raw bytes
+    u8Size = 8;
+    eResult = SPIMeasure_eMeasure(&sSPI.sInterface, au8Buffer, &u8Size, 0);
+    TEST_ASSERT_EQUAL(ISENSORMEASURE_OK_E, eResult);
+    TEST_ASSERT_EQUAL(4, u8Size);
+    TEST_ASSERT_EQUAL(0x01, au8Buffer[0]);
+    TEST_ASSERT_EQUAL(0x91, au8Buffer[1]);
+    TEST_ASSERT_EQUAL(0x67, au8Buffer[2]);
+    TEST_ASSERT_EQUAL(0x00, au8Buffer[3]);
+    TEST_ASSERT_EQUAL(SPIMEASURE_STATE_IDLE_E, sSPI.eState);
+    
+    // Can repeat measurement
+    SPIMock_vSetResponse(au8ResponseData, 4);
+    init_ArduinoMock();  // Reset GPIO mock counters
+    u8Size = 8;
+    eResult = SPIMeasure_eMeasure(&sSPI.sInterface, au8Buffer, &u8Size, 0);
+    TEST_ASSERT_EQUAL(ISENSORMEASURE_PENDING_E, eResult);
+}
+
+/**
+ * Test SPI command mode (sensor with read command and no delay)
+ */
+void test_vSPIMeasure_CommandModeNoDelay(void)
+{
+    SPIMEASURE_T sSPI;
+    uint8_t au8Buffer[8];
+    uint8_t u8Size = 8;
+    ISENSORMEASURE_RESULT_T eResult;
+    uint8_t au8Cmd[] = {0x80};  // Read register command
+    uint8_t au8ResponseData[] = {0xAA, 0xBB, 0xCC, 0xDD};
+    STRING_POINT_T sName;
+    uint8_t u8TxSize;
+    const uint8_t *pu8TxData;
+    
+    // Initialize for command mode without conversion delay
+    PinCfgStr_vInitStrPoint(&sName, "sensor", 6);
+    SPIMeasure_eInit(&sSPI, &sName, 10, au8Cmd, 1, 4, 0);
+    
+    SPIMock_vReset();
+    // Set response with command byte first (full-duplex: command echoed back, then data)
+    uint8_t au8FullResponse[] = {0xFF, 0xAA, 0xBB, 0xCC, 0xDD};  // 0xFF echo for command, then data
+    SPIMock_vSetResponse(au8FullResponse, 5);
+    init_ArduinoMock();
+    
+    // First call: Send command and immediately read data
+    eResult = SPIMeasure_eMeasure(&sSPI.sInterface, au8Buffer, &u8Size, 0);
+    TEST_ASSERT_EQUAL(ISENSORMEASURE_PENDING_E, eResult);
+    TEST_ASSERT_EQUAL(SPIMEASURE_STATE_READING_E, sSPI.eState);
+    
+    // Verify command was sent
+    pu8TxData = SPIMock_pu8GetLastTxData(&u8TxSize);
+    TEST_ASSERT_GREATER_THAN(0, u8TxSize);  // Should have sent at least 1 byte
+    TEST_ASSERT_EQUAL(0x80, pu8TxData[0]);
+    
+    // Second call: Complete reading
+    u8Size = 8;
+    eResult = SPIMeasure_eMeasure(&sSPI.sInterface, au8Buffer, &u8Size, 0);
+    TEST_ASSERT_EQUAL(ISENSORMEASURE_PENDING_E, eResult);
+    TEST_ASSERT_EQUAL(SPIMEASURE_STATE_DATA_READY_E, sSPI.eState);
+    
+    // Third call: Return raw bytes
+    u8Size = 8;
+    eResult = SPIMeasure_eMeasure(&sSPI.sInterface, au8Buffer, &u8Size, 0);
+    TEST_ASSERT_EQUAL(ISENSORMEASURE_OK_E, eResult);
+    TEST_ASSERT_EQUAL(4, u8Size);
+    // Buffer contains the data bytes read (mock returned bytes 1-4 from full response)
+    TEST_ASSERT_EQUAL(0xAA, au8Buffer[0]);
+    TEST_ASSERT_EQUAL(0xBB, au8Buffer[1]);
+    TEST_ASSERT_EQUAL(0xCC, au8Buffer[2]);
+    TEST_ASSERT_EQUAL(0xDD, au8Buffer[3]);
+    TEST_ASSERT_EQUAL(SPIMEASURE_STATE_IDLE_E, sSPI.eState);
+}
+
+/**
+ * Test SPI command mode with conversion delay
+ */
+void test_vSPIMeasure_CommandModeWithDelay(void)
+{
+    SPIMEASURE_T sSPI;
+    uint8_t au8Buffer[8];
+    uint8_t u8Size = 8;
+    ISENSORMEASURE_RESULT_T eResult;
+    uint8_t au8Cmd[] = {0xAC, 0x33};  // Multi-byte command
+    uint8_t au8ResponseData[] = {0x11, 0x22, 0x33, 0x44, 0x55, 0x66};
+    STRING_POINT_T sName;
+    
+    // Initialize for command mode with conversion delay
+    PinCfgStr_vInitStrPoint(&sName, "sensor", 6);
+    SPIMeasure_eInit(&sSPI, &sName, 10, au8Cmd, 2, 6, 50);
+    
+    SPIMock_vReset();
+    mock_millis_u32Return = 0;
+    init_ArduinoMock();
+    
+    // First call: Send command, start waiting
+    eResult = SPIMeasure_eMeasure(&sSPI.sInterface, au8Buffer, &u8Size, mock_millis_u32Return);
+    TEST_ASSERT_EQUAL(ISENSORMEASURE_PENDING_E, eResult);
+    TEST_ASSERT_EQUAL(SPIMEASURE_STATE_COMMAND_SENT_E, sSPI.eState);
+    TEST_ASSERT_EQUAL(2, SPIMock_u32GetTransferCount());  // Command sent
+    
+    // CS should be HIGH during wait
+    TEST_ASSERT_EQUAL(HIGH, mock_digitalWrite_u8Value);
+    
+    // Second call: Still waiting for conversion delay
+    mock_millis_u32Return = 30;  // Only 30ms elapsed
+    u8Size = 8;
+    eResult = SPIMeasure_eMeasure(&sSPI.sInterface, au8Buffer, &u8Size, mock_millis_u32Return);
+    TEST_ASSERT_EQUAL(ISENSORMEASURE_PENDING_E, eResult);
+    TEST_ASSERT_EQUAL(SPIMEASURE_STATE_COMMAND_SENT_E, sSPI.eState);
+    
+    // Third call: Conversion delay complete, read data
+    mock_millis_u32Return = 55;  // >50ms elapsed
+    SPIMock_vSetResponse(au8ResponseData, 6);
+    u8Size = 8;
+    eResult = SPIMeasure_eMeasure(&sSPI.sInterface, au8Buffer, &u8Size, mock_millis_u32Return);
+    TEST_ASSERT_EQUAL(ISENSORMEASURE_PENDING_E, eResult);
+    TEST_ASSERT_EQUAL(SPIMEASURE_STATE_READING_E, sSPI.eState);  // Should transition to READING
+    
+    // Fourth call: Complete reading
+    u8Size = 8;
+    eResult = SPIMeasure_eMeasure(&sSPI.sInterface, au8Buffer, &u8Size, mock_millis_u32Return);
+    TEST_ASSERT_EQUAL(ISENSORMEASURE_PENDING_E, eResult);
+    TEST_ASSERT_EQUAL(SPIMEASURE_STATE_DATA_READY_E, sSPI.eState);
+    
+    // Fifth call: Return raw bytes
+    u8Size = 8;
+    eResult = SPIMeasure_eMeasure(&sSPI.sInterface, au8Buffer, &u8Size, mock_millis_u32Return);
+    TEST_ASSERT_EQUAL(ISENSORMEASURE_OK_E, eResult);
+    TEST_ASSERT_EQUAL(6, u8Size);
+    TEST_ASSERT_EQUAL(0x11, au8Buffer[0]);
+    TEST_ASSERT_EQUAL(0x22, au8Buffer[1]);
+    TEST_ASSERT_EQUAL(0x33, au8Buffer[2]);
+    TEST_ASSERT_EQUAL(0x44, au8Buffer[3]);
+    TEST_ASSERT_EQUAL(0x55, au8Buffer[4]);
+    TEST_ASSERT_EQUAL(0x66, au8Buffer[5]);
+    TEST_ASSERT_EQUAL(SPIMEASURE_STATE_IDLE_E, sSPI.eState);
+}
+
+/**
+ * Test SPI timeout handling
+ */
+void test_vSPIMeasure_Timeout(void)
+{
+    SPIMEASURE_T sSPI;
+    uint8_t au8Buffer[8];
+    uint8_t u8Size = 8;
+    ISENSORMEASURE_RESULT_T eResult;
+    uint8_t au8Cmd[] = {0x01};
+    STRING_POINT_T sName;
+    
+    // Initialize with conversion delay
+    PinCfgStr_vInitStrPoint(&sName, "sensor", 6);
+    SPIMeasure_eInit(&sSPI, &sName, 10, au8Cmd, 1, 4, 50);
+    
+    SPIMock_vReset();
+    // Set full response including command echo
+    uint8_t au8FullResponse[] = {0xFF, 0xAA, 0xBB, 0xCC, 0xDD};
+    SPIMock_vSetResponse(au8FullResponse, 5);
+    mock_millis_u32Return = 0;
+    
+    // Start request
+    eResult = SPIMeasure_eMeasure(&sSPI.sInterface, au8Buffer, &u8Size, mock_millis_u32Return);
+    TEST_ASSERT_EQUAL(ISENSORMEASURE_PENDING_E, eResult);
+    TEST_ASSERT_EQUAL(SPIMEASURE_STATE_COMMAND_SENT_E, sSPI.eState);
+    
+    // Still waiting, no timeout yet
+    mock_millis_u32Return = 40;  // Still within conversion delay (50ms)
+    u8Size = 8;
+    eResult = SPIMeasure_eMeasure(&sSPI.sInterface, au8Buffer, &u8Size, mock_millis_u32Return);
+    TEST_ASSERT_EQUAL(ISENSORMEASURE_PENDING_E, eResult);
+    TEST_ASSERT_EQUAL(SPIMEASURE_STATE_COMMAND_SENT_E, sSPI.eState);  // Still waiting
+    
+    // Timeout occurs during wait (before conversion delay completes)
+    mock_millis_u32Return = 150;  // Exceeds timeout (100ms default)
+    u8Size = 8;
+    eResult = SPIMeasure_eMeasure(&sSPI.sInterface, au8Buffer, &u8Size, mock_millis_u32Return);
+    TEST_ASSERT_EQUAL(ISENSORMEASURE_ERROR_E, eResult);
+    TEST_ASSERT_EQUAL(SPIMEASURE_STATE_ERROR_E, sSPI.eState);
+    
+    // Can retry after timeout
+    SPIMock_vSetResponse((uint8_t[]){0xAA, 0xBB, 0xCC, 0xDD}, 4);
+    mock_millis_u32Return = 200;
+    
+    // First call after error: Resets to IDLE
+    u8Size = 8;
+    eResult = SPIMeasure_eMeasure(&sSPI.sInterface, au8Buffer, &u8Size, 0);
+    TEST_ASSERT_EQUAL(ISENSORMEASURE_ERROR_E, eResult);
+    TEST_ASSERT_EQUAL(SPIMEASURE_STATE_IDLE_E, sSPI.eState);
+    
+    // Second call: Starts new transaction
+    u8Size = 8;
+    eResult = SPIMeasure_eMeasure(&sSPI.sInterface, au8Buffer, &u8Size, 0);
+    TEST_ASSERT_EQUAL(ISENSORMEASURE_PENDING_E, eResult);
+}
+
+/**
+ * Test SPI error simulation
+ */
+void test_vSPIMeasure_ErrorSimulation(void)
+{
+    SPIMEASURE_T sSPI;
+    uint8_t au8Buffer[8];
+    uint8_t u8Size = 8;
+    ISENSORMEASURE_RESULT_T eResult;
+    STRING_POINT_T sName;
+    
+    PinCfgStr_vInitStrPoint(&sName, "sensor", 6);
+    SPIMeasure_eInit(&sSPI, &sName, 10, NULL, 0, 4, 0);
+    
+    SPIMock_vReset();
+    SPIMock_vSimulateError(true);  // Simulate communication error
+    
+    // Request should complete but with error data (0x00)
+    eResult = SPIMeasure_eMeasure(&sSPI.sInterface, au8Buffer, &u8Size, 0);
+    TEST_ASSERT_EQUAL(ISENSORMEASURE_PENDING_E, eResult);
+    
+    // Get data (will be zeros due to error)
+    u8Size = 8;
+    eResult = SPIMeasure_eMeasure(&sSPI.sInterface, au8Buffer, &u8Size, 0);
+    TEST_ASSERT_EQUAL(ISENSORMEASURE_OK_E, eResult);
+    TEST_ASSERT_EQUAL(4, u8Size);
+    TEST_ASSERT_EQUAL(0x00, au8Buffer[0]);
+    TEST_ASSERT_EQUAL(0x00, au8Buffer[1]);
+    TEST_ASSERT_EQUAL(0x00, au8Buffer[2]);
+    TEST_ASSERT_EQUAL(0x00, au8Buffer[3]);
+}
+
+/**
+ * Test SPI buffer size limiting
+ */
+void test_vSPIMeasure_BufferSizeLimit(void)
+{
+    SPIMEASURE_T sSPI;
+    uint8_t au8Buffer[3];  // Smaller buffer than data size
+    uint8_t u8Size = 3;
+    ISENSORMEASURE_RESULT_T eResult;
+    uint8_t au8ResponseData[] = {0x11, 0x22, 0x33, 0x44, 0x55, 0x66};
+    STRING_POINT_T sName;
+    
+    // Initialize for 6-byte read
+    PinCfgStr_vInitStrPoint(&sName, "sensor", 6);
+    SPIMeasure_eInit(&sSPI, &sName, 10, NULL, 0, 6, 0);
+    
+    SPIMock_vReset();
+    SPIMock_vSetResponse(au8ResponseData, 6);
+    
+    // Read data
+    eResult = SPIMeasure_eMeasure(&sSPI.sInterface, au8Buffer, &u8Size, 0);
+    TEST_ASSERT_EQUAL(ISENSORMEASURE_PENDING_E, eResult);
+    
+    // Get data (should be limited to buffer size)
+    u8Size = 3;
+    eResult = SPIMeasure_eMeasure(&sSPI.sInterface, au8Buffer, &u8Size, 0);
+    TEST_ASSERT_EQUAL(ISENSORMEASURE_OK_E, eResult);
+    TEST_ASSERT_EQUAL(3, u8Size);  // Limited to buffer size
+    TEST_ASSERT_EQUAL(0x11, au8Buffer[0]);
+    TEST_ASSERT_EQUAL(0x22, au8Buffer[1]);
+    TEST_ASSERT_EQUAL(0x33, au8Buffer[2]);
+}
+
+/**
+ * Test SPI CS pin control
+ */
+void test_vSPIMeasure_CSPinControl(void)
+{
+    SPIMEASURE_T sSPI;
+    uint8_t au8Buffer[8];
+    uint8_t u8Size = 8;
+    uint8_t au8ResponseData[] = {0xFF, 0xFF};
+    STRING_POINT_T sName;
+    
+    PinCfgStr_vInitStrPoint(&sName, "sensor", 6);
+    SPIMeasure_eInit(&sSPI, &sName, 10, NULL, 0, 2, 0);
+    
+    SPIMock_vReset();
+    SPIMock_vSetResponse(au8ResponseData, 2);
+    init_ArduinoMock();
+    
+    // During init, CS should be configured as OUTPUT and set HIGH
+    TEST_ASSERT_EQUAL(10, mock_pinMode_u8Pin);
+    TEST_ASSERT_EQUAL(OUTPUT, mock_pinMode_u8Mode);
+    TEST_ASSERT_EQUAL(10, mock_digitalWrite_u8Pin);
+    TEST_ASSERT_EQUAL(HIGH, mock_digitalWrite_u8Value);
+    
+    // During read, CS should go LOW then HIGH
+    init_ArduinoMock();  // Reset counters
+    SPIMeasure_eMeasure(&sSPI.sInterface, au8Buffer, &u8Size, 0);
+    
+    // Should have called digitalWrite at least once (for CS HIGH at end)
+    TEST_ASSERT_GREATER_THAN(0, mock_digitalWrite_u32Called);
+}
+
+/**
+ * Test SPI CSV parsing - simple mode
+ */
+void test_vSPIMeasure_CSVParsing_Simple(void)
+{
+    PINCFG_RESULT_T eResult;
+    LINKEDLIST_RESULT_T eLinkedListResult;
+    char acOutStr[OUT_STR_MAX_LEN_D];
+    size_t szMemoryRequired;
+    
+    // Format: MS,6,name,cs_pin,size/
+    // 6 = MEASUREMENT_TYPE_SPI_E, simple mode (no command)
+    const char *pcCfg = "MS,6,temp_sensor,10,2/"
+                        "MS,6,pressure,11,4/"
+                        "MS,6,accel,12,6/";
+    
+    // First pass: calculate memory requirements
+    PINCFG_PARSE_PARAMS_T sParams = {
+        .pcConfig = pcCfg,
+        .eAddToLoopables = PinCfgCsv_eAddToTempLoopables,
+        .eAddToPresentables = PinCfgCsv_eAddToTempPresentables,
+        .pszMemoryRequired = &szMemoryRequired,
+        .pcOutString = acOutStr,
+        .u16OutStrMaxLen = (uint16_t)OUT_STR_MAX_LEN_D,
+        .bValidate = false};
+    
+    eResult = PinCfgCsv_eParse(&sParams);
+    if (eResult != PINCFG_OK_E) {
+        printf("\n=== SPI Simple Parse Error (pass 1) ===\nResult: %d\nOutput: %s\n", eResult, acOutStr);
+    }
+    TEST_ASSERT_EQUAL(PINCFG_OK_E, eResult);
+    
+    // Second pass: actually create objects
+    memset(acOutStr, 0, OUT_STR_MAX_LEN_D);
+    sParams.pszMemoryRequired = NULL;
+    eResult = PinCfgCsv_eParse(&sParams);
+    if (eResult != PINCFG_OK_E) {
+        printf("\n=== SPI Simple Parse Error ===\nResult: %d\nOutput: %s\n", eResult, acOutStr);
+    }
+    TEST_ASSERT_EQUAL(PINCFG_OK_E, eResult);
+    
+    eLinkedListResult =
+        LinkedList_eLinkedListToArray((LINKEDLIST_ITEM_T **)(&psGlobals->ppsLoopables), &psGlobals->u8LoopablesCount);
+    TEST_ASSERT_EQUAL(LINKEDLIST_OK_E, eLinkedListResult);
+    
+    eLinkedListResult = LinkedList_eLinkedListToArray(
+        (LINKEDLIST_ITEM_T **)(&psGlobals->ppsPresentables), &psGlobals->u8PresentablesCount);
+    TEST_ASSERT_EQUAL(LINKEDLIST_OK_E, eLinkedListResult);
+}
+
+/**
+ * Test SPI CSV parsing - command mode with delay
+ */
+void test_vSPIMeasure_CSVParsing_Command(void)
+{
+    PINCFG_RESULT_T eResult;
+    LINKEDLIST_RESULT_T eLinkedListResult;
+    char acOutStr[OUT_STR_MAX_LEN_D];
+    size_t szMemoryRequired;
+    
+    // Format: MS,6,name,cs_pin,cmd1,size[,cmd2,cmd3,cmd4,delay]/
+    // Command mode with 1-4 command bytes and optional delay
+    const char *pcCfg = "MS,6,thermo,10,3,2/"        // 1 cmd byte (0x03), 2 data bytes, no delay
+                        "MS,6,adc,11,170,2,50/"      // 1 cmd byte (0xAA), 2 data bytes, 50ms delay
+                        "MS,6,fram,12,3,0,1,4,25/";  // 3 cmd bytes (0x03,0x00,0x01), 4 data bytes, 25ms delay
+    
+    // First pass: calculate memory requirements
+    PINCFG_PARSE_PARAMS_T sParams = {
+        .pcConfig = pcCfg,
+        .eAddToLoopables = PinCfgCsv_eAddToTempLoopables,
+        .eAddToPresentables = PinCfgCsv_eAddToTempPresentables,
+        .pszMemoryRequired = &szMemoryRequired,
+        .pcOutString = acOutStr,
+        .u16OutStrMaxLen = (uint16_t)OUT_STR_MAX_LEN_D,
+        .bValidate = false};
+    
+    eResult = PinCfgCsv_eParse(&sParams);
+    if (eResult != PINCFG_OK_E) {
+        printf("\n=== SPI Command Parse Error (pass 1) ===\nResult: %d\nOutput: %s\n", eResult, acOutStr);
+    }
+    TEST_ASSERT_EQUAL(PINCFG_OK_E, eResult);
+    
+    // Second pass: actually create objects
+    memset(acOutStr, 0, OUT_STR_MAX_LEN_D);
+    sParams.pszMemoryRequired = NULL;
+    eResult = PinCfgCsv_eParse(&sParams);
+    if (eResult != PINCFG_OK_E) {
+        printf("\n=== SPI Command Parse Error ===\nResult: %d\nOutput: %s\n", eResult, acOutStr);
+    }
+    TEST_ASSERT_EQUAL(PINCFG_OK_E, eResult);
+    
+    eLinkedListResult =
+        LinkedList_eLinkedListToArray((LINKEDLIST_ITEM_T **)(&psGlobals->ppsLoopables), &psGlobals->u8LoopablesCount);
+    TEST_ASSERT_EQUAL(LINKEDLIST_OK_E, eLinkedListResult);
+    
+    eLinkedListResult = LinkedList_eLinkedListToArray(
+        (LINKEDLIST_ITEM_T **)(&psGlobals->ppsPresentables), &psGlobals->u8PresentablesCount);
+    TEST_ASSERT_EQUAL(LINKEDLIST_OK_E, eLinkedListResult);
+}
+
+/**
+ * Test SPI CSV parsing with sensor integration
+ */
+void test_vSPIMeasure_CSVParsing_Sensor(void)
+{
+    PINCFG_RESULT_T eResult;
+    LINKEDLIST_RESULT_T eLinkedListResult;
+    char acOutStr[OUT_STR_MAX_LEN_D];
+    size_t szMemoryRequired;
+    
+    // Create SPI measurement and sensor that uses it
+    // MS,6,name,cs_pin,cmd,size,delay/
+    // SR,sensorName,measurementName,vType,sType,enableable,cumulative,sampMs,reportSec[,offset]/
+    const char *pcCfg = "MS,6,max31855,10,0,4,100/"  // Thermocouple: cmd=0x00, 4 bytes, 100ms delay
+                        "SR,Temperature,max31855,38,6,0,1,1000,60,1.0/";
+    
+    // First pass: calculate memory
+    PINCFG_PARSE_PARAMS_T sParams = {
+        .pcConfig = pcCfg,
+        .eAddToLoopables = PinCfgCsv_eAddToTempLoopables,
+        .eAddToPresentables = PinCfgCsv_eAddToTempPresentables,
+        .pszMemoryRequired = &szMemoryRequired,
+        .pcOutString = acOutStr,
+        .u16OutStrMaxLen = (uint16_t)OUT_STR_MAX_LEN_D,
+        .bValidate = false};
+    
+    eResult = PinCfgCsv_eParse(&sParams);
+    if (eResult != PINCFG_OK_E) {
+        printf("\n=== SPI Sensor Parse Error (pass 1) ===\nResult: %d\nOutput: %s\n", eResult, acOutStr);
+    }
+    TEST_ASSERT_EQUAL(PINCFG_OK_E, eResult);
+    
+    // Second pass: create objects
+    memset(acOutStr, 0, OUT_STR_MAX_LEN_D);
+    sParams.pszMemoryRequired = NULL;
+    eResult = PinCfgCsv_eParse(&sParams);
+    if (eResult != PINCFG_OK_E) {
+        printf("\n=== SPI Sensor Parse Error ===\nResult: %d\nOutput: %s\n", eResult, acOutStr);
+    }
+    TEST_ASSERT_EQUAL(PINCFG_OK_E, eResult);
+    
+    eLinkedListResult =
+        LinkedList_eLinkedListToArray((LINKEDLIST_ITEM_T **)(&psGlobals->ppsLoopables), &psGlobals->u8LoopablesCount);
+    TEST_ASSERT_EQUAL(LINKEDLIST_OK_E, eLinkedListResult);
+    
+    eLinkedListResult = LinkedList_eLinkedListToArray(
+        (LINKEDLIST_ITEM_T **)(&psGlobals->ppsPresentables), &psGlobals->u8PresentablesCount);
+    TEST_ASSERT_EQUAL(LINKEDLIST_OK_E, eLinkedListResult);
+    
+    // Verify sensor was created
+    TEST_ASSERT_GREATER_THAN(0, psGlobals->u8PresentablesCount);
+}
+
+#endif // FEATURE_SPI_MEASUREMENT
 
 // =============================================================================
 // ANALOG MEASUREMENT TESTS
@@ -3661,6 +4225,21 @@ int test_main(void)
     RUN_TEST(test_vI2CMeasure_Timeout);
     RUN_TEST(test_vI2CMeasure_DeviceError);
     RUN_TEST(test_vI2CMeasure_RawData);
+#endif
+
+#ifdef FEATURE_SPI_MEASUREMENT
+    // SPI measurement tests
+    RUN_TEST(test_vSPIMeasure_Init);
+    RUN_TEST(test_vSPIMeasure_SimpleRead);
+    RUN_TEST(test_vSPIMeasure_CommandModeNoDelay);
+    RUN_TEST(test_vSPIMeasure_CommandModeWithDelay);
+    RUN_TEST(test_vSPIMeasure_Timeout);
+    RUN_TEST(test_vSPIMeasure_ErrorSimulation);
+    RUN_TEST(test_vSPIMeasure_BufferSizeLimit);
+    RUN_TEST(test_vSPIMeasure_CSPinControl);
+    RUN_TEST(test_vSPIMeasure_CSVParsing_Simple);
+    RUN_TEST(test_vSPIMeasure_CSVParsing_Command);
+    RUN_TEST(test_vSPIMeasure_CSVParsing_Sensor);
 #endif
 
 #ifdef FEATURE_ANALOG_MEASUREMENT

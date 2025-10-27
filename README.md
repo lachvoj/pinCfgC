@@ -18,8 +18,9 @@ The goal of this library is to provide a CSV-based configuration that specifies 
 8. [Measurement Sources](#measurement-sources)
    1. [CPU Temperature Measurement](#cpu-temperature-measurement)
    2. [I2C Measurement](#i2c-measurement-compile-time-optional)
-   3. [Loop Time Measurement](#loop-time-measurement-debug)
-   4. [Analog Measurement](#analog-measurement-compile-time-optional)
+   3. [SPI Measurement](#spi-measurement-compile-time-optional)
+   4. [Loop Time Measurement](#loop-time-measurement-debug)
+   5. [Analog Measurement](#analog-measurement-compile-time-optional)
 9. [Sensor Reporters](#sensor-reporters)
 
 ## Format Overview
@@ -452,6 +453,56 @@ build_flags =
 **Binary Size:** +800-1000 bytes when enabled, +0 bytes when disabled.
 
 **Compatibility:** Both 5-parameter (simple) and 6-7 parameter (command) formats are supported.
+
+### SPI Measurement (Compile-Time Optional)
+
+Measures sensor data via SPI interface. Supports simple read and command modes with optional conversion delays. Common use cases: thermocouples (MAX31855), accelerometers (ADXL345), IMUs (MPU9250).
+
+**Requires:** `FEATURE_SPI_MEASUREMENT` defined at compile time.
+
+#### Non-Blocking Operation
+SPI measurements use a state machine to avoid blocking the main `loop()`:
+- **Simple mode:** Assert CS → Read data → Deassert CS → Return value
+- **Command mode (no delay):** Assert CS → Send command → Read data → Deassert CS → Return value
+- **Command mode (with delay):** Assert CS → Send command → Deassert CS → Wait → Assert CS → Read data → Deassert CS → Return value
+
+The sensor automatically retries on PENDING, so multiple `loop()` iterations may be needed per reading.
+
+**Timeout:** 100ms default (configurable)
+
+#### Supported Sensors
+
+**Simple Mode (no command):**
+- MAX31855 (Thermocouple, 4 bytes)
+- MAX6675 (Thermocouple, 2 bytes)
+
+**Command Mode:**
+- ADXL345 (Accelerometer, register reads)
+- MPU9250 (IMU, multi-register reads)
+- BME680 (Environmental sensor)
+- LSM6DS3 (6-axis IMU)
+- BMI160 (6-axis IMU)
+
+#### Compile-Time Configuration
+Enable SPI support by defining:
+
+**In `Globals.h`:**
+```c
+#define FEATURE_SPI_MEASUREMENT
+```
+
+**Or in `platformio.ini`:**
+```ini
+[env:myboard]
+build_flags = 
+    -DFEATURE_SPI_MEASUREMENT
+```
+
+**Binary Size:** +900-1100 bytes when enabled, +0 bytes when disabled.
+
+**SPI Settings:** MODE0 (CPOL=0, CPHA=0), 1 MHz, MSB first (configurable via `SPI_vSetConfig()`)
+
+📖 **Detailed Documentation:** See `SPI_MEASUREMENT.md` for implementation guide and `SPI_QUICK_START.md` for quick reference.
 
 ### Loop Time Measurement (Debug)
 

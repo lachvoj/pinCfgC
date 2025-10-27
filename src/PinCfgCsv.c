@@ -31,6 +31,10 @@
 #include "AnalogMeasure.h"
 #endif
 
+#ifdef FEATURE_SPI_MEASUREMENT
+#include "SPIMeasure.h"
+#endif
+
 // Forward declarations
 static PINCFG_RESULT_T PinCfgCsv_CreateCli(PINCFG_PARSE_SUBFN_PARAMS_T *psPrms);
 static PINCFG_RESULT_T PinCfgCsv_ParseSwitch(PINCFG_PARSE_SUBFN_PARAMS_T *psPrms);
@@ -856,6 +860,11 @@ static PINCFG_RESULT_T PinCfgCsv_ParseMeasurementSource(PINCFG_PARSE_SUBFN_PARAM
                 szMeasurementSize = sizeof(I2CMEASURE_T);
                 break;
 #endif
+#ifdef FEATURE_SPI_MEASUREMENT
+            case MEASUREMENT_TYPE_SPI_E:
+                szMeasurementSize = sizeof(SPIMEASURE_T);
+                break;
+#endif
 #ifdef FEATURE_ANALOG_MEASUREMENT
             case MEASUREMENT_TYPE_ANALOG_E:
                 szMeasurementSize = sizeof(ANALOGMEASURE_T);
@@ -1037,6 +1046,153 @@ static PINCFG_RESULT_T PinCfgCsv_ParseMeasurementSource(PINCFG_PARSE_SUBFN_PARAM
         break;
     }
 #endif // FEATURE_I2C_MEASUREMENT
+    
+#ifdef FEATURE_SPI_MEASUREMENT
+    case MEASUREMENT_TYPE_SPI_E:
+    {
+        // Parse SPI-specific parameters
+        // Format: MS,6,name,cs_pin,cmd1,size[,cmd2,cmd3,cmd4,delay]/
+        // Simple mode (5 params): MS,6,name,cs_pin,size/
+        // Command mode (6+ params): MS,6,name,cs_pin,cmd1,size[,cmd2,cmd3,cmd4,delay]/
+        
+        // Validate parameter count (need at least 5: MS, type, name, cs_pin, size)
+        if (psPrms->u8LineItemsLen < 5)
+        {
+            psPrms->pcOutStringLast += snprintf(
+                (char *)(psPrms->psParsePrms->pcOutString + psPrms->pcOutStringLast),
+                szGetSize(psPrms->psParsePrms->u16OutStrMaxLen, psPrms->pcOutStringLast),
+                PinCfgMessages_getString(FSDSS_E), PinCfgMessages_getString(EL_E), psPrms->u16LinesProcessed, PinCfgMessages_getString(MS_E), PinCfgMessages_getString(IVLD_E), " SPI params\n");
+            return PINCFG_OK_E;
+        }
+        
+        uint8_t au8CommandBytes[4] = {0};
+        uint8_t u8CommandLength = 0;
+        uint16_t u16ConversionDelayMs = 0;
+        
+        // Parameter 3: CS pin number
+        psPrms->sTempStrPt = psPrms->sLine;
+        PinCfgStr_vGetSplitElemByIndex(&(psPrms->sTempStrPt), PINCFG_VALUE_SEPARATOR_D, 3);
+        uint8_t u8CSPin = 0;
+        if (PinCfgStr_eAtoU8(&(psPrms->sTempStrPt), &u8CSPin) != PINCFG_STR_OK_E)
+        {
+            psPrms->pcOutStringLast += snprintf(
+                (char *)(psPrms->psParsePrms->pcOutString + psPrms->pcOutStringLast),
+                szGetSize(psPrms->psParsePrms->u16OutStrMaxLen, psPrms->pcOutStringLast),
+                PinCfgMessages_getString(FSDSS_E), PinCfgMessages_getString(EL_E), psPrms->u16LinesProcessed, PinCfgMessages_getString(MS_E), PinCfgMessages_getString(IVLD_E), " CS pin\n");
+            return PINCFG_OK_E;
+        }
+        
+        uint8_t u8DataSize = 0;
+        
+        // Check if parameter 4 is size (simple mode) or command byte (command mode)
+        // Simple mode: MS,6,name,cs,size/
+        // Command mode: MS,6,name,cs,cmd1,size[,cmd2,cmd3,cmd4,delay]/
+        if (psPrms->u8LineItemsLen == 5)
+        {
+            // Simple mode - parameter 4 is size
+            psPrms->sTempStrPt = psPrms->sLine;
+            PinCfgStr_vGetSplitElemByIndex(&(psPrms->sTempStrPt), PINCFG_VALUE_SEPARATOR_D, 4);
+            if (PinCfgStr_eAtoU8(&(psPrms->sTempStrPt), &u8DataSize) != PINCFG_STR_OK_E)
+            {
+                psPrms->pcOutStringLast += LOG_WARNING(psPrms, PinCfgMessages_getString(MS_E), ERR_INVALID_DATA_SIZE);
+                return PINCFG_OK_E;
+            }
+            u8CommandLength = 0;
+        }
+        else
+        {
+            // Command mode - parse from the end backwards
+            // Last param might be delay (if > 8) or size (if 1-8)
+            // Format: MS,6,name,cs,cmd[1-4],size[,delay]/
+            
+            // Check if last parameter is a delay (> 8)
+            uint8_t u8SizeParamIndex;
+            psPrms->sTempStrPt = psPrms->sLine;
+            PinCfgStr_vGetSplitElemByIndex(&(psPrms->sTempStrPt), PINCFG_VALUE_SEPARATOR_D, psPrms->u8LineItemsLen - 1);
+            uint32_t u32LastParam = 0;
+            if (PinCfgStr_eAtoU32(&(psPrms->sTempStrPt), &u32LastParam) == PINCFG_STR_OK_E && u32LastParam > 8)
+            {
+                // Last param is delay
+                u16ConversionDelayMs = (uint16_t)u32LastParam;
+                u8SizeParamIndex = psPrms->u8LineItemsLen - 2;  // Size is second-to-last
+            }
+            else
+            {
+                // Last param is size
+                u8SizeParamIndex = psPrms->u8LineItemsLen - 1;
+            }
+            
+            // Parse size
+            psPrms->sTempStrPt = psPrms->sLine;
+            PinCfgStr_vGetSplitElemByIndex(&(psPrms->sTempStrPt), PINCFG_VALUE_SEPARATOR_D, u8SizeParamIndex);
+            if (PinCfgStr_eAtoU8(&(psPrms->sTempStrPt), &u8DataSize) != PINCFG_STR_OK_E)
+            {
+                psPrms->pcOutStringLast += LOG_WARNING(psPrms, PinCfgMessages_getString(MS_E), ERR_INVALID_DATA_SIZE);
+                return PINCFG_OK_E;
+            }
+            
+            // Parse command bytes (between index 4 and sizeParamIndex)
+            u8CommandLength = u8SizeParamIndex - 4;  // Number of params between cs and size
+            if (u8CommandLength > 4)
+            {
+                psPrms->pcOutStringLast += snprintf(
+                    (char *)(psPrms->psParsePrms->pcOutString + psPrms->pcOutStringLast),
+                    szGetSize(psPrms->psParsePrms->u16OutStrMaxLen, psPrms->pcOutStringLast),
+                    PinCfgMessages_getString(FSDSS_E), PinCfgMessages_getString(EL_E), psPrms->u16LinesProcessed, PinCfgMessages_getString(MS_E), PinCfgMessages_getString(IVLD_E), " too many command bytes (max 4)\n");
+                return PINCFG_OK_E;
+            }
+            
+            // Read command bytes
+            for (uint8_t i = 0; i < u8CommandLength; i++)
+            {
+                psPrms->sTempStrPt = psPrms->sLine;
+                PinCfgStr_vGetSplitElemByIndex(&(psPrms->sTempStrPt), PINCFG_VALUE_SEPARATOR_D, 4 + i);
+                uint32_t u32Cmd = 0;
+                if (PinCfgStr_eAtoU32(&(psPrms->sTempStrPt), &u32Cmd) != PINCFG_STR_OK_E)
+                {
+                    psPrms->pcOutStringLast += snprintf(
+                        (char *)(psPrms->psParsePrms->pcOutString + psPrms->pcOutStringLast),
+                        szGetSize(psPrms->psParsePrms->u16OutStrMaxLen, psPrms->pcOutStringLast),
+                        PinCfgMessages_getString(FSDSS_E), PinCfgMessages_getString(EL_E), psPrms->u16LinesProcessed, PinCfgMessages_getString(MS_E), PinCfgMessages_getString(IVLD_E), " command byte\n");
+                    return PINCFG_OK_E;
+                }
+                au8CommandBytes[i] = (uint8_t)u32Cmd;
+            }
+        }
+        
+        // Validate data size (1-8 bytes for SPI)
+        if (u8DataSize < 1 || u8DataSize > 8)
+        {
+            psPrms->pcOutStringLast += LOG_WARNING(psPrms, PinCfgMessages_getString(MS_E), ERR_INVALID_DATA_SIZE);
+            return PINCFG_OK_E;
+        }
+        
+        // Allocate SPI measurement structure
+        SPIMEASURE_T *psMeasurement = (SPIMEASURE_T *)Memory_vpAlloc(sizeof(SPIMEASURE_T));
+        if (psMeasurement == NULL)
+        {
+            Memory_eReset();
+            psPrms->pcOutStringLast += LOG_ERROR(psPrms, PinCfgMessages_getString(MS_E), ERR_OOM);
+            return PINCFG_OUTOFMEMORY_ERROR_E;
+        }
+        
+        // Get name from index 2 (already extracted earlier)
+        psPrms->sTempStrPt = psPrms->sLine;
+        PinCfgStr_vGetSplitElemByIndex(&(psPrms->sTempStrPt), PINCFG_VALUE_SEPARATOR_D, 2);
+        
+        // Initialize SPI measurement
+        if (SPIMeasure_eInit(psMeasurement, &(psPrms->sTempStrPt), u8CSPin,
+                             u8CommandLength > 0 ? au8CommandBytes : NULL,
+                             u8CommandLength, u8DataSize, u16ConversionDelayMs) != PINCFG_OK_E)
+        {
+            psPrms->pcOutStringLast += LOG_WARNING(psPrms, PinCfgMessages_getString(MS_E), ERR_INIT_FAILED);
+            return PINCFG_OK_E;
+        }
+        
+        psGenericMeasurement = &(psMeasurement->sInterface);
+        break;
+    }
+#endif // FEATURE_SPI_MEASUREMENT
     
 #ifdef FEATURE_LOOPTIME_MEASUREMENT
     case MEASUREMENT_TYPE_LOOPTIME_E:
