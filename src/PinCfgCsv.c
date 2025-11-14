@@ -145,10 +145,12 @@ PINCFG_RESULT_T PinCfgCsv_eInitMemoryAndTypes(uint8_t *pu8Memory, size_t szMemor
 PINCFG_RESULT_T PinCfgCsv_eInit(uint8_t *pu8Memory, size_t szMemorySize, const char *pcDefaultCfg)
 {
     // Memory init
+#ifndef USE_MALLOC
     if (pu8Memory == NULL)
     {
         return PINCFG_NULLPTR_ERROR_E;
     }
+#endif // USE_MALLOC
 
     PINCFG_RESULT_T eMemAndTypesInitRes = PinCfgCsv_eInitMemoryAndTypes(pu8Memory, szMemorySize);
     if (eMemAndTypesInitRes != PINCFG_OK_E)

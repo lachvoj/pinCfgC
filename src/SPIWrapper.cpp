@@ -7,10 +7,12 @@ extern "C"
 }
 #else
 
-// Detect STM32 HAL mode
-#if defined(ARDUINO_ARCH_STM32) || defined(ARDUINO_ARCH_STM32F1) || \
+// Detect STM32 HAL mode (but not in unit test mode)
+#if !defined(UNIT_TEST) && ( \
+    defined(ARDUINO_ARCH_STM32) || defined(ARDUINO_ARCH_STM32F1) || \
     defined(ARDUINO_ARCH_STM32F4) || defined(ARDUINO_ARCH_STM32L4) || \
-    defined(USE_STM32_HAL_SPI)
+    defined(USE_STM32_HAL_SPI) \
+)
     #define USE_STM32_HAL_MODE
 #endif
 
