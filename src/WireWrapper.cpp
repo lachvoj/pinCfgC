@@ -12,7 +12,7 @@
  * - Or manually with USE_STM32_HAL_I2C flag
  */
 
-#ifdef FEATURE_I2C_MEASUREMENT
+#ifdef PINCFG_FEATURE_I2C_MEASUREMENT
 
 #include "WireWrapper.h"
 #include <stddef.h>  // For NULL
@@ -277,4 +277,4 @@ uint8_t Wire_u8Read(void)
 
 } // extern "C"
 
-#endif // FEATURE_I2C_MEASUREMENT
+#endif // PINCFG_FEATURE_I2C_MEASUREMENT

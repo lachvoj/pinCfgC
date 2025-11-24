@@ -1,7 +1,7 @@
 #ifndef ANALOGMEASURE_H
 #define ANALOGMEASURE_H
 
-#ifdef FEATURE_ANALOG_MEASUREMENT
+#ifdef PINCFG_FEATURE_ANALOG_MEASUREMENT
 
 #include "ISensorMeasure.h"
 #include "PinCfgStr.h"
@@ -54,6 +54,6 @@ ANALOGMEASURE_RESULT_T AnalogMeasure_eInit(
     uint8_t u8Pin
 );
 
-#endif // FEATURE_ANALOG_MEASUREMENT
+#endif // PINCFG_FEATURE_ANALOG_MEASUREMENT
 
 #endif // ANALOGMEASURE_H

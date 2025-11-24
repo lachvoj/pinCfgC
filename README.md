@@ -4,24 +4,25 @@ The goal of this library is to provide a CSV-based configuration that specifies 
 
 ## Table of Contents
 1. [Format Overview](#format-overview)
-2. [Comments](#comments)
-3. [Special Characters](#special-characters)
-4. [Global Configuration Items](#global-configuration-items)
-5. [Switches](#switches)
+2. [Memory Management](#memory-management)
+3. [Comments](#comments)
+4. [Special Characters](#special-characters)
+5. [Global Configuration Items](#global-configuration-items)
+6. [Switches](#switches)
    1. [Basic switch](#basic-switch)
    2. [Basic switch with Feedback](#basic-switch-with-feedback)
    3. [Impulse Output Switch](#impulse-output-switch)
    4. [Impulse Output Switch with Feedback](#impulse-output-switch-with-feedback)
    5. [Timed Output Switch](#timed-output-switch)
-6. [Inputs](#inputs)
-7. [Triggers](#triggers)
-8. [Measurement Sources](#measurement-sources)
+7. [Inputs](#inputs)
+8. [Triggers](#triggers)
+9. [Measurement Sources](#measurement-sources)
    1. [CPU Temperature Measurement](#cpu-temperature-measurement)
    2. [I2C Measurement](#i2c-measurement-compile-time-optional)
    3. [SPI Measurement](#spi-measurement-compile-time-optional)
    4. [Loop Time Measurement](#loop-time-measurement-debug)
    5. [Analog Measurement](#analog-measurement-compile-time-optional)
-9. [Sensor Reporters](#sensor-reporters)
+10. [Sensor Reporters](#sensor-reporters)
 
 ## Format Overview
 ```
@@ -52,6 +53,88 @@ T,t10,i10,1,1,o10,0/
 MS,0,cpu_temp/
 SR,CPUTemp,cpu_temp,6,6,0,0,1000,300,-2.1/
 ```
+
+## Memory Management
+
+The pinCfgC library requires memory to store its internal data structures. You can choose between two memory allocation strategies:
+
+### Pre-Allocated Memory (Default)
+
+By default, the library uses a **pre-allocated static buffer** that you provide during initialization. This approach is recommended for embedded systems as it:
+- Provides predictable memory usage
+- Avoids heap fragmentation
+- Eliminates runtime allocation failures
+- Is suitable for safety-critical applications
+
+#### Usage Example
+```cpp
+// Define memory buffer size
+#ifndef PINCFG_MEMORY_SZ
+#define PINCFG_MEMORY_SZ 5000
+#endif
+
+// Allocate static buffer
+uint8_t au8PincfgMemory[PINCFG_MEMORY_SZ];
+
+// Initialize library with buffer
+void before(void) {
+    PinCfgCsv_eInit(au8PincfgMemory, PINCFG_MEMORY_SZ, sDefaultConfig);
+}
+```
+
+**Memory Size Guidelines:**
+- Basic configuration (few switches/inputs): ~1000-2000 bytes
+- Medium configuration (10-20 switches): ~3000-5000 bytes
+- Complex configuration (sensors, I2C/SPI): ~5000-8000 bytes
+
+### Heap Allocation (Optional)
+
+For platforms with sufficient RAM and dynamic memory management, you can enable heap allocation using the `USE_MALLOC` compile-time flag. This approach:
+- Allocates memory dynamically using `malloc()`
+- May be more flexible for development/testing
+- Requires careful monitoring on resource-constrained devices
+
+#### Usage Example
+```cpp
+// Enable heap allocation
+#define USE_MALLOC
+
+// Pointer to dynamically allocated memory
+uint8_t *au8PincfgMemory = NULL;
+
+// Initialize library (memory will be allocated internally)
+void before(void) {
+    PinCfgCsv_eInit(au8PincfgMemory, 0, sDefaultConfig);
+}
+```
+
+#### Compile-Time Configuration
+
+**In your code:**
+```cpp
+#define USE_MALLOC
+#include <PinCfg.h>
+```
+
+**Or in `platformio.ini`:**
+```ini
+[env:myboard]
+build_flags = 
+    -DUSE_MALLOC
+```
+
+**Note:** When `USE_MALLOC` is defined, the memory size parameter is ignored and memory is allocated dynamically based on configuration requirements.
+
+### Choosing the Right Approach
+
+| Criteria | Pre-Allocated | Heap Allocation |
+|----------|---------------|-----------------|
+| **Memory Safety** | ✅ Predictable | ⚠️ May fragment |
+| **Embedded Systems** | ✅ Recommended | ⚠️ Use with caution |
+| **RAM Usage** | Fixed at compile-time | Dynamic at runtime |
+| **Setup Complexity** | Simple | Requires malloc support |
+| **Best For** | Production, STM32, AVR | Development, ESP32, Linux |
+
 ## Comments
 Lines starting with **#** will be ignored by the parsing function and can be used as comments.
 
@@ -293,7 +376,7 @@ MS,0,external_sensor/     # Another measurement source
 ### I2C Measurement (Compile-Time Optional)
 Defines an I2C sensor measurement source with non-blocking read support.
 
-**Requires:** `FEATURE_I2C_MEASUREMENT` defined at compile time.
+**Requires:** `PINCFG_FEATURE_I2C_MEASUREMENT` defined at compile time.
 
 #### Line Formats
 
@@ -440,14 +523,14 @@ Enable I2C support by defining:
 
 **In `Globals.h`:**
 ```c
-#define FEATURE_I2C_MEASUREMENT
+#define PINCFG_FEATURE_I2C_MEASUREMENT
 ```
 
 **Or in `platformio.ini`:**
 ```ini
 [env:myboard]
 build_flags = 
-    -DFEATURE_I2C_MEASUREMENT
+    -DPINCFG_FEATURE_I2C_MEASUREMENT
 ```
 
 **Binary Size:** +800-1000 bytes when enabled, +0 bytes when disabled.
@@ -458,7 +541,7 @@ build_flags =
 
 Measures sensor data via SPI interface. Supports simple read and command modes with optional conversion delays. Common use cases: thermocouples (MAX31855), accelerometers (ADXL345), IMUs (MPU9250).
 
-**Requires:** `FEATURE_SPI_MEASUREMENT` defined at compile time.
+**Requires:** `PINCFG_FEATURE_SPI_MEASUREMENT` defined at compile time.
 
 #### Non-Blocking Operation
 SPI measurements use a state machine to avoid blocking the main `loop()`:
@@ -488,14 +571,14 @@ Enable SPI support by defining:
 
 **In `Globals.h`:**
 ```c
-#define FEATURE_SPI_MEASUREMENT
+#define PINCFG_FEATURE_SPI_MEASUREMENT
 ```
 
 **Or in `platformio.ini`:**
 ```ini
 [env:myboard]
 build_flags = 
-    -DFEATURE_SPI_MEASUREMENT
+    -DPINCFG_FEATURE_SPI_MEASUREMENT
 ```
 
 **Binary Size:** +900-1100 bytes when enabled, +0 bytes when disabled.
@@ -679,14 +762,14 @@ Enable analog measurement support:
 
 **In `Globals.h`:**
 ```c
-#define FEATURE_ANALOG_MEASUREMENT
+#define PINCFG_FEATURE_ANALOG_MEASUREMENT
 ```
 
 **Or in `platformio.ini`:**
 ```ini
 [env:myboard]
 build_flags = 
-    -DFEATURE_ANALOG_MEASUREMENT
+    -DPINCFG_FEATURE_ANALOG_MEASUREMENT
 ```
 
 **Binary Size:** +200-300 bytes when enabled, +0 bytes when disabled.

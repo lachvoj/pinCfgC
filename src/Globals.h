@@ -7,11 +7,11 @@
 
 // Uncomment to enable I2C measurement support (Phase 3)
 // Adds ~600-800 bytes to binary when enabled
-// #define FEATURE_I2C_MEASUREMENT
+// #define  PINCFG_FEATURE_I2C_MEASUREMENT
 
 // Uncomment to enable loop time measurement support (for debugging/profiling)
 // Adds ~200-300 bytes to binary when enabled
-// #define FEATURE_LOOPTIME_MEASUREMENT
+// #define  PINCFG_FEATURE_LOOPTIME_MEASUREMENT
 
 // ============================================================================
 

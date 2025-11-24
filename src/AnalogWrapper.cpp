@@ -13,7 +13,7 @@
  * - Or manually with USE_STM32_HAL_ADC flag
  */
 
-#ifdef FEATURE_ANALOG_MEASUREMENT
+#ifdef PINCFG_FEATURE_ANALOG_MEASUREMENT
 
 #include "AnalogWrapper.h"
 #include <stddef.h>  // For NULL
@@ -167,4 +167,4 @@ uint16_t Analog_u16Read(uint8_t u8Pin)
 
 } // extern "C"
 
-#endif // FEATURE_ANALOG_MEASUREMENT
+#endif // PINCFG_FEATURE_ANALOG_MEASUREMENT

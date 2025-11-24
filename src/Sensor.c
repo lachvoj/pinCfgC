@@ -188,7 +188,7 @@ static void Sensor_vLoop(LOOPABLE_T *psLoopableHandle, uint32_t u32ms)
         bool bShouldMeasure = false;
         
         // Special case: LOOPTIME always measures every loop (bypasses sampling interval)
-#ifdef FEATURE_LOOPTIME_MEASUREMENT
+#ifdef PINCFG_FEATURE_LOOPTIME_MEASUREMENT
         if (psHandle->psSensorMeasure->eType == MEASUREMENT_TYPE_LOOPTIME_E)
         {
             bShouldMeasure = true;

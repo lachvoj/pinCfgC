@@ -21,7 +21,7 @@
  * Example platformio.ini (manual enable):
  * ```
  * build_flags = 
- *     -DFEATURE_ANALOG_MEASUREMENT
+ *     -DPINCFG_FEATURE_ANALOG_MEASUREMENT
  *     -DUSE_STM32_HAL_ADC        # Optional, auto-detected for STM32
  *     -DANALOG_ADC_HANDLE=hadc1  # Optional, defaults to hadc1
  * ```
@@ -30,7 +30,7 @@
 #ifndef ANALOGWRAPPER_H
 #define ANALOGWRAPPER_H
 
-#ifdef FEATURE_ANALOG_MEASUREMENT
+#ifdef PINCFG_FEATURE_ANALOG_MEASUREMENT
 
 #include <stdint.h>
 #include <stdbool.h>
@@ -110,6 +110,6 @@ uint16_t Analog_u16Read(uint8_t u8Pin);
 }
 #endif
 
-#endif // FEATURE_ANALOG_MEASUREMENT
+#endif // PINCFG_FEATURE_ANALOG_MEASUREMENT
 
 #endif // ANALOGWRAPPER_H

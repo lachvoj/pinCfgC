@@ -1,4 +1,4 @@
-#ifdef FEATURE_SPI_MEASUREMENT
+#ifdef PINCFG_FEATURE_SPI_MEASUREMENT
 
 #ifdef UNIT_TEST
 extern "C"
@@ -180,4 +180,4 @@ void SPI_vEnd(void)
 
 } // extern "C"
 
-#endif // FEATURE_SPI_MEASUREMENT
+#endif // PINCFG_FEATURE_SPI_MEASUREMENT

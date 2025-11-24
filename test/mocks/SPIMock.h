@@ -1,7 +1,7 @@
 #ifndef SPIMOCK_H
 #define SPIMOCK_H
 
-#ifdef FEATURE_SPI_MEASUREMENT
+#ifdef PINCFG_FEATURE_SPI_MEASUREMENT
 
 #include <stdint.h>
 #include <stdbool.h>
@@ -142,6 +142,6 @@ uint32_t SPIMock_u32GetClockHz(void);
 }
 #endif
 
-#endif // FEATURE_SPI_MEASUREMENT
+#endif // PINCFG_FEATURE_SPI_MEASUREMENT
 
 #endif // SPIMOCK_H

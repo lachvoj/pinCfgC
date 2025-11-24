@@ -1,4 +1,4 @@
-#ifdef FEATURE_SPI_MEASUREMENT
+#ifdef PINCFG_FEATURE_SPI_MEASUREMENT
 
 #include "SPIMeasure.h"
 #include "SPIWrapper.h"
@@ -228,4 +228,4 @@ ISENSORMEASURE_RESULT_T SPIMeasure_eMeasure(
     }
 }
 
-#endif // FEATURE_SPI_MEASUREMENT
+#endif // PINCFG_FEATURE_SPI_MEASUREMENT

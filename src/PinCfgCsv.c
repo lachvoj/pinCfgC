@@ -19,19 +19,19 @@
 #include "Switch.h"
 #include "Trigger.h"
 
-#ifdef FEATURE_I2C_MEASUREMENT
+#ifdef PINCFG_FEATURE_I2C_MEASUREMENT
 #include "I2CMeasure.h"
 #endif
 
-#ifdef FEATURE_LOOPTIME_MEASUREMENT
+#ifdef PINCFG_FEATURE_LOOPTIME_MEASUREMENT
 #include "LoopTimeMeasure.h"
 #endif
 
-#ifdef FEATURE_ANALOG_MEASUREMENT
+#ifdef PINCFG_FEATURE_ANALOG_MEASUREMENT
 #include "AnalogMeasure.h"
 #endif
 
-#ifdef FEATURE_SPI_MEASUREMENT
+#ifdef PINCFG_FEATURE_SPI_MEASUREMENT
 #include "SPIMeasure.h"
 #endif
 
@@ -852,22 +852,22 @@ static PINCFG_RESULT_T PinCfgCsv_ParseMeasurementSource(PINCFG_PARSE_SUBFN_PARAM
             case MEASUREMENT_TYPE_CPUTEMP_E:
                 szMeasurementSize = sizeof(CPUTEMPMEASURE_T);
                 break;
-#ifdef FEATURE_LOOPTIME_MEASUREMENT
+#ifdef PINCFG_FEATURE_LOOPTIME_MEASUREMENT
             case MEASUREMENT_TYPE_LOOPTIME_E:
                 szMeasurementSize = sizeof(LOOPTIMEMEASURE_T);
                 break;
 #endif
-#ifdef FEATURE_I2C_MEASUREMENT
+#ifdef PINCFG_FEATURE_I2C_MEASUREMENT
             case MEASUREMENT_TYPE_I2C_E:
                 szMeasurementSize = sizeof(I2CMEASURE_T);
                 break;
 #endif
-#ifdef FEATURE_SPI_MEASUREMENT
+#ifdef PINCFG_FEATURE_SPI_MEASUREMENT
             case MEASUREMENT_TYPE_SPI_E:
                 szMeasurementSize = sizeof(SPIMEASURE_T);
                 break;
 #endif
-#ifdef FEATURE_ANALOG_MEASUREMENT
+#ifdef PINCFG_FEATURE_ANALOG_MEASUREMENT
             case MEASUREMENT_TYPE_ANALOG_E:
                 szMeasurementSize = sizeof(ANALOGMEASURE_T);
                 break;
@@ -913,7 +913,7 @@ static PINCFG_RESULT_T PinCfgCsv_ParseMeasurementSource(PINCFG_PARSE_SUBFN_PARAM
     }
     
     // Phase 3: Add cases for other measurement types here
-#ifdef FEATURE_I2C_MEASUREMENT
+#ifdef PINCFG_FEATURE_I2C_MEASUREMENT
     case MEASUREMENT_TYPE_I2C_E:
     {
         // Parse I2C-specific parameters
@@ -1047,9 +1047,9 @@ static PINCFG_RESULT_T PinCfgCsv_ParseMeasurementSource(PINCFG_PARSE_SUBFN_PARAM
         psGenericMeasurement = &(psMeasurement->sInterface);
         break;
     }
-#endif // FEATURE_I2C_MEASUREMENT
+#endif // PINCFG_FEATURE_I2C_MEASUREMENT
     
-#ifdef FEATURE_SPI_MEASUREMENT
+#ifdef PINCFG_FEATURE_SPI_MEASUREMENT
     case MEASUREMENT_TYPE_SPI_E:
     {
         // Parse SPI-specific parameters
@@ -1194,9 +1194,9 @@ static PINCFG_RESULT_T PinCfgCsv_ParseMeasurementSource(PINCFG_PARSE_SUBFN_PARAM
         psGenericMeasurement = &(psMeasurement->sInterface);
         break;
     }
-#endif // FEATURE_SPI_MEASUREMENT
+#endif // PINCFG_FEATURE_SPI_MEASUREMENT
     
-#ifdef FEATURE_LOOPTIME_MEASUREMENT
+#ifdef PINCFG_FEATURE_LOOPTIME_MEASUREMENT
     case MEASUREMENT_TYPE_LOOPTIME_E:
     {
         LOOPTIMEMEASURE_T *psMeasurement = (LOOPTIMEMEASURE_T *)Memory_vpAlloc(sizeof(LOOPTIMEMEASURE_T));
@@ -1217,9 +1217,9 @@ static PINCFG_RESULT_T PinCfgCsv_ParseMeasurementSource(PINCFG_PARSE_SUBFN_PARAM
         psGenericMeasurement = &(psMeasurement->sSensorMeasure);
         break;
     }
-#endif // FEATURE_LOOPTIME_MEASUREMENT
+#endif // PINCFG_FEATURE_LOOPTIME_MEASUREMENT
     
-#ifdef FEATURE_ANALOG_MEASUREMENT
+#ifdef PINCFG_FEATURE_ANALOG_MEASUREMENT
     case MEASUREMENT_TYPE_ANALOG_E:
     {
         // Parse analog-specific parameters
@@ -1264,13 +1264,13 @@ static PINCFG_RESULT_T PinCfgCsv_ParseMeasurementSource(PINCFG_PARSE_SUBFN_PARAM
         psGenericMeasurement = &(psMeasurement->sSensorMeasure);
         break;
     }
-#endif // FEATURE_ANALOG_MEASUREMENT
+#endif // PINCFG_FEATURE_ANALOG_MEASUREMENT
     
     case MEASUREMENT_TYPE_DIGITAL_E:
-#ifndef FEATURE_I2C_MEASUREMENT
+#ifndef PINCFG_FEATURE_I2C_MEASUREMENT
     case MEASUREMENT_TYPE_I2C_E:
 #endif
-#ifndef FEATURE_ANALOG_MEASUREMENT
+#ifndef PINCFG_FEATURE_ANALOG_MEASUREMENT
     case MEASUREMENT_TYPE_ANALOG_E:
 #endif
     case MEASUREMENT_TYPE_CALCULATED_E:

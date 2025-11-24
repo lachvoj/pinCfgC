@@ -1,7 +1,7 @@
 #ifndef I2CMEASURE_H
 #define I2CMEASURE_H
 
-#ifdef FEATURE_I2C_MEASUREMENT
+#ifdef PINCFG_FEATURE_I2C_MEASUREMENT
 
 #include "ISensorMeasure.h"
 #include "Types.h"
@@ -100,6 +100,6 @@ ISENSORMEASURE_RESULT_T I2CMeasure_eMeasure(
     uint32_t u32ms
 );
 
-#endif // FEATURE_I2C_MEASUREMENT
+#endif // PINCFG_FEATURE_I2C_MEASUREMENT
 
 #endif // I2CMEASURE_H

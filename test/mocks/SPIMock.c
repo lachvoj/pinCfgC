@@ -1,4 +1,4 @@
-#ifdef FEATURE_SPI_MEASUREMENT
+#ifdef PINCFG_FEATURE_SPI_MEASUREMENT
 
 #include "SPIMock.h"
 #include <string.h>
@@ -138,4 +138,4 @@ uint32_t SPIMock_u32GetClockHz(void)
     return g_sSPIMock.u32ClockHz;
 }
 
-#endif // FEATURE_SPI_MEASUREMENT
+#endif // PINCFG_FEATURE_SPI_MEASUREMENT

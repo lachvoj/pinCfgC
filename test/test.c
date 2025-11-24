@@ -8,7 +8,7 @@
 #include "Globals.h"
 #include "InPin.h"
 #include "LinkedList.h"
-#ifdef FEATURE_LOOPTIME_MEASUREMENT
+#ifdef PINCFG_FEATURE_LOOPTIME_MEASUREMENT
 #include "LoopTimeMeasure.h"
 #endif
 #include "Memory.h"
@@ -21,17 +21,17 @@
 #include "Switch.h"
 #include "Trigger.h"
 
-#ifdef FEATURE_I2C_MEASUREMENT
+#ifdef PINCFG_FEATURE_I2C_MEASUREMENT
 #include "I2CMeasure.h"
 #include "I2CMock.h"
 #endif
 
-#ifdef FEATURE_SPI_MEASUREMENT
+#ifdef PINCFG_FEATURE_SPI_MEASUREMENT
 #include "SPIMeasure.h"
 #include "SPIMock.h"
 #endif
 
-#ifdef FEATURE_ANALOG_MEASUREMENT
+#ifdef PINCFG_FEATURE_ANALOG_MEASUREMENT
 #include "AnalogMeasure.h"
 #endif
 
@@ -1862,7 +1862,7 @@ void test_vCLI_EdgeCases(void)
 // I2C MEASUREMENT TESTS
 // =============================================================================
 
-#ifdef FEATURE_I2C_MEASUREMENT
+#ifdef PINCFG_FEATURE_I2C_MEASUREMENT
 
 /**
  * Test I2C measurement initialization
@@ -2163,13 +2163,13 @@ void test_vI2CMeasure_RawData(void)
     TEST_ASSERT_EQUAL(0x00, au8Buffer[5]);
 }
 
-#endif // FEATURE_I2C_MEASUREMENT
+#endif // PINCFG_FEATURE_I2C_MEASUREMENT
 
 // =============================================================================
 // SPI MEASUREMENT TESTS
 // =============================================================================
 
-#ifdef FEATURE_SPI_MEASUREMENT
+#ifdef PINCFG_FEATURE_SPI_MEASUREMENT
 
 /**
  * Test SPI measurement initialization
@@ -2722,13 +2722,13 @@ void test_vSPIMeasure_CSVParsing_Sensor(void)
     TEST_ASSERT_GREATER_THAN(0, psGlobals->u8PresentablesCount);
 }
 
-#endif // FEATURE_SPI_MEASUREMENT
+#endif // PINCFG_FEATURE_SPI_MEASUREMENT
 
 // =============================================================================
 // ANALOG MEASUREMENT TESTS
 // =============================================================================
 
-#ifdef FEATURE_ANALOG_MEASUREMENT
+#ifdef PINCFG_FEATURE_ANALOG_MEASUREMENT
 
 /**
  * Test AnalogMeasure initialization
@@ -3015,7 +3015,7 @@ void test_vAnalogMeasure_SensorIntegration(void)
     TEST_ASSERT_GREATER_THAN(0, mock_analogRead_u32Called);
 }
 
-#endif // FEATURE_ANALOG_MEASUREMENT
+#endif // PINCFG_FEATURE_ANALOG_MEASUREMENT
 
 // =============================================================================
 // SENSOR TESTS (Enhanced)
@@ -3143,7 +3143,7 @@ void test_vCPUTemp_EdgeCases(void)
     Memory_eReset();
 }
 
-#ifdef FEATURE_LOOPTIME_MEASUREMENT
+#ifdef PINCFG_FEATURE_LOOPTIME_MEASUREMENT
 // =============================================================================
 // LOOP TIME MEASUREMENT TESTS
 // =============================================================================
@@ -3539,7 +3539,7 @@ void test_vLoopTimeMeasure_MultipleSensors(void)
 #endif
 }
 
-#endif // FEATURE_LOOPTIME_MEASUREMENT
+#endif // PINCFG_FEATURE_LOOPTIME_MEASUREMENT
 
 // =============================================================================
 // INTEGRATION TESTS
@@ -4186,7 +4186,7 @@ int test_main(void)
     printf("sizeof(TRIGGER_SWITCHACTION_T): %ld\n", sizeof(TRIGGER_SWITCHACTION_T));
     printf("sizeof(SENSOR_T): %ld\n", sizeof(SENSOR_T));
     printf("sizeof(CPUTEMPMEASURE_T): %ld\n", sizeof(CPUTEMPMEASURE_T));
-#ifdef FEATURE_LOOPTIME_MEASUREMENT
+#ifdef PINCFG_FEATURE_LOOPTIME_MEASUREMENT
     printf("sizeof(LOOPTIMEMEASURE_T): %ld\n", sizeof(LOOPTIMEMEASURE_T));
 #endif
     printf("\n\n");
@@ -4217,7 +4217,7 @@ int test_main(void)
     RUN_TEST(test_vPinCfgCsv_EdgeCases);
     RUN_TEST(test_vCLI_EdgeCases);
 
-#ifdef FEATURE_I2C_MEASUREMENT
+#ifdef PINCFG_FEATURE_I2C_MEASUREMENT
     // I2C measurement tests
     RUN_TEST(test_vI2CMeasure_Init);
     RUN_TEST(test_vI2CMeasure_SimpleRead);
@@ -4227,7 +4227,7 @@ int test_main(void)
     RUN_TEST(test_vI2CMeasure_RawData);
 #endif
 
-#ifdef FEATURE_SPI_MEASUREMENT
+#ifdef PINCFG_FEATURE_SPI_MEASUREMENT
     // SPI measurement tests
     RUN_TEST(test_vSPIMeasure_Init);
     RUN_TEST(test_vSPIMeasure_SimpleRead);
@@ -4242,7 +4242,7 @@ int test_main(void)
     RUN_TEST(test_vSPIMeasure_CSVParsing_Sensor);
 #endif
 
-#ifdef FEATURE_ANALOG_MEASUREMENT
+#ifdef PINCFG_FEATURE_ANALOG_MEASUREMENT
     // Analog measurement tests
     RUN_TEST(test_vAnalogMeasure_Init);
     RUN_TEST(test_vAnalogMeasure_SimpleRead);
@@ -4255,7 +4255,7 @@ int test_main(void)
     // Enhanced sensor tests
     RUN_TEST(test_vCPUTemp_EdgeCases);
 
-#ifdef FEATURE_LOOPTIME_MEASUREMENT
+#ifdef PINCFG_FEATURE_LOOPTIME_MEASUREMENT
     // Loop time measurement tests
     RUN_TEST(test_vLoopTimeMeasure_Init);
     RUN_TEST(test_vLoopTimeMeasure_TimeDelta);

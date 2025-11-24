@@ -1,7 +1,7 @@
 #ifndef SPIMEASURE_H
 #define SPIMEASURE_H
 
-#ifdef FEATURE_SPI_MEASUREMENT
+#ifdef PINCFG_FEATURE_SPI_MEASUREMENT
 
 #include "ISensorMeasure.h"
 #include "Types.h"
@@ -106,6 +106,6 @@ ISENSORMEASURE_RESULT_T SPIMeasure_eMeasure(
     uint32_t u32ms
 );
 
-#endif // FEATURE_SPI_MEASUREMENT
+#endif // PINCFG_FEATURE_SPI_MEASUREMENT
 
 #endif // SPIMEASURE_H

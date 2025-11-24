@@ -1,4 +1,4 @@
-#ifdef FEATURE_I2C_MEASUREMENT
+#ifdef PINCFG_FEATURE_I2C_MEASUREMENT
 
 #include "I2CMeasure.h"
 #include "WireWrapper.h"
@@ -205,4 +205,4 @@ ISENSORMEASURE_RESULT_T I2CMeasure_eMeasure(
     }
 }
 
-#endif // FEATURE_I2C_MEASUREMENT
+#endif // PINCFG_FEATURE_I2C_MEASUREMENT

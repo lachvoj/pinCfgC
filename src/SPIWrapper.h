@@ -21,7 +21,7 @@
  * Example platformio.ini (manual enable):
  * ```
  * build_flags = 
- *     -DFEATURE_SPI_MEASUREMENT
+ *     -DPINCFG_FEATURE_SPI_MEASUREMENT
  *     -DUSE_STM32_HAL_SPI        # Optional, auto-detected for STM32
  *     -DSPI_HANDLE=hspi1         # Optional, defaults to hspi1
  * ```
@@ -37,7 +37,7 @@
 #ifndef SPIWRAPPER_H
 #define SPIWRAPPER_H
 
-#ifdef FEATURE_SPI_MEASUREMENT
+#ifdef PINCFG_FEATURE_SPI_MEASUREMENT
 
 #include <stdint.h>
 #include <stdbool.h>
@@ -131,6 +131,6 @@ void SPI_vEnd(void);
 }
 #endif
 
-#endif // FEATURE_SPI_MEASUREMENT
+#endif // PINCFG_FEATURE_SPI_MEASUREMENT
 
 #endif // SPIWRAPPER_H

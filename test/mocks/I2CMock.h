@@ -1,7 +1,7 @@
 #ifndef I2CMOCK_H
 #define I2CMOCK_H
 
-#ifdef FEATURE_I2C_MEASUREMENT
+#ifdef PINCFG_FEATURE_I2C_MEASUREMENT
 
 #include <stdint.h>
 #include <stdbool.h>
@@ -140,6 +140,6 @@ uint8_t WireMock_u8GetLastRegister(void);
 }
 #endif
 
-#endif // FEATURE_I2C_MEASUREMENT
+#endif // PINCFG_FEATURE_I2C_MEASUREMENT
 
 #endif // I2CMOCK_H

@@ -21,7 +21,7 @@
  * Example platformio.ini (manual enable):
  * ```
  * build_flags = 
- *     -DFEATURE_I2C_MEASUREMENT
+ *     -DPINCFG_FEATURE_I2C_MEASUREMENT
  *     -DUSE_STM32_HAL_I2C        # Optional, auto-detected for STM32
  *     -DWIRE_I2C_HANDLE=hi2c1    # Optional, defaults to hi2c1
  * ```
@@ -30,7 +30,7 @@
 #ifndef WIREWRAPPER_H
 #define WIREWRAPPER_H
 
-#ifdef FEATURE_I2C_MEASUREMENT
+#ifdef PINCFG_FEATURE_I2C_MEASUREMENT
 
 #include <stdint.h>
 #include <stdbool.h>
@@ -144,6 +144,6 @@ uint8_t Wire_u8Read(void);
 }
 #endif
 
-#endif // FEATURE_I2C_MEASUREMENT
+#endif // PINCFG_FEATURE_I2C_MEASUREMENT
 
 #endif // WIREWRAPPER_H

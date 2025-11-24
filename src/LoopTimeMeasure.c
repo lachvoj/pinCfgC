@@ -1,7 +1,7 @@
 // Include Globals.h first to get feature flags
 #include "Globals.h"
 
-#ifdef FEATURE_LOOPTIME_MEASUREMENT
+#ifdef PINCFG_FEATURE_LOOPTIME_MEASUREMENT
 
 #include "LoopTimeMeasure.h"
 #include "PinCfgUtils.h"
@@ -73,4 +73,4 @@ static ISENSORMEASURE_RESULT_T LoopTimeMeasure_eMeasure(
     return ISENSORMEASURE_OK_E;
 }
 
-#endif // FEATURE_LOOPTIME_MEASUREMENT
+#endif // PINCFG_FEATURE_LOOPTIME_MEASUREMENT

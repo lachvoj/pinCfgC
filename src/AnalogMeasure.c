@@ -1,7 +1,7 @@
 // Include Globals.h first to get feature flags
 #include "Globals.h"
 
-#ifdef FEATURE_ANALOG_MEASUREMENT
+#ifdef PINCFG_FEATURE_ANALOG_MEASUREMENT
 
 #include "AnalogMeasure.h"
 #include "AnalogWrapper.h"
@@ -74,4 +74,4 @@ static ISENSORMEASURE_RESULT_T AnalogMeasure_eMeasure(
     return ISENSORMEASURE_OK_E;
 }
 
-#endif // FEATURE_ANALOG_MEASUREMENT
+#endif // PINCFG_FEATURE_ANALOG_MEASUREMENT
