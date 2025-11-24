@@ -1407,12 +1407,12 @@ static PINCFG_RESULT_T PinCfgCsv_ParseSensorReporter(PINCFG_PARSE_SUBFN_PARAMS_T
     u16ReportIntervalSec = (uint16_t)u32Temp;
 
     // Get offset (index 9, optional)
-    float fOffset = PINCFG_CPUTEMP_OFFSET_D;
+    int32_t i32Offset = (int32_t)(PINCFG_CPUTEMP_OFFSET_D * PINCFG_FIXED_POINT_SCALE);  // Convert default to fixed-point
     if (psPrms->u8LineItemsLen >= 10)
     {
         psPrms->sTempStrPt = psPrms->sLine;
         PinCfgStr_vGetSplitElemByIndex(&(psPrms->sTempStrPt), PINCFG_VALUE_SEPARATOR_D, 9);
-        if (PinCfgStr_eAtoFloat(&(psPrms->sTempStrPt), &fOffset) != PINCFG_STR_OK_E)
+        if (PinCfgStr_eAtoFixedPoint(&(psPrms->sTempStrPt), &i32Offset) != PINCFG_STR_OK_E)
         {
             psPrms->pcOutStringLast += snprintf(
                 (char *)(psPrms->psParsePrms->pcOutString + psPrms->pcOutStringLast),
@@ -1491,7 +1491,7 @@ static PINCFG_RESULT_T PinCfgCsv_ParseSensorReporter(PINCFG_PARSE_SUBFN_PARAMS_T
             psMeasurement,  // Link to measurement
             u16SamplingIntervalMs,
             u16ReportIntervalSec,
-            fOffset) != SENSOR_OK_E)  // Sensor-specific calibration offset
+            i32Offset) != SENSOR_OK_E)  // Sensor-specific calibration offset (fixed-point)
     {
         psPrms->pcOutStringLast += snprintf(
             (char *)(psPrms->psParsePrms->pcOutString + psPrms->pcOutStringLast),

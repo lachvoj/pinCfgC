@@ -36,10 +36,10 @@ typedef struct SENSOR_S
     
     // Cumulative mode fields (always present, only used if bCumulative=true)
     uint32_t u32SamplesCount;           // Sample counter (can exceed 65k)
-    double fCumulatedValue;             // Double precision to prevent precision loss in long cumulative periods
+    int64_t i64CumulatedValue;          // Fixed-point accumulator (no scaling)
     
-    // Calibration
-    float fOffset;
+    // Calibration (fixed-point: value × PINCFG_FIXED_POINT_SCALE)
+    int32_t i32Offset;                  // e.g., 0.0625 stored as 62500
     
     // Data extraction (for multi-value I2C sensors)
     uint8_t u8DataByteOffset;           // Starting byte index in raw measurement buffer (0-5)
@@ -69,6 +69,6 @@ SENSOR_RESULT_T Sensor_eInit(
     ISENSORMEASURE_T *psSensorMeasure,
     uint16_t u16SamplingIntervalMs,
     uint16_t u16ReportIntervalSec,
-    float fOffset);
+    int32_t i32Offset);  // Fixed-point: offset × PINCFG_FIXED_POINT_SCALE
 
 #endif // SENSOR_H

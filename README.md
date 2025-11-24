@@ -822,9 +822,11 @@ Lines starting with **'SR'** are parsed as sensor reporter definitions.
     * Valid range: 100-5000 ms (100 ms - 5 seconds)
 8. **Report Interval** (`uint16_t`) - In **SECONDS**, default 300 s (5 min) or `PINCFG_CPUTEMP_REPORTING_INTV_SEC_D`
     * Valid range: 1-3600 seconds (1 second - 1 hour)
-9. **Offset** (optional, `float`) - Scaling factor or calibration offset, default 0.0 or `PINCFG_CPUTEMP_OFFSET_D`
-    * For temperature: calibration offset in °C
-    * For I2C: scaling multiplier (e.g., 0.0625 for TMP102)
+9. **Offset** (optional, fixed-point) - Scaling factor or calibration offset, default 0.0 or `PINCFG_CPUTEMP_OFFSET_D`
+    * Stored internally as fixed-point integer with configurable precision (default: 6 decimal places via `PINCFG_FIXED_POINT_SCALE`)
+    * For temperature: calibration offset in °C (e.g., `-2.1` becomes -2100000 internally)
+    * For I2C: scaling multiplier (e.g., `0.0625` for TMP102 becomes 62500 internally)
+    * Range: ±2147.483647 (limited by INT32_MAX / PINCFG_FIXED_POINT_SCALE)
 10. **Byte Offset** (optional, `uint8_t`) - Starting byte index for multi-value sensors (0-5), default 0
 11. **Byte Count** (optional, `uint8_t`) - Number of bytes to extract (1-6, 0=all), default 0
 

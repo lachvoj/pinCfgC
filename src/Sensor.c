@@ -6,15 +6,15 @@
 static void Sensor_vLoop(LOOPABLE_T *psLoopableHandle, uint32_t u32ms);
 
 /**
- * @brief Extract specific bytes from raw buffer and convert to float
+ * @brief Extract specific bytes from raw buffer and return as integer
  * 
  * @param pu8Buffer Raw byte buffer
  * @param u8TotalSize Total size of buffer
  * @param u8Offset Starting byte offset
  * @param u8Count Number of bytes to extract (0 = use all from offset)
- * @return Extracted value as float (big-endian)
+ * @return Extracted value as int32_t (big-endian, sign-extended)
  */
-static float Sensor_fExtractBytes(
+static int32_t Sensor_i32ExtractBytes(
     const uint8_t *pu8Buffer,
     uint8_t u8TotalSize,
     uint8_t u8Offset,
@@ -49,7 +49,7 @@ static float Sensor_fExtractBytes(
         i32Value |= 0xFF000000;
     }
     
-    return (float)i32Value;
+    return i32Value;
 }
 
 SENSOR_RESULT_T Sensor_eInit(
@@ -66,7 +66,7 @@ SENSOR_RESULT_T Sensor_eInit(
     ISENSORMEASURE_T *psSensorMeasure,
     uint16_t u16SamplingIntervalMs,
     uint16_t u16ReportIntervalSec,
-    float fOffset)
+    int32_t i32Offset)  // Fixed-point: offset × PINCFG_FIXED_POINT_SCALE
 {
     if (psHandle == NULL || sName == NULL || vReceive == NULL || psSensorMeasure == NULL)
         return SENSOR_NULLPTR_ERROR_E;
@@ -90,7 +90,7 @@ SENSOR_RESULT_T Sensor_eInit(
     psHandle->u16SamplingIntervalMs = u16SamplingIntervalMs;
     psHandle->u32LastReportMs = 0U;
     psHandle->u32LastSamplingMs = 0U;
-    psHandle->fOffset = fOffset;
+    psHandle->i32Offset = i32Offset;
     
     // Initialize byte extraction (defaults: use all bytes)
     psHandle->u8DataByteOffset = 0;
@@ -108,7 +108,7 @@ SENSOR_RESULT_T Sensor_eInit(
     if (bCumulative)
     {
         psHandle->u32SamplesCount = 0U;
-        psHandle->fCumulatedValue = 0.0;
+        psHandle->i64CumulatedValue = 0;
     }
 
     // Setup enableable if needed
@@ -171,7 +171,7 @@ static void Sensor_vLoop(LOOPABLE_T *psLoopableHandle, uint32_t u32ms)
             if (psHandle->u8Flags & SENSOR_FLAG_CUMULATIVE)
             {
                 psHandle->u32LastSamplingMs = 0U;
-                psHandle->fCumulatedValue = 0.0;
+                psHandle->i64CumulatedValue = 0;
                 psHandle->u32SamplesCount = 0U;
             }
         }
@@ -219,18 +219,19 @@ static void Sensor_vLoop(LOOPABLE_T *psLoopableHandle, uint32_t u32ms)
             
             if (eResult == ISENSORMEASURE_OK_E)
             {
-                // Extract and convert bytes to float (handles byte extraction for multi-value)
-                float fValue = Sensor_fExtractBytes(
+                // Extract raw integer value (no conversion)
+                int32_t i32Value = Sensor_i32ExtractBytes(
                     au8Buffer,
                     u8Size,
                     psHandle->u8DataByteOffset,
                     psHandle->u8DataByteCount);
                 
-                // Apply scaling factor
-                fValue = fValue * psHandle->fOffset;
+                // Apply scaling factor (fixed-point multiply)
+                // Result: (raw_value × (offset × scale)) / scale = scaled_value
+                int64_t i64Scaled = ((int64_t)i32Value * (int64_t)psHandle->i32Offset) / PINCFG_FIXED_POINT_SCALE;
                 
-                // Accumulate
-                psHandle->fCumulatedValue += fValue;
+                // Accumulate (no scaling - accumulates final values)
+                psHandle->i64CumulatedValue += i64Scaled;
                 psHandle->u32SamplesCount++;
             }
             // Note: On error, skip this sample (no increment)
@@ -243,11 +244,11 @@ static void Sensor_vLoop(LOOPABLE_T *psLoopableHandle, uint32_t u32ms)
             
             if (psHandle->u32SamplesCount > 0U)
             {
-                float fAverage = (float)(psHandle->fCumulatedValue / psHandle->u32SamplesCount);
-                Presentable_vSetState((PRESENTABLE_T *)psHandle, (uint8_t)fAverage, true);
+                int64_t i64Average = psHandle->i64CumulatedValue / (int64_t)psHandle->u32SamplesCount;
+                Presentable_vSetState((PRESENTABLE_T *)psHandle, (uint8_t)i64Average, true);
                 
                 // Reset accumulator
-                psHandle->fCumulatedValue = 0.0;
+                psHandle->i64CumulatedValue = 0;
                 psHandle->u32SamplesCount = 0U;
             }
         }
@@ -275,18 +276,18 @@ static void Sensor_vLoop(LOOPABLE_T *psLoopableHandle, uint32_t u32ms)
             
             if (eResult == ISENSORMEASURE_OK_E)
             {
-                // Extract and convert bytes to float (handles byte extraction for multi-value)
-                float fValue = Sensor_fExtractBytes(
+                // Extract raw integer value (no conversion)
+                int32_t i32Value = Sensor_i32ExtractBytes(
                     au8Buffer,
                     u8Size,
                     psHandle->u8DataByteOffset,
                     psHandle->u8DataByteCount);
                 
-                // Apply scaling factor
-                fValue = fValue * psHandle->fOffset;
+                // Apply scaling factor (fixed-point multiply)
+                int64_t i64Scaled = ((int64_t)i32Value * (int64_t)psHandle->i32Offset) / PINCFG_FIXED_POINT_SCALE;
                 
                 // Report value
-                Presentable_vSetState((PRESENTABLE_T *)psHandle, (uint8_t)fValue, true);
+                Presentable_vSetState((PRESENTABLE_T *)psHandle, (uint8_t)i64Scaled, true);
             }
             // Note: On error, skip this reading (no state update)
         }

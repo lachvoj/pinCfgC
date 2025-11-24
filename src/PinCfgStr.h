@@ -31,7 +31,8 @@ PINCFG_STR_RESULT_T PinCfgStr_eAtoU8(const STRING_POINT_T *psStrPt, uint8_t *pu8
 
 PINCFG_STR_RESULT_T PinCfgStr_eAtoU32(const STRING_POINT_T *psStrPt, uint32_t *pu32Out);
 
-PINCFG_STR_RESULT_T PinCfgStr_eAtoFloat(const STRING_POINT_T *psStrPt, float *fOut);
+// Fixed-point parser - scale factor defined by PINCFG_FIXED_POINT_SCALE
+PINCFG_STR_RESULT_T PinCfgStr_eAtoFixedPoint(const STRING_POINT_T *psStrPt, int32_t *i32Out);
 
 PINCFG_STR_RESULT_T PinCfgStr_eSplitStrPt(
     const STRING_POINT_T *psInStrPt,

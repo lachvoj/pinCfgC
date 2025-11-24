@@ -103,20 +103,117 @@ PINCFG_STR_RESULT_T PinCfgStr_eAtoU32(const STRING_POINT_T *psStrPt, uint32_t *p
     return PINCFG_STR_OK_E;
 }
 
-PINCFG_STR_RESULT_T PinCfgStr_eAtoFloat(const STRING_POINT_T *psStrPt, float *fOut)
+/**
+ * @brief Parse decimal string to fixed-point integer
+ * 
+ * Leverages existing strtol() for robust parsing (already linked in codebase).
+ * Scale factor is configurable via PINCFG_FIXED_POINT_SCALE constant.
+ * 
+ * Parses format: [-]digits[.digits]
+ * Examples (with PINCFG_FIXED_POINT_SCALE=1000000):
+ *   "0.0625" → 62500, "-2.1" → -2100000, "1" → 1000000
+ * 
+ * @param psStrPt Input string pointer
+ * @param i32Out Output: value × PINCFG_FIXED_POINT_SCALE
+ * @return PINCFG_STR_OK_E on success
+ */
+PINCFG_STR_RESULT_T PinCfgStr_eAtoFixedPoint(const STRING_POINT_T *psStrPt, int32_t *i32Out)
 {
-    if (psStrPt->szLen > 10)
+    if (psStrPt == NULL || i32Out == NULL)
         return PINCFG_STR_INSUFFICIENT_BUFFER_E;
-
-    char cTempStr[11];
-    char *endptr = NULL;
+    
+    if (psStrPt->szLen == 0 || psStrPt->szLen > 15)
+        return PINCFG_STR_INSUFFICIENT_BUFFER_E;
+    
+    // Copy to null-terminated buffer (larger for "2147.999999")
+    char cTempStr[16];
     memcpy(cTempStr, psStrPt->pcStrStart, psStrPt->szLen);
     cTempStr[psStrPt->szLen] = '\0';
+    
+    // Find decimal point
+    char *pcDecimal = strchr(cTempStr, '.');
+    
+    if (pcDecimal == NULL) {
+        // No decimal point - parse as integer and multiply by 1e6
+        char *endptr = NULL;
+        errno = 0;
+        int32_t i32Integer = (int32_t)strtol(cTempStr, &endptr, 10);
+        
+        if (cTempStr == endptr || errno != 0)
+            return PINCFG_STR_UNSUCCESSFULL_CONVERSION_E;
+        
+        // Check overflow before multiply
+        if (i32Integer > 2147 || i32Integer < -2147)
+            return PINCFG_STR_UNSUCCESSFULL_CONVERSION_E;
+        
+        *i32Out = i32Integer * PINCFG_FIXED_POINT_SCALE;
+        return PINCFG_STR_OK_E;
+    }
+    
+    // Has decimal point - parse integer and fractional parts separately
+    *pcDecimal = '\0';  // Temporarily null-terminate integer part
+    
+    // Parse integer part
+    char *endptr = NULL;
     errno = 0;
-    *fOut = strtof(cTempStr, &endptr);
-    if (cTempStr == endptr || errno != 0)
+    int32_t i32Integer = 0;
+    bool bNegative = (cTempStr[0] == '-');
+    
+    if (cTempStr[0] != '\0' && !(cTempStr[0] == '-' && cTempStr[1] == '\0')) {
+        i32Integer = (int32_t)strtol(cTempStr, &endptr, 10);
+        if (cTempStr == endptr || errno != 0) {
+            return PINCFG_STR_UNSUCCESSFULL_CONVERSION_E;
+        }
+        
+        // Check range
+        if (i32Integer > 2147 || i32Integer < -2147) {
+            return PINCFG_STR_UNSUCCESSFULL_CONVERSION_E;
+        }
+    }
+    
+    // Parse fractional part (up to 6 digits)
+    char *pcFraction = pcDecimal + 1;
+    uint8_t u8FracLen = (uint8_t)strlen(pcFraction);
+    
+    if (u8FracLen > 6) {
+        u8FracLen = 6;  // Truncate to 6 digits
+    }
+    
+    // Extract up to 6 digits from fraction
+    char cFracStr[7];
+    memcpy(cFracStr, pcFraction, u8FracLen);
+    cFracStr[u8FracLen] = '\0';
+    
+    // Parse fraction as integer
+    errno = 0;
+    int32_t i32Fraction = 0;
+    if (u8FracLen > 0) {
+        i32Fraction = (int32_t)strtol(cFracStr, &endptr, 10);
+        if (cFracStr == endptr || errno != 0) {
+            return PINCFG_STR_UNSUCCESSFULL_CONVERSION_E;
+        }
+    }
+    
+    // Scale fraction to 6 decimal places
+    while (u8FracLen < 6) {
+        i32Fraction *= 10;
+        u8FracLen++;
+    }
+    
+    // Combine parts using int64_t to avoid overflow
+    int64_t i64Result = (int64_t)i32Integer * PINCFG_FIXED_POINT_SCALE;
+    if (bNegative) {
+        i64Result -= i32Fraction;  // Negative numbers
+    } else {
+        i64Result += i32Fraction;  // Positive numbers
+    }
+    
+    // Check if result fits in int32_t
+    if (i64Result > 2147483647LL || i64Result < -2147483648LL) {
         return PINCFG_STR_UNSUCCESSFULL_CONVERSION_E;
-
+    }
+    
+    *i32Out = (int32_t)i64Result;
     return PINCFG_STR_OK_E;
 }
 

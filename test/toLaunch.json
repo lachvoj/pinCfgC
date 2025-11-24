@@ -3,7 +3,7 @@
             "type": "cppdbg",
             "request": "launch",
             "miDebuggerServerAddress": "localhost:1234",
-            "preLaunchTask": "qemu_start",
+            "preLaunchTask": "qemu_start_pre-debug",
             "cwd": "${workspaceFolder}/test",
             "program": "${workspaceFolder}/.pio/build/bluepill_f103c8_debug/firmware.elf",
             "stopAtEntry": true,

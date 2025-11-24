@@ -298,6 +298,112 @@ void test_vPinCfgStr(void)
     TEST_ASSERT_EQUAL(22, u8Out);
 }
 
+void test_vFixedPointParser(void)
+{
+    int32_t i32Result;
+    PINCFG_STR_RESULT_T eResult;
+    STRING_POINT_T sStrPt;
+    
+    // Test positive integer
+    sStrPt.pcStrStart = "1";
+    sStrPt.szLen = 1;
+    eResult = PinCfgStr_eAtoFixedPoint(&sStrPt, &i32Result);
+    TEST_ASSERT_EQUAL(PINCFG_STR_OK_E, eResult);
+    TEST_ASSERT_EQUAL(1000000, i32Result);
+    
+    // Test decimal
+    sStrPt.pcStrStart = "0.0625";
+    sStrPt.szLen = 6;
+    eResult = PinCfgStr_eAtoFixedPoint(&sStrPt, &i32Result);
+    TEST_ASSERT_EQUAL(PINCFG_STR_OK_E, eResult);
+    TEST_ASSERT_EQUAL(62500, i32Result);
+    
+    // Test negative
+    sStrPt.pcStrStart = "-2.1";
+    sStrPt.szLen = 4;
+    eResult = PinCfgStr_eAtoFixedPoint(&sStrPt, &i32Result);
+    TEST_ASSERT_EQUAL(PINCFG_STR_OK_E, eResult);
+    TEST_ASSERT_EQUAL(-2100000, i32Result);
+    
+    // Test 6 decimals (AHT10 temperature)
+    sStrPt.pcStrStart = "0.000191";
+    sStrPt.szLen = 8;
+    eResult = PinCfgStr_eAtoFixedPoint(&sStrPt, &i32Result);
+    TEST_ASSERT_EQUAL(PINCFG_STR_OK_E, eResult);
+    TEST_ASSERT_EQUAL(191, i32Result);
+    
+    // Test truncation (>6 decimals)
+    sStrPt.pcStrStart = "0.0000504";
+    sStrPt.szLen = 9;
+    eResult = PinCfgStr_eAtoFixedPoint(&sStrPt, &i32Result);
+    TEST_ASSERT_EQUAL(PINCFG_STR_OK_E, eResult);
+    TEST_ASSERT_EQUAL(50, i32Result);  // Truncates to 0.00005
+    
+    // Test large value (max safe: 2147.483647)
+    sStrPt.pcStrStart = "2147.483647";
+    sStrPt.szLen = 11;
+    eResult = PinCfgStr_eAtoFixedPoint(&sStrPt, &i32Result);
+    TEST_ASSERT_EQUAL(PINCFG_STR_OK_E, eResult);
+    TEST_ASSERT_EQUAL(2147483647, i32Result);  // INT32_MAX
+    
+    // Test overflow detection
+    sStrPt.pcStrStart = "2148";
+    sStrPt.szLen = 4;
+    eResult = PinCfgStr_eAtoFixedPoint(&sStrPt, &i32Result);
+    TEST_ASSERT_EQUAL(PINCFG_STR_UNSUCCESSFULL_CONVERSION_E, eResult);
+    
+    // Test overflow with large decimal
+    sStrPt.pcStrStart = "2147.483648";
+    sStrPt.szLen = 11;
+    eResult = PinCfgStr_eAtoFixedPoint(&sStrPt, &i32Result);
+    TEST_ASSERT_EQUAL(PINCFG_STR_UNSUCCESSFULL_CONVERSION_E, eResult);
+    
+    // Test invalid format
+    sStrPt.pcStrStart = "abc";
+    sStrPt.szLen = 3;
+    eResult = PinCfgStr_eAtoFixedPoint(&sStrPt, &i32Result);
+    TEST_ASSERT_EQUAL(PINCFG_STR_UNSUCCESSFULL_CONVERSION_E, eResult);
+    
+    // Test NULL pointer
+    eResult = PinCfgStr_eAtoFixedPoint(NULL, &i32Result);
+    TEST_ASSERT_EQUAL(PINCFG_STR_INSUFFICIENT_BUFFER_E, eResult);
+    
+    // Test edge case: only decimal point
+    sStrPt.pcStrStart = ".5";
+    sStrPt.szLen = 2;
+    eResult = PinCfgStr_eAtoFixedPoint(&sStrPt, &i32Result);
+    TEST_ASSERT_EQUAL(PINCFG_STR_OK_E, eResult);
+    TEST_ASSERT_EQUAL(500000, i32Result);
+    
+    // Test edge case: trailing decimal
+    sStrPt.pcStrStart = "2.";
+    sStrPt.szLen = 2;
+    eResult = PinCfgStr_eAtoFixedPoint(&sStrPt, &i32Result);
+    TEST_ASSERT_EQUAL(PINCFG_STR_OK_E, eResult);
+    TEST_ASSERT_EQUAL(2000000, i32Result);
+    
+    // Test negative decimal only
+    sStrPt.pcStrStart = "-.5";
+    sStrPt.szLen = 3;
+    eResult = PinCfgStr_eAtoFixedPoint(&sStrPt, &i32Result);
+    TEST_ASSERT_EQUAL(PINCFG_STR_OK_E, eResult);
+    TEST_ASSERT_EQUAL(-500000, i32Result);
+    
+    // Test zero
+    sStrPt.pcStrStart = "0";
+    sStrPt.szLen = 1;
+    eResult = PinCfgStr_eAtoFixedPoint(&sStrPt, &i32Result);
+    TEST_ASSERT_EQUAL(PINCFG_STR_OK_E, eResult);
+    TEST_ASSERT_EQUAL(0, i32Result);
+    
+    // Test negative zero
+    sStrPt.pcStrStart = "-0.0";
+    sStrPt.szLen = 4;
+    eResult = PinCfgStr_eAtoFixedPoint(&sStrPt, &i32Result);
+    TEST_ASSERT_EQUAL(PINCFG_STR_OK_E, eResult);
+    TEST_ASSERT_EQUAL(0, i32Result);
+}
+
 void test_vMySenosrsPresent(void)
 {
     // setup
@@ -1026,7 +1132,7 @@ void test_vCPUTemp(void)
     SENSOR_T *psSensor = (SENSOR_T *)psGlobals->ppsPresentables[2];
     TEST_ASSERT_EQUAL(V_TEMP, psSensor->sVtab.eVType);
     TEST_ASSERT_EQUAL(S_TEMP, psSensor->sVtab.eSType);
-    TEST_ASSERT_EQUAL(PINCFG_CPUTEMP_OFFSET_D, psSensor->fOffset);
+    TEST_ASSERT_EQUAL((int32_t)(PINCFG_CPUTEMP_OFFSET_D * PINCFG_FIXED_POINT_SCALE), psSensor->i32Offset);
     TEST_ASSERT_EQUAL_STRING("CPUTemp0", psSensor->sPresentable.pcName);
     TEST_ASSERT_EQUAL(1000, psSensor->u16SamplingIntervalMs);
     TEST_ASSERT_EQUAL(300, psSensor->u16ReportIntervalSec);
@@ -1047,7 +1153,7 @@ void test_vCPUTemp(void)
     TEST_ASSERT_EQUAL(V_TEMP, psSensor->sVtab.eVType);
     TEST_ASSERT_EQUAL(S_TEMP, psSensor->sVtab.eSType);
     TEST_ASSERT_EQUAL_STRING("CPUTemp2", psSensor->sPresentable.pcName);
-    TEST_ASSERT_EQUAL_FLOAT(-2.1f, psSensor->fOffset);
+    TEST_ASSERT_EQUAL(-2100000, psSensor->i32Offset);  // -2.1 × PINCFG_FIXED_POINT_SCALE
     TEST_ASSERT_EQUAL(1500, psSensor->u16SamplingIntervalMs);
     TEST_ASSERT_EQUAL(200, psSensor->u16ReportIntervalSec);
     TEST_ASSERT_NOT_EQUAL(0, psSensor->u8Flags & SENSOR_FLAG_CUMULATIVE);
@@ -3067,7 +3173,7 @@ void test_vCPUTemp_EdgeCases(void)
                 }
             }
             TEST_ASSERT_NOT_NULL(psSensor);
-            TEST_ASSERT_EQUAL_FLOAT(-100.5f, psSensor->fOffset);
+            TEST_ASSERT_EQUAL(-100500000, psSensor->i32Offset);  // -100.5 × PINCFG_FIXED_POINT_SCALE
         }
     }
     
@@ -3453,14 +3559,14 @@ void test_vLoopTimeMeasure_SensorIntegration(void)
     PinCfgCsv_vLoop(mock_millis_u32Return);
     
     // Debug: print actual values
-    if (psSensor->u32SamplesCount != 4 || psSensor->fCumulatedValue < 599.0 || psSensor->fCumulatedValue > 601.0) {
+    if (psSensor->u32SamplesCount != 4 || psSensor->i64CumulatedValue < 599 || psSensor->i64CumulatedValue > 601) {
         printf("\n=== LoopTime Sensor Debug ===\n");
         printf("Samples count: %lu (expected 4)\n", (unsigned long)psSensor->u32SamplesCount);
-        printf("Cumulated value: %f (expected 600.0)\n", psSensor->fCumulatedValue);
+        printf("Cumulated value: %lld (expected 600)\n", (long long)psSensor->i64CumulatedValue);
         printf("Sensor flags: 0x%02X\n", psSensor->u8Flags);
         printf("Sampling interval: %u ms\n", psSensor->u16SamplingIntervalMs);
         printf("Report interval: %u sec\n", psSensor->u16ReportIntervalSec);
-        printf("fOffset (scale factor): %f\n", psSensor->fOffset);
+        printf("i32Offset (scale factor): %d (raw fixed-point)\n", psSensor->i32Offset);
         printf("Data byte offset: %u\n", psSensor->u8DataByteOffset);
         printf("Data byte count: %u\n", psSensor->u8DataByteCount);
     }
@@ -3468,7 +3574,7 @@ void test_vLoopTimeMeasure_SensorIntegration(void)
     TEST_ASSERT_EQUAL(4, psSensor->u32SamplesCount);
     
     // Verify cumulative value (100ms + 100ms + 100ms + 300ms = 600ms)
-    TEST_ASSERT_EQUAL_FLOAT(600.0, psSensor->fCumulatedValue);
+    TEST_ASSERT_EQUAL(600, psSensor->i64CumulatedValue);  // Already scaled value
     
     // Continue loops until report interval (5 seconds = 5000ms)
     for (uint32_t i = 6; i <= 5000; i++) {
@@ -3478,7 +3584,7 @@ void test_vLoopTimeMeasure_SensorIntegration(void)
     
     // After reporting, samples should be reset
     TEST_ASSERT_EQUAL(0, psSensor->u32SamplesCount);
-    TEST_ASSERT_EQUAL_FLOAT(0.0, psSensor->fCumulatedValue);
+    TEST_ASSERT_EQUAL(0, psSensor->i64CumulatedValue);
 }
 
 /**
@@ -4196,6 +4302,7 @@ int test_main(void)
     RUN_TEST(test_vStringPoint);
     RUN_TEST(test_vLinkedList);
     RUN_TEST(test_vPinCfgStr);
+    RUN_TEST(test_vFixedPointParser);
     RUN_TEST(test_vMySenosrsPresent);
     RUN_TEST(test_vInPin);
     RUN_TEST(test_vSwitch);

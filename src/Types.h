@@ -13,6 +13,12 @@
 #include <wiring_digital.h>
 #endif
 
+// Fixed-point arithmetic scaling factor (6 decimal places)
+// Sensor offset values are stored as: value × PINCFG_FIXED_POINT_SCALE
+// Example: 0.0625 is stored as 62500 (0.0625 × 1000000)
+#ifndef PINCFG_FIXED_POINT_SCALE
+#define PINCFG_FIXED_POINT_SCALE 1000000LL
+#endif
 
 // Password section size
 #ifndef PINCFG_AUTH_PASSWORD_MAX_LEN_D
