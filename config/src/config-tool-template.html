@@ -1,0 +1,175 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>pinCfgC Configuration Tool</title>
+    <style>
+        /* CSS_PLACEHOLDER */
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>pinCfgC Config Tool</h1>
+            <p class="subtitle">Visual Builder & Validator</p>
+        </header>
+
+        <div class="toolbar">
+            <button id="saveBtn" class="btn btn-primary">💾 Save</button>
+            <button id="loadBtn" class="btn btn-primary">📂 Load</button>
+            <button id="clearBtn" class="btn btn-danger">🗑️ Clear All</button>
+        </div>
+
+        <div class="main-layout">
+            <!-- Builder Section -->
+            <div class="builder-section">
+                <h2>Configuration Builder</h2>
+                
+                <!-- Authentication -->
+                <section class="config-section collapsible">
+                    <div class="section-header" id="authHeader">
+                        <h3>Authentication</h3>
+                        <button class="btn-collapse">▼</button>
+                    </div>
+                    <div id="authContent" class="collapsible-content">
+                        <div class="form-group">
+                            <label>Password</label>
+                            <input type="password" id="authPassword" class="text-input" placeholder="Optional authentication password">
+                            <span class="helper-text">Leave empty to skip authentication</span>
+                        </div>
+                    </div>
+                </section>
+                
+                <!-- Global Configuration -->
+                <section class="config-section collapsible">
+                    <div class="section-header" id="globalConfigHeader">
+                        <h3>Global Configuration</h3>
+                        <button class="btn-collapse">▼</button>
+                    </div>
+                    <div id="globalConfigContent" class="collapsible-content">
+                        <div id="globalConfigForm" class="form-grid"></div>
+                    </div>
+                </section>
+
+                <!-- Switches -->
+                <section class="config-section collapsible">
+                    <div class="section-header" id="switchesHeader">
+                        <h3>Switches</h3>
+                        <button class="btn-collapse">▼</button>
+                    </div>
+                    <div id="switchesContent" class="collapsible-content">
+                        <div class="add-item-controls">
+                            <select id="switchType" class="select-input">
+                                <option value="S">S - Basic Switch</option>
+                                <option value="SF">SF - Switch with Feedback</option>
+                                <option value="SI">SI - Impulse Switch</option>
+                                <option value="SIF">SIF - Impulse Switch with Feedback</option>
+                                <option value="ST">ST - Timed Switch</option>
+                                <option value="STF">STF - Timed Switch with Feedback</option>
+                            </select>
+                            <button id="addSwitchBtn" class="btn btn-add">+ Add Switch</button>
+                        </div>
+                        <div id="switchesList" class="items-list"></div>
+                    </div>
+                </section>
+
+                <!-- Inputs -->
+                <section class="config-section collapsible">
+                    <div class="section-header" id="inputsHeader">
+                        <h3>Inputs</h3>
+                        <button class="btn-collapse">▼</button>
+                    </div>
+                    <div id="inputsContent" class="collapsible-content">
+                        <button id="addInputBtn" class="btn btn-add">+ Add Input</button>
+                        <div id="inputsList" class="items-list"></div>
+                    </div>
+                </section>
+
+                <!-- Triggers -->
+                <section class="config-section collapsible">
+                    <div class="section-header" id="triggersHeader">
+                        <h3>Triggers</h3>
+                        <button class="btn-collapse">▼</button>
+                    </div>
+                    <div id="triggersContent" class="collapsible-content">
+                        <button id="addTriggerBtn" class="btn btn-add">+ Add Trigger</button>
+                        <div id="triggersList" class="items-list"></div>
+                    </div>
+                </section>
+
+                <!-- Measurement Sources -->
+                <section class="config-section collapsible">
+                    <div class="section-header" id="msHeader">
+                        <h3>Measurement Sources</h3>
+                        <button class="btn-collapse">▼</button>
+                    </div>
+                    <div id="msContent" class="collapsible-content">
+                        <div class="add-item-controls">
+                            <select id="msType" class="select-input">
+                                <option value="0">CPU Temperature</option>
+                                <option value="1">Analog</option>
+                                <option value="3">I2C</option>
+                                <option value="4">SPI</option>
+                                <option value="5">Loop Time</option>
+                            </select>
+                            <button id="addMsBtn" class="btn btn-add">+ Add Measurement</button>
+                        </div>
+                        <div id="msList" class="items-list"></div>
+                    </div>
+                </section>
+
+                <!-- Sensor Reporters -->
+                <section class="config-section collapsible">
+                    <div class="section-header" id="srHeader">
+                        <h3>Sensor Reporters</h3>
+                        <button class="btn-collapse">▼</button>
+                    </div>
+                    <div id="srContent" class="collapsible-content">
+                        <button id="addSrBtn" class="btn btn-add">+ Add Reporter</button>
+                        <div id="srList" class="items-list"></div>
+                    </div>
+                </section>
+            </div>
+
+            <!-- Output Section -->
+            <div class="output-section">
+                <h2>Generated Configuration</h2>
+                
+                <div class="output-controls">
+                    <button id="generateBtn" class="btn btn-success">🔄 Generate</button>
+                    <button id="parseBtn" class="btn btn-warning">⬅️ Parse & Load</button>
+                    <button id="validateBtn" class="btn btn-primary">✓ Validate</button>
+                    <button id="copyAllBtn" class="btn btn-secondary">📋 Copy All</button>
+                </div>
+
+                <div id="validationResults" class="validation-results"></div>
+
+                <div class="output-area">
+                    <div style="display: flex; justify-content: space-between; align-items: center;">
+                        <h3>Configuration (Editable)</h3>
+                        <span id="configSize" class="size-indicator">0 / 480 bytes</span>
+                    </div>
+                    <textarea id="fullOutput" class="output-textarea" placeholder="Enter or paste configuration here, then click 'Parse & Load' to import into the builder..."></textarea>
+                </div>
+
+                <div class="output-area">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
+                        <h3>Fixed-Width Lines (CLI Format)</h3>
+                        <div class="line-break-control">
+                            <label for="lineBreakCount">Break every</label>
+                            <input type="number" id="lineBreakCount" min="5" max="25" value="18" class="number-input" style="width: 60px;" title="Number of characters per line (5-25)">
+                            <label>characters</label>
+                        </div>
+                    </div>
+                    <div id="linesOutput" class="lines-output"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        /* JAVASCRIPT_PLACEHOLDER */
+    </script>
+</body>
+</html>
