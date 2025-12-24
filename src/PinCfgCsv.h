@@ -7,6 +7,14 @@
 #include "Presentable.h"
 #include "Types.h"
 
+// Magic number defines for data size validation
+#define PINCFG_I2C_MAX_DATA_SIZE  6
+#define PINCFG_SPI_MAX_DATA_SIZE  8
+#define PINCFG_SPI_MAX_CMD_BYTES  4
+
+// Helper to safely calculate remaining buffer size
+size_t szGetSize(size_t a, size_t b);
+
 typedef enum PINCFG_RESULT_E
 {
     PINCFG_OK_E = 0,

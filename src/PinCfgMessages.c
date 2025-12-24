@@ -103,12 +103,6 @@ static const char *_parseStrings[] = {
 #endif
 };
 
-// Helper to safely calculate remaining buffer size
-static inline size_t szGetSize(size_t a, size_t b)
-{
-    return (a > b) ? (a - b) : 0;
-}
-
 const char *PinCfgMessages_getString(PINCFG_PARSE_STRINGS_T eStr)
 {
 #ifdef PINCFG_USE_ERROR_MESSAGES
