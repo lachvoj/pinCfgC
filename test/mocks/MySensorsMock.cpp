@@ -96,7 +96,7 @@ extern "C"
         // addr is actually an integer address cast to pointer
         size_t address = (size_t)addr;
         memcpy(&mock_EEPROM[address], buf, length);
-        
+
         mock_hwWriteConfigBlock_buf = buf;
         mock_hwWriteConfigBlock_addr = addr;
         mock_hwWriteConfigBlock_length = length;
@@ -113,7 +113,7 @@ extern "C"
         // addr is actually an integer address cast to pointer
         size_t address = (size_t)addr;
         memcpy(buf, &mock_EEPROM[address], length);
-        
+
         if (mock_hwReadConfigBlock_buf != NULL)
         {
             memcpy(buf, mock_hwReadConfigBlock_buf, length);

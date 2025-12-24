@@ -44,9 +44,9 @@ EXE3 = test_static_errmsg
 EXE4 = test_static_errcode
 
 # Flag combinations
-CFLAGS1 = $(CFLAGS_BASE) -DUSE_MALLOC -DUSE_ERROR_MESSAGES
-CFLAGS2 = $(CFLAGS_BASE) -DUSE_MALLOC
-CFLAGS3 = $(CFLAGS_BASE) -DUSE_ERROR_MESSAGES
+CFLAGS1 = $(CFLAGS_BASE) -D USE_MALLOC -D PINCFG_USE_ERROR_MESSAGES
+CFLAGS2 = $(CFLAGS_BASE) -D USE_MALLOC
+CFLAGS3 = $(CFLAGS_BASE) -D PINCFG_USE_ERROR_MESSAGES
 CFLAGS4 = $(CFLAGS_BASE)
 
 .PHONY: all
@@ -71,11 +71,11 @@ echo:
 	@echo $(OBJCPP)
 
 run: all
-	@echo "\n=== Running test_malloc_errmsg (USE_MALLOC + USE_ERROR_MESSAGES) ==="
+	@echo "\n=== Running test_malloc_errmsg (USE_MALLOC + PINCFG_USE_ERROR_MESSAGES) ==="
 	@ASAN_OPTIONS=detect_leaks=0 ./$(BUILDDIR)/$(EXE1) 2>&1 | tail -3
 	@echo "\n=== Running test_malloc_errcode (USE_MALLOC only) ==="
 	@ASAN_OPTIONS=detect_leaks=0 ./$(BUILDDIR)/$(EXE2) 2>&1 | tail -3
-	@echo "\n=== Running test_static_errmsg (USE_ERROR_MESSAGES only) ==="
+	@echo "\n=== Running test_static_errmsg (PINCFG_USE_ERROR_MESSAGES only) ==="
 	@./$(BUILDDIR)/$(EXE3) 2>&1 | tail -3
 	@echo "\n=== Running test_static_errcode (No flags) ==="
 	@./$(BUILDDIR)/$(EXE4) 2>&1 | tail -3

@@ -382,9 +382,16 @@ function renderSensorReporter(srObj) {
             // Check if selected measurement source is Loop Time type
             const selectedMs = configState.measurementSources.find(ms => ms.name === value);
             const isLoopTime = selectedMs && selectedMs.type === '5';
+            const isDigitalBus = selectedMs && (selectedMs.type === '3' || selectedMs.type === '4'); // I2C or SPI
             
             const cumulativeCheckbox = document.getElementById(`sr_${srObj.id}_cumulative`);
             const samplingGroup = document.getElementById(`sr_${srObj.id}_sampling_group`);
+            const multiValueGroup = document.getElementById(`sr_${srObj.id}_multivalue_group`);
+            
+            // Show/hide multi-value sensors group based on measurement source type
+            if (multiValueGroup) {
+                multiValueGroup.style.display = isDigitalBus ? 'block' : 'none';
+            }
             
             if (isLoopTime) {
                 // Loop Time: enable cumulative and disable editing
@@ -419,49 +426,65 @@ function renderSensorReporter(srObj) {
     group1.appendChild(msSelect);
     fields.appendChild(group1);
     
-    // Group 2: V_TYPE and S_TYPE
+    // Group 2: S_TYPE and V_TYPE (S_TYPE first to filter V_TYPE options)
     const group2 = document.createElement('fieldset');
     group2.className = 'sensor-field-group';
     const legend2 = document.createElement('legend');
     legend2.textContent = 'MySensors Types';
     group2.appendChild(legend2);
     
-    // V_TYPE to S_TYPE mapping (common pairings)
-    const vTypeToSType = {
-        '0': '6',   // V_TEMP -> S_TEMP
-        '1': '7',   // V_HUM -> S_HUM
-        '2': '3',   // V_STATUS -> S_BINARY
-        '3': '0',   // V_PERCENTAGE -> S_DOOR
-        '4': '8',   // V_PRESSURE -> S_BARO
-        '16': '1',  // V_TRIPPED -> S_MOTION
-        '23': '16', // V_LIGHT_LEVEL -> S_LIGHT_LEVEL
-        '37': '30', // V_LEVEL -> S_MULTIMETER
-        '38': '30', // V_VOLTAGE -> S_MULTIMETER
-        '39': '30'  // V_CURRENT -> S_MULTIMETER
-    };
+    // S_TYPE to compatible V_TYPEs mapping is auto-generated from MyMessage.h
+    // Use STYPE_TO_VTYPES and STYPE_DEFAULT_VTYPE constants from build script
     
-    const vTypeOptions = Object.entries(V_TYPES).map(([k, v]) => ({ value: k, label: `${k} - ${v}` }));
     const sTypeOptions = Object.entries(S_TYPES).map(([k, v]) => ({ value: k, label: `${k} - ${v}` }));
     
-    const vTypeSelect = createSelectField('V_TYPE', srObj.vType, vTypeOptions, (value) => {
-        srObj.vType = value;
-        // Auto-select S_TYPE based on V_TYPE if mapping exists
-        if (vTypeToSType[value]) {
-            srObj.sType = vTypeToSType[value];
-            const sTypeSelectEl = document.getElementById(`sr_${srObj.id}_stype`);
-            if (sTypeSelectEl) sTypeSelectEl.value = srObj.sType;
+    // Function to get filtered V_TYPE options based on selected S_TYPE
+    function getFilteredVTypeOptions(sType) {
+        const compatibleVTypes = STYPE_TO_VTYPES[sType];
+        if (!compatibleVTypes || compatibleVTypes.length === 0) {
+            // No restrictions, return all
+            return Object.entries(V_TYPES).map(([k, v]) => ({ value: k, label: `${k} - ${v}` }));
         }
-        saveToLocalStorage();
-    });
-    const vTypeLabel = vTypeSelect.querySelector('label');
-    if (vTypeLabel) {
-        vTypeLabel.title = 'MySensors variable type (data format)';
-        vTypeLabel.style.cursor = 'help';
+        return Object.entries(V_TYPES)
+            .filter(([k, v]) => compatibleVTypes.includes(k))
+            .map(([k, v]) => ({ value: k, label: `${k} - ${v}` }));
     }
-    group2.appendChild(vTypeSelect);
     
+    // S_TYPE selector (first)
     const sTypeSelect = createSelectField('S_TYPE', srObj.sType, sTypeOptions, (value) => {
         srObj.sType = value;
+        
+        // Update V_TYPE dropdown with filtered options
+        const vTypeSelectEl = document.getElementById(`sr_${srObj.id}_vtype`);
+        if (vTypeSelectEl) {
+            const currentVType = srObj.vType;
+            const filteredOptions = getFilteredVTypeOptions(value);
+            
+            // Clear and repopulate V_TYPE dropdown
+            vTypeSelectEl.innerHTML = '';
+            const emptyOpt = document.createElement('option');
+            emptyOpt.value = '';
+            emptyOpt.textContent = 'Select...';
+            vTypeSelectEl.appendChild(emptyOpt);
+            
+            filteredOptions.forEach(opt => {
+                const option = document.createElement('option');
+                option.value = opt.value;
+                option.textContent = opt.label;
+                vTypeSelectEl.appendChild(option);
+            });
+            
+            // Check if current V_TYPE is still valid
+            const isCurrentValid = filteredOptions.some(opt => opt.value === currentVType);
+            if (isCurrentValid) {
+                vTypeSelectEl.value = currentVType;
+            } else {
+                // Auto-select default V_TYPE for this S_TYPE (from auto-generated mapping)
+                const defaultVType = STYPE_DEFAULT_VTYPE[value] || filteredOptions[0]?.value || '';
+                vTypeSelectEl.value = defaultVType;
+                srObj.vType = defaultVType;
+            }
+        }
         saveToLocalStorage();
     });
     const sTypeLabel = sTypeSelect.querySelector('label');
@@ -469,10 +492,27 @@ function renderSensorReporter(srObj) {
         sTypeLabel.title = 'MySensors sensor type (device category)';
         sTypeLabel.style.cursor = 'help';
     }
-    // Add ID for auto-selection
+    // Add ID for programmatic access
     const sTypeSelectEl = sTypeSelect.querySelector('select');
     if (sTypeSelectEl) sTypeSelectEl.id = `sr_${srObj.id}_stype`;
     group2.appendChild(sTypeSelect);
+    
+    // V_TYPE selector (second, filtered by S_TYPE)
+    const initialVTypeOptions = getFilteredVTypeOptions(srObj.sType);
+    const vTypeSelect = createSelectField('V_TYPE', srObj.vType, initialVTypeOptions, (value) => {
+        srObj.vType = value;
+        saveToLocalStorage();
+    });
+    const vTypeLabel = vTypeSelect.querySelector('label');
+    if (vTypeLabel) {
+        vTypeLabel.title = 'MySensors variable type (data format)';
+        vTypeLabel.style.cursor = 'help';
+    }
+    // Add ID for programmatic access
+    const vTypeSelectEl = vTypeSelect.querySelector('select');
+    if (vTypeSelectEl) vTypeSelectEl.id = `sr_${srObj.id}_vtype`;
+    group2.appendChild(vTypeSelect);
+    
     fields.appendChild(group2);
     
     // Group 3: Behavior and Timing
@@ -660,6 +700,7 @@ function renderSensorReporter(srObj) {
     // Group 5: Multi-value Sensors
     const group5 = document.createElement('fieldset');
     group5.className = 'sensor-field-group';
+    group5.id = `sr_${srObj.id}_multivalue_group`;
     const legend5 = document.createElement('legend');
     legend5.textContent = 'Multi-value Sensors';
     legend5.title = 'For sensors that return multiple values in one measurement';
@@ -687,6 +728,11 @@ function renderSensorReporter(srObj) {
         byteCountLabel.style.cursor = 'help';
     }
     group5.appendChild(byteCountField);
+    
+    // Set initial visibility based on measurement source type
+    const initialMs = configState.measurementSources.find(ms => ms.name === srObj.measurementName);
+    const isDigitalBus = initialMs && (initialMs.type === '3' || initialMs.type === '4'); // I2C or SPI
+    group5.style.display = isDigitalBus ? 'block' : 'none';
     
     fields.appendChild(group5);
     

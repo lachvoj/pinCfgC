@@ -18,7 +18,11 @@ ENABLEABLE_RESULT_T Enableable_eInit(ENABLEABLE_T *psHandle, STRING_POINT_T *sNa
     if (Presentable_eInitReuseName(&psHandle->sPresentable, pcName, u8Id) != PRESENTABLE_OK_E)
         return ENABLEABLE_ERROR_E;
 
-    psHandle->sPresentable.psVtab = &psGlobals->sSwitchPrVTab; // Assuming Enableable uses the same vtab as Switch
+    // Enableable uses the same vtab as Switch
+    psHandle->sPresentable.psVtab = &psGlobals->sSwitchPrVTab;
+
+    // Initialize enableable switch to ON state (enabled by default)
+    psHandle->sPresentable.u8State = 1;
 
     return ENABLEABLE_OK_E;
 }

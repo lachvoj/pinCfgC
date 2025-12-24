@@ -81,8 +81,8 @@ MyMessage &MyMessage::set(const char *value)
     if (szCharsToCopy > MAX_PAYLOAD_SIZE)
         szCharsToCopy = MAX_PAYLOAD_SIZE;
     (void)strncpy(this->data, value, szCharsToCopy);
-	// null terminate string
-	this->data[szCharsToCopy] = 0;
+    // null terminate string
+    this->data[szCharsToCopy] = 0;
     mock_MyMessage_set_pChar_u32Called++;
     return *this;
 }
@@ -94,6 +94,54 @@ MyMessage &MyMessage::set(const bool value)
     mock_MyMessage_set_bool_value = value;
     mock_MyMessage_set_bool_u32Called++;
     return *this;
+}
+
+int16_t mock_MyMessage_set_int16_t_value;
+uint32_t mock_MyMessage_set_int16_t_u32Called;
+MyMessage &MyMessage::set(const int16_t value)
+{
+    mock_MyMessage_set_int16_t_value = value;
+    mock_MyMessage_set_int16_t_u32Called++;
+    this->iValue = value;
+    return *this;
+}
+
+uint16_t mock_MyMessage_set_uint16_t_value;
+uint32_t mock_MyMessage_set_uint16_t_u32Called;
+MyMessage &MyMessage::set(const uint16_t value)
+{
+    mock_MyMessage_set_uint16_t_value = value;
+    mock_MyMessage_set_uint16_t_u32Called++;
+    this->uiValue = value;
+    return *this;
+}
+
+int32_t mock_MyMessage_set_int32_t_value;
+uint32_t mock_MyMessage_set_int32_t_u32Called;
+MyMessage &MyMessage::set(const int32_t value)
+{
+    mock_MyMessage_set_int32_t_value = value;
+    mock_MyMessage_set_int32_t_u32Called++;
+    this->lValue = value;
+    return *this;
+}
+
+uint32_t mock_MyMessage_set_uint32_t_value;
+uint32_t mock_MyMessage_set_uint32_t_u32Called;
+MyMessage &MyMessage::set(const uint32_t value)
+{
+    mock_MyMessage_set_uint32_t_value = value;
+    mock_MyMessage_set_uint32_t_u32Called++;
+    this->ulValue = value;
+    return *this;
+}
+
+uint8_t mock_MyMessage_getByte_returnValue;
+uint32_t mock_MyMessage_getByte_u32Called;
+uint8_t MyMessage::getByte(void) const
+{
+    mock_MyMessage_getByte_u32Called++;
+    return mock_MyMessage_getByte_returnValue;
 }
 
 uint32_t mock_MyMessage_getCustom_u32Called;
@@ -137,6 +185,16 @@ extern "C"
         mock_MyMessage_set_pChar_u32Called = 0;
         mock_MyMessage_set_bool_u32Called = 0;
         mock_MyMessage_set_bool_value = false;
+        mock_MyMessage_set_int16_t_u32Called = 0;
+        mock_MyMessage_set_int16_t_value = 0;
+        mock_MyMessage_set_uint16_t_u32Called = 0;
+        mock_MyMessage_set_uint16_t_value = 0;
+        mock_MyMessage_set_int32_t_u32Called = 0;
+        mock_MyMessage_set_int32_t_value = 0;
+        mock_MyMessage_set_uint32_t_u32Called = 0;
+        mock_MyMessage_set_uint32_t_value = 0;
+        mock_MyMessage_getByte_u32Called = 0;
+        mock_MyMessage_getByte_returnValue = 0;
         mock_MyMessage_getCustom_u32Called = 0;
         mock_MyMessage_getPayloadType_u32Called = 0;
         mock_MyMessage_getString_u32Called = 0;

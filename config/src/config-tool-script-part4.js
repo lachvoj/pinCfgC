@@ -199,9 +199,11 @@ function generate18CharLines(config) {
     // Add opening marker
     let fullContinuous = '#[';
     
-    // Add password authentication if set (using PWD: format)
-    if (configState.authPassword) {
-        fullContinuous += `PWD:${configState.authPassword}/`;
+    // Add password authentication if set (unified format: hash/CFG:config)
+    if (configState.authPasswordHash) {
+        fullContinuous += `${configState.authPasswordHash}/CFG:`;
+    } else {
+        fullContinuous += 'CFG:';
     }
     
     // Add the configuration
@@ -271,8 +273,10 @@ function validateConfiguration() {
     // Remove markers and parse
     let content = configText.replace(/^#\[/, '').replace(/\]#$/, '').trim();
     
-    // Skip PWD line
-    content = content.replace(/^PWD:[^/]+\//, '');
+    // Skip password and CFG: prefix (new format: hash/CFG:config)
+    content = content.replace(/^[a-fA-F0-9]{64}\/CFG:/, '');
+    // Also handle case without password
+    content = content.replace(/^CFG:/, '');
     
     // Parse each line
     const configLines = content.split(/\n/).map(l => l.trim()).filter(l => l && !l.startsWith('#'));

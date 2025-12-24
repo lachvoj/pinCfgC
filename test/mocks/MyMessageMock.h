@@ -23,6 +23,21 @@ extern uint32_t mock_MyMessage_set_pChar_u32Called;
 extern bool mock_MyMessage_set_bool_value;
 extern uint32_t mock_MyMessage_set_bool_u32Called;
 
+extern int16_t mock_MyMessage_set_int16_t_value;
+extern uint32_t mock_MyMessage_set_int16_t_u32Called;
+
+extern uint16_t mock_MyMessage_set_uint16_t_value;
+extern uint32_t mock_MyMessage_set_uint16_t_u32Called;
+
+extern int32_t mock_MyMessage_set_int32_t_value;
+extern uint32_t mock_MyMessage_set_int32_t_u32Called;
+
+extern uint32_t mock_MyMessage_set_uint32_t_value;
+extern uint32_t mock_MyMessage_set_uint32_t_u32Called;
+
+extern uint8_t mock_MyMessage_getByte_returnValue;
+extern uint32_t mock_MyMessage_getByte_u32Called;
+
 extern uint32_t mock_MyMessage_getCustom_u32Called;
 
 extern uint32_t mock_MyMessage_getPayloadType_u32Called;
@@ -251,7 +266,7 @@ typedef enum
 #define BIT_MASK(len) (BIT(len) - 1)
 #define BF_MASK(start, len) (BIT_MASK(len) << (start))
 
-#define BF_PREP(x, start, len) (((x)&BIT_MASK(len)) << (start))
+#define BF_PREP(x, start, len) (((x) & BIT_MASK(len)) << (start))
 #define BF_GET(y, start, len) (((y) >> (start)) & BIT_MASK(len))
 #define BF_SET(y, x, start, len) (y = ((y) & ~BF_MASK(start, len)) | BF_PREP(x, start, len))
 

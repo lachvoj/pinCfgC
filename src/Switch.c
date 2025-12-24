@@ -1,8 +1,8 @@
 #include "Globals.h"
 #include "MySensorsWrapper.h"
+#include "PinCfgUtils.h"
 #include "Switch.h"
 #include "Trigger.h"
-#include "PinCfgUtils.h"
 
 // loopable IF
 void Switch_vLoopClassic(LOOPABLE_T *psLoopableHandle, uint32_t u32ms);
@@ -37,6 +37,7 @@ void Switch_vInitType(PRESENTABLE_VTAB_T *psVtab)
     psVtab->eVType = V_STATUS;
     psVtab->eSType = S_BINARY;
     psVtab->vReceive = Presentable_vRcvMessage;
+    psVtab->vPresent = Presentable_vPresent;
 
     Switch_SetImpulseDurationMs(PINCFG_SWITCH_IMPULSE_DURATIN_MS_D);
     Switch_SetFbOnDelayMs(PINCFG_SWITCH_FB_ON_DELAY_MS_D);
@@ -127,7 +128,7 @@ static inline void Switch_vCheckFbPin(SWITCH_T *psHandle, uint32_t u32ms)
              PinCfg_u32GetElapsedTime(psHandle->u32FbReadStarted, u32ms) > psGlobals->u32SwitchFbOffDelayMs))
         {
             psHandle->u32FbReadStarted = 0U;
-            Presentable_vSetState((PRESENTABLE_T *)psHandle, u8ActualPinState, true);
+            Presentable_vSetState((PRESENTABLE_T *)psHandle, (int32_t)u8ActualPinState, true);
         }
     }
     else
@@ -159,12 +160,13 @@ static inline void Switch_vHandleImpulse(SWITCH_T *psHandle, uint32_t u32ms)
 
 static inline void Switch_vHandleTimed(SWITCH_T *psHandle, uint32_t u32ms)
 {
-    if (PinCfg_u32GetElapsedTime(psHandle->u32ImpulseStarted, u32ms) > psHandle->u32ImpulseDuration)
+    if (psHandle->u32ImpulseStarted != 0U &&
+        PinCfg_u32GetElapsedTime(psHandle->u32ImpulseStarted, u32ms) > psHandle->u32ImpulseDuration)
     {
         psHandle->u32ImpulseStarted = 0U;
         psHandle->u32ImpulseDuration = 0U;
         Switch_vWritePin(psHandle, (uint8_t) false);
-        Presentable_vSetState((PRESENTABLE_T *)psHandle, (uint8_t) false, true);
+        Presentable_vSetState((PRESENTABLE_T *)psHandle, (int32_t) false, true);
         psHandle->sPresentable.bStateChanged = false;
     }
 }
@@ -173,7 +175,7 @@ void Switch_vLoopClassic(LOOPABLE_T *psLoopableHandle, uint32_t u32ms)
 {
     (void)u32ms; // unused parameter
 
-    SWITCH_T *psHandle = (SWITCH_T *)(((uint8_t *)psLoopableHandle) - sizeof(PRESENTABLE_T));
+    SWITCH_T *psHandle = container_of(psLoopableHandle, SWITCH_T, sLoopable);
 
     if (psHandle->sPresentable.bStateChanged != true)
         return;
@@ -183,7 +185,7 @@ void Switch_vLoopClassic(LOOPABLE_T *psLoopableHandle, uint32_t u32ms)
 
 void Switch_vLoopClassicFeedback(LOOPABLE_T *psLoopableHandle, uint32_t u32ms)
 {
-    SWITCH_T *psHandle = (SWITCH_T *)(((uint8_t *)psLoopableHandle) - sizeof(PRESENTABLE_T));
+    SWITCH_T *psHandle = container_of(psLoopableHandle, SWITCH_T, sLoopable);
 
     Switch_vCheckFbPin(psHandle, u32ms);
 
@@ -195,7 +197,7 @@ void Switch_vLoopClassicFeedback(LOOPABLE_T *psLoopableHandle, uint32_t u32ms)
 
 void Switch_vLoopImpulse(LOOPABLE_T *psLoopableHandle, uint32_t u32ms)
 {
-    SWITCH_T *psHandle = (SWITCH_T *)(((uint8_t *)psLoopableHandle) - sizeof(PRESENTABLE_T));
+    SWITCH_T *psHandle = container_of(psLoopableHandle, SWITCH_T, sLoopable);
 
     if (psHandle->sPresentable.bStateChanged != true)
         return;
@@ -205,7 +207,7 @@ void Switch_vLoopImpulse(LOOPABLE_T *psLoopableHandle, uint32_t u32ms)
 
 void Switch_vLoopImpulseFeedback(LOOPABLE_T *psLoopableHandle, uint32_t u32ms)
 {
-    SWITCH_T *psHandle = (SWITCH_T *)(((uint8_t *)psLoopableHandle) - sizeof(PRESENTABLE_T));
+    SWITCH_T *psHandle = container_of(psLoopableHandle, SWITCH_T, sLoopable);
 
     Switch_vCheckFbPin(psHandle, u32ms);
 
@@ -217,24 +219,28 @@ void Switch_vLoopImpulseFeedback(LOOPABLE_T *psLoopableHandle, uint32_t u32ms)
 
 void Switch_vLoopTimed(LOOPABLE_T *psLoopableHandle, uint32_t u32ms)
 {
-    SWITCH_T *psHandle = (SWITCH_T *)(((uint8_t *)psLoopableHandle) - sizeof(PRESENTABLE_T));
+    SWITCH_T *psHandle = container_of(psLoopableHandle, SWITCH_T, sLoopable);
 
-    if (psHandle->sPresentable.bStateChanged != true)
-        return;
-
-    Switch_vHandleTimed(psHandle, u32ms);
+    // Always check timeout - timed switch must turn off even without state change
+    // Turn-on is handled by Switch_vEventHandle, not here
+    if (psHandle->u32ImpulseDuration > 0U)
+    {
+        Switch_vHandleTimed(psHandle, u32ms);
+    }
 }
 
 void Switch_vLoopTimedFeedback(LOOPABLE_T *psLoopableHandle, uint32_t u32ms)
 {
-    SWITCH_T *psHandle = (SWITCH_T *)(((uint8_t *)psLoopableHandle) - sizeof(PRESENTABLE_T));
+    SWITCH_T *psHandle = container_of(psLoopableHandle, SWITCH_T, sLoopable);
 
     Switch_vCheckFbPin(psHandle, u32ms);
 
-    if (psHandle->sPresentable.bStateChanged != true)
-        return;
-
-    Switch_vHandleTimed(psHandle, u32ms);
+    // Always check timeout - timed switch must turn off even without state change
+    // Turn-on is handled by Switch_vEventHandle, not here
+    if (psHandle->u32ImpulseDuration > 0U)
+    {
+        Switch_vHandleTimed(psHandle, u32ms);
+    }
 }
 
 void Switch_vEventHandle(SWITCH_T *psHandle, uint8_t u8EventType, uint32_t u32Data, uint32_t u32ms)
@@ -255,7 +261,7 @@ void Switch_vEventHandle(SWITCH_T *psHandle, uint8_t u8EventType, uint32_t u32Da
             psHandle->u32ImpulseStarted = u32ms;
             psHandle->u32ImpulseDuration = psHandle->u32TimedAdidtionalDelayMs;
             Switch_vWritePin(psHandle, (uint8_t) true);
-            Presentable_vSetState((PRESENTABLE_T *)psHandle, (uint8_t) true, true);
+            Presentable_vSetState((PRESENTABLE_T *)psHandle, (int32_t) true, true);
         }
         else
         {
@@ -269,7 +275,7 @@ void Switch_vEventHandle(SWITCH_T *psHandle, uint8_t u8EventType, uint32_t u32Da
             psHandle->u32ImpulseStarted = 0U;
             psHandle->u32ImpulseDuration = 0U;
             Switch_vWritePin(psHandle, (uint8_t) false);
-            Presentable_vSetState((PRESENTABLE_T *)psHandle, (uint8_t) false, true);
+            Presentable_vSetState((PRESENTABLE_T *)psHandle, (int32_t) false, true);
             psHandle->sPresentable.bStateChanged = false;
         }
     }

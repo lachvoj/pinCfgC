@@ -1,11 +1,3 @@
-/**
- * @file PinCfgParse.h
- * @brief Parser internal types and structures
- * 
- * This header contains types used internally by the parser subsystem.
- * Separated to avoid circular dependencies between modules.
- */
-
 #ifndef PINCFG_PARSE_H
 #define PINCFG_PARSE_H
 
@@ -27,7 +19,7 @@ typedef struct PINCFG_PARSE_SUBFN_PARAMS_S
     size_t szNumberOfWarnings;
     STRING_POINT_T sLine;
     STRING_POINT_T sTempStrPt;
-    LINKEDLIST_ITEM_T *psMeasurementsListHead;  // Measurements during parsing only
+    LINKEDLIST_ITEM_T *psMeasurementsListHead; // Measurements during parsing only
 } PINCFG_PARSE_SUBFN_PARAMS_T;
 
 #endif // PINCFG_PARSE_H

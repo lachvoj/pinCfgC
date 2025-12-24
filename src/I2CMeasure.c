@@ -1,9 +1,12 @@
 #ifdef PINCFG_FEATURE_I2C_MEASUREMENT
 
-#include "I2CMeasure.h"
-#include "WireWrapper.h"
-#include "SensorMeasure.h"
 #include <string.h>
+
+#include "I2CMeasure.h"
+#include "PinCfgUtils.h"
+#include "SensorMeasure.h"
+#include "WireWrapper.h"
+
 
 #ifdef UNIT_TEST
 #include "ArduinoMock.h"
@@ -14,9 +17,6 @@
 // Default timeout for I2C operations (milliseconds)
 #define I2CMEASURE_DEFAULT_TIMEOUT_MS 100
 
-/**
- * @brief Initialize I2C measurement instance
- */
 PINCFG_RESULT_T I2CMeasure_eInit(
     I2CMEASURE_T *psHandle,
     STRING_POINT_T *psName,
@@ -62,7 +62,7 @@ PINCFG_RESULT_T I2CMeasure_eInit(
     // Set I2C configuration
     psHandle->u8DeviceAddress = u8DeviceAddress;
     psHandle->u8DataSize = u8DataSize;
-    
+
     // Copy command bytes
     psHandle->u8CommandLength = u8CommandLength;
     for (uint8_t i = 0; i < u8CommandLength; i++)
@@ -84,19 +84,6 @@ PINCFG_RESULT_T I2CMeasure_eInit(
     return PINCFG_OK_E;
 }
 
-/**
- * @brief Read measurement from I2C device (non-blocking state machine)
- * 
- * Returns raw bytes from I2C buffer. Sensor layer handles byte extraction and conversion.
- * 
- * @param pSelf Pointer to ISENSORMEASURE_T interface
- * @param pu8Buffer Output buffer for raw bytes (must be at least 6 bytes)
- * @param pu8Size Input/Output: max buffer size in, actual bytes out
- * @param u32ms Current time in milliseconds
- * @return ISENSORMEASURE_OK_E when data ready
- *         ISENSORMEASURE_PENDING_E when operation in progress
- *         ISENSORMEASURE_ERROR_E on timeout or error
- */
 ISENSORMEASURE_RESULT_T I2CMeasure_eMeasure(
     ISENSORMEASURE_T *pSelf,
     uint8_t *pu8Buffer,
@@ -114,7 +101,7 @@ ISENSORMEASURE_RESULT_T I2CMeasure_eMeasure(
 
     // Run state machine (same as eMeasure, but don't convert to float)
     // We'll copy the buffer when in DATA_READY state
-    
+
     switch (psHandle->eState)
     {
     case I2CMEASURE_STATE_IDLE_E:
@@ -145,7 +132,7 @@ ISENSORMEASURE_RESULT_T I2CMeasure_eMeasure(
 
     case I2CMEASURE_STATE_COMMAND_SENT_E:
         // Wait for conversion delay
-        if ((u32ms - psHandle->u32RequestTime) >= psHandle->u16ConversionDelayMs)
+        if (PinCfg_u32GetElapsedTime(psHandle->u32RequestTime, u32ms) >= psHandle->u16ConversionDelayMs)
         {
             Wire_u8RequestFrom(psHandle->u8DeviceAddress, psHandle->u8DataSize);
             psHandle->u32RequestTime = u32ms;
@@ -168,7 +155,7 @@ ISENSORMEASURE_RESULT_T I2CMeasure_eMeasure(
         }
 
         // Check timeout
-        if ((u32ms - psHandle->u32RequestTime) > psHandle->u16TimeoutMs)
+        if (PinCfg_u32GetElapsedTime(psHandle->u32RequestTime, u32ms) > psHandle->u16TimeoutMs)
         {
             psHandle->eState = I2CMEASURE_STATE_ERROR_E;
             return ISENSORMEASURE_ERROR_E;
@@ -183,7 +170,7 @@ ISENSORMEASURE_RESULT_T I2CMeasure_eMeasure(
             uint8_t u8CopySize = psHandle->u8DataSize;
             if (u8CopySize > *pu8Size)
             {
-                u8CopySize = *pu8Size;  // Limit to buffer size
+                u8CopySize = *pu8Size; // Limit to buffer size
             }
 
             for (uint8_t i = 0; i < u8CopySize; i++)
@@ -191,7 +178,7 @@ ISENSORMEASURE_RESULT_T I2CMeasure_eMeasure(
                 pu8Buffer[i] = psHandle->au8Buffer[i];
             }
 
-            *pu8Size = u8CopySize;  // Return actual bytes copied
+            *pu8Size = u8CopySize; // Return actual bytes copied
         }
 
         // Reset for next read
@@ -199,9 +186,7 @@ ISENSORMEASURE_RESULT_T I2CMeasure_eMeasure(
         return ISENSORMEASURE_OK_E;
 
     case I2CMEASURE_STATE_ERROR_E:
-    default:
-        psHandle->eState = I2CMEASURE_STATE_IDLE_E;
-        return ISENSORMEASURE_ERROR_E;
+    default: psHandle->eState = I2CMEASURE_STATE_IDLE_E; return ISENSORMEASURE_ERROR_E;
     }
 }
 

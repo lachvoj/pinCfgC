@@ -5,27 +5,48 @@
 #include "Globals.h"
 #include "Memory.h"
 #include "MySensorsWrapper.h"
-#include "PersistentConfigiration.h"
+#include "PersistentConfiguration.h"
 #include "PinCfgCsv.h"
 
-static const char *_apcStateStrings[] =
-    {"LISTENING", "OUT_OF_MEMORY_ERROR", "RECEIVING", "RECEIVED", "VALIDATING", "VALIDATION_OK", "VALIDATION_ERROR"};
+static const char *_apcStateStrings[] = {
+    "READY",
+    "OUT_OF_MEMORY_ERROR",
+    "RECEIVING_AUTH",
+    "RECEIVING_DATA",
+    "RECEIVED",
+    "VALIDATING",
+    "VALIDATION_OK",
+    "VALIDATION_ERROR"};
 
-static const char *_pcCfgBegin = "#[";
-static const char *_pcCfgEND = "]#";
-static const char *_pcCmdBegin = "#C:";
-static const char *_pcAuthPrefix = "PWD:";  // Password prefix for commands
+static const char *_pcMsgBegin = "#[";
+static const char *_pcMsgEND = "]#";
+static const char *_pcCfgPrefix = "CFG:";
+static const char *_pcCmdPrefix = "CMD:";
+
+static const char *_pcLockedOutMsg = "Locked out. Try again later.";
+static const char *_pcAuthFailedMsg = "Authentication failed.";
+static const char *_pcAutnRequiredMsg = "Authentication required.";
+static const char *_pcInvalidPwdLenMsg = "Invalid pwd length.";
+static const char *_pcDataTooLargeMsg = "Data too large.";
+static const char *_pcInvalidMsgTypeMsg = "Invalid message type.";
 
 static void Cli_vConfigurationReceived(CLI_T *psHandle);
-static void Cli_vCommandFunction(CLI_T *psHandle, char *cmd);
+static void Cli_vExecuteCommand(CLI_T *psHandle, char *pcCmd);
 static void Cli_vSendBigMessage(CLI_T *psHandle, char *pcBigMsg);
-static void Cli_vSendMessage(CLI_T *psHandle, const char *pvMessage);
+static void Cli_vResetState(CLI_T *psHandle);
+static bool Cli_bHandleAuthResult(CLI_T *psHandle, CLI_AUTH_RESULT_T eResult);
+static void Cli_vProcessAfterAuth(
+    CLI_T *psHandle,
+    PRESENTABLE_T *psBaseHandle,
+    char *pcDataStart,
+    const char *pcMessage);
+static void Cli_vFinalizeData(CLI_T *psHandle);
 
 #if defined(ARDUINO) && !defined(TEST)
 #ifdef ARDUINO_ARCH_STM32F1
 void resetFunc(void)
 {
-    asm("b Reset_Handler"); 
+    asm("b Reset_Handler");
 }
 #else
 void (*resetFunc)(void) = 0; // declare reset fuction at address 0
@@ -41,6 +62,7 @@ void Cli_vInitType(PRESENTABLE_VTAB_T *psVtab)
     psVtab->eVType = V_TEXT;
     psVtab->eSType = S_INFO;
     psVtab->vReceive = Cli_vRcvMessage;
+    psVtab->vPresent = Presentable_vPresent;
 }
 
 CLI_RESULT_T Cli_eInit(CLI_T *psHandle, uint8_t u8Id)
@@ -54,6 +76,7 @@ CLI_RESULT_T Cli_eInit(CLI_T *psHandle, uint8_t u8Id)
     psHandle->sPresentable.psVtab = &psGlobals->sCliPrVTab;
 
     // LOOPRE init
+    psHandle->sPresentable.ePayloadType = P_STRING;
     psHandle->sPresentable.pcName = "CLI";
     psHandle->sPresentable.u8Id = u8Id;
 #ifdef MY_CONTROLLER_HA
@@ -63,44 +86,145 @@ CLI_RESULT_T Cli_eInit(CLI_T *psHandle, uint8_t u8Id)
     // Initialize handle items
     psHandle->pcCfgBuf = NULL;
     psHandle->eMode = CLI_LINE_E;
-    psHandle->eState = CLI_LISTENING_E;
-    psHandle->pcState = _apcStateStrings[CLI_LISTENING_E];
+    psHandle->eState = CLI_READY_E;
+    psHandle->sPresentable.pcState = _apcStateStrings[CLI_READY_E];
+    psHandle->bIsConfig = false;
     psHandle->bAuthenticated = false;
+
+    // Initialize rate limiting
+    psHandle->u8FailedAttempts = 0;
+    psHandle->u32LockoutUntilMs = 0;
 
     return CLI_OK_E;
 }
 
-void Cli_vSetState(
-    CLI_T *psHandle,
-    CLI_STATE_T eState,
-    const char *psState,
-    bool bSendState)
+void Cli_vSetState(CLI_T *psHandle, CLI_STATE_T eState, const char *psState, bool bSendState)
 {
     psHandle->eState = eState;
     if (eState == CLI_CUSTOM_E)
     {
         if (psState != NULL)
-            psHandle->pcState = psState;
+            psHandle->sPresentable.pcState = psState;
         else
         {
-            psHandle->pcState = NULL;
+            psHandle->sPresentable.pcState = NULL;
             bSendState = false;
         }
     }
     else
-        psHandle->pcState = _apcStateStrings[eState];
+        psHandle->sPresentable.pcState = _apcStateStrings[eState];
 
     if (bSendState)
-        Cli_vSendMessage(psHandle, psHandle->pcState);
+        Presentable_vSendState((PRESENTABLE_T *)psHandle);
+}
+
+// Helper: Reset CLI state and optionally free buffer
+static void Cli_vResetState(CLI_T *psHandle)
+{
+    psHandle->eState = CLI_READY_E;
+    psHandle->u16CfgNext = 0;
+    psHandle->bIsConfig = false;
+    psHandle->bAuthenticated = false;
+}
+
+// Helper: Handle auth result, returns true if auth succeeded
+static bool Cli_bHandleAuthResult(CLI_T *psHandle, CLI_AUTH_RESULT_T eResult)
+{
+    if (eResult == CLI_AUTH_OK_E)
+    {
+        psHandle->bAuthenticated = true;
+        return true;
+    }
+    else if (eResult == CLI_AUTH_LOCKED_OUT_E)
+    {
+        Cli_vSetState(psHandle, CLI_CUSTOM_E, _pcLockedOutMsg, true);
+    }
+    else
+    {
+        Cli_vSetState(psHandle, CLI_CUSTOM_E, _pcAuthFailedMsg, true);
+    }
+    Cli_vResetState(psHandle);
+    return false;
+}
+
+// Helper: Finalize received data (call appropriate handler based on bIsConfig)
+static void Cli_vFinalizeData(CLI_T *psHandle)
+{
+    if (psHandle->bIsConfig)
+    {
+        psHandle->eState = CLI_RECEIVED_E;
+        Cli_vConfigurationReceived(psHandle);
+        Memory_vTempFreePt(psHandle->pcCfgBuf);
+    }
+    else
+    {
+        Cli_vExecuteCommand(psHandle, psHandle->pcCfgBuf);
+    }
+    Cli_vResetState(psHandle);
+}
+
+// Helper: Process message type (CFG:/CMD:) after successful authentication
+// pcDataStart points to position after '/' (where CFG: or CMD: should be)
+static void Cli_vProcessAfterAuth(
+    CLI_T *psHandle,
+    PRESENTABLE_T *psBaseHandle,
+    char *pcDataStart,
+    const char *pcMessage)
+{
+    // Check for CFG: or CMD: prefix
+    if (strncmp(pcDataStart, _pcCfgPrefix, strlen(_pcCfgPrefix)) == 0)
+    {
+        psHandle->bIsConfig = true;
+        pcDataStart += strlen(_pcCfgPrefix);
+    }
+    else if (strncmp(pcDataStart, _pcCmdPrefix, strlen(_pcCmdPrefix)) == 0)
+    {
+        psHandle->bIsConfig = false;
+        pcDataStart += strlen(_pcCmdPrefix);
+    }
+    else
+    {
+        Cli_vSetState(psHandle, CLI_CUSTOM_E, _pcInvalidMsgTypeMsg, true);
+        Cli_vResetState(psHandle);
+        return;
+    }
+
+    // Check if complete message in same fragment
+    char *pcMsgEnd = strstr(pcDataStart, _pcMsgEND);
+    if (pcMsgEnd != NULL)
+    {
+        // Complete data in same fragment
+        size_t szLen = pcMsgEnd - pcDataStart;
+        memcpy(psHandle->pcCfgBuf, pcDataStart, szLen);
+        psHandle->pcCfgBuf[szLen] = '\0';
+        Cli_vFinalizeData(psHandle);
+    }
+    else
+    {
+        // Data continues in more fragments
+        size_t szCopy = strlen(pcDataStart);
+        if (szCopy >= PINCFG_CONFIG_MAX_SZ_D)
+        {
+            Cli_vSetState(psHandle, CLI_CUSTOM_E, _pcDataTooLargeMsg, true);
+            Cli_vResetState(psHandle);
+            return;
+        }
+        memcpy(psHandle->pcCfgBuf, pcDataStart, szCopy);
+        psHandle->pcCfgBuf[szCopy] = '\0';
+        psHandle->u16CfgNext = szCopy;
+        Cli_vSetState(psHandle, CLI_RECEIVING_DATA_E, NULL, false);
+        psBaseHandle->pcState = pcMessage;
+        Presentable_vSendState(psBaseHandle);
+    }
 }
 
 // presentable IF
-void Cli_vRcvMessage(PRESENTABLE_T *psBaseHandle, const void *pvMessage)
+void Cli_vRcvMessage(PRESENTABLE_T *psBaseHandle, const MyMessage *pcMsg)
 {
     CLI_T *psHandle = (CLI_T *)psBaseHandle;
-    const char *pcMessage = (const char *)pvMessage;
-    bool bCopied = false;
+    const char *pcMessage = pcMsg->data;
 
+    // Allocate buffer if needed
     if (psHandle->pcCfgBuf == NULL)
     {
         size_t szFreeMemory = Memory_szGetFree();
@@ -115,108 +239,157 @@ void Cli_vRcvMessage(PRESENTABLE_T *psBaseHandle, const void *pvMessage)
             }
         }
         // TODO: Implement line mode
-        // else
-        // {
-        //     if (szFreeMemory < PINCFG_CLI_MAX_LINE_SZ_D)
-        //     {
-        //         Cli_vSetState(psHandle, CLI_OUT_OF_MEM_ERR_E, NULL, true);
-        //         return;
-        //     }
-        //     psHandle->eMode = CLI_LINE_E;
-        //     psHandle->pcCfgBuf = (char *)Memory_vpTempAlloc(PINCFG_CLI_MAX_LINE_SZ_D);
-        //     if (psHandle->pcCfgBuf == NULL)
-        //     {
-        //         Cli_vSetState(psHandle, CLI_OUT_OF_MEM_ERR_E, NULL, true);
-        //         return;
-        //     }
-        // }
     }
 
 #ifdef MY_CONTROLLER_HA
     psHandle->sPresentable.bStatePresented = true;
 #endif
-    // CLI_STATE_T eOldState = psHandle->eState;
 
-    if (psHandle->eState == CLI_LISTENING_E)
+    // STATE: READY - Detect message type and start auth
+    if (psHandle->eState == CLI_READY_E)
     {
-        char *pcStartString = strstr((char *)pcMessage, _pcCfgBegin);
-        if (pcStartString != NULL)
+        // Check for unified message format: #[<password>/<type>:...]#
+        char *pcStartString = strstr((char *)pcMessage, _pcMsgBegin);
+        if (pcStartString == NULL)
         {
-            // Check for authentication in format: #[PWD:password/config...]#
-            char *pcAuthStart = strstr(pcStartString, _pcAuthPrefix);
-            if (pcAuthStart == pcStartString + strlen(_pcCfgBegin))
+            return;
+        }
+
+        // Password starts right after #[
+        char *pcPwdStart = pcStartString + strlen(_pcMsgBegin);
+        char *pcPwdEnd = strchr(pcPwdStart, '/');
+
+        if (pcPwdEnd != NULL)
+        {
+            // Full pwd in first fragment
+            size_t pwdLen = pcPwdEnd - pcPwdStart;
+            if (pwdLen == 0 || pwdLen > PINCFG_AUTH_HEX_PASSWORD_LEN_D)
             {
-                // Extract password (terminated by '/')
-                char *pcPwdStart = pcAuthStart + strlen(_pcAuthPrefix);
-                char *pcPwdEnd = strchr(pcPwdStart, '/');
-                
-                if (pcPwdEnd != NULL && (pcPwdEnd - pcPwdStart) < PINCFG_AUTH_PASSWORD_MAX_LEN_D)
-                {
-                    // Parse password
-                    char acPassword[PINCFG_AUTH_PASSWORD_MAX_LEN_D];
-                    size_t pwdLen = pcPwdEnd - pcPwdStart;
-                    memcpy(acPassword, pcPwdStart, pwdLen);
-                    acPassword[pwdLen] = '\0';
-                    
-                    if (CliAuth_eVerifyPassword(acPassword) == CLI_AUTH_OK_E)
-                    {
-                        // Authentication successful
-                        psHandle->bAuthenticated = true;
-                        
-                        // Copy config data (without password) to buffer
-                        strcpy(psHandle->pcCfgBuf, pcPwdEnd + 1);
-                        psHandle->u16CfgNext = strlen(pcPwdEnd + 1);
-                        bCopied = true;
-                        Cli_vSetState(psHandle, CLI_RECEIVING_E, NULL, true);
-                    }
-                    else
-                    {
-                        Cli_vSetState(psHandle, CLI_CUSTOM_E, "Authentication failed.", true);
-                        Cli_vSetState(psHandle, CLI_LISTENING_E, NULL, true);
-                        return;
-                    }
-                }
-                else
-                {
-                    Cli_vSetState(psHandle, CLI_CUSTOM_E, "Invalid auth format. Use: #[PWD:password/config...]#", true);
-                    Cli_vSetState(psHandle, CLI_LISTENING_E, NULL, true);
-                    return;
-                }
-            }
-            else
-            {
-                // No authentication provided
-                Cli_vSetState(psHandle, CLI_CUSTOM_E, "Authentication required.", true);
-                Cli_vSetState(psHandle, CLI_LISTENING_E, NULL, true);
+                Cli_vSetState(psHandle, CLI_CUSTOM_E, _pcInvalidPwdLenMsg, true);
+                Cli_vResetState(psHandle);
                 return;
             }
+
+            // Copy and verify pwd
+            char acPassword[PINCFG_AUTH_HEX_PASSWORD_LEN_D + 1];
+            memcpy(acPassword, pcPwdStart, pwdLen);
+            acPassword[pwdLen] = '\0';
+
+            CLI_AUTH_RESULT_T eAuthResult = CliAuth_eVerifyPasswordRateLimited(
+                acPassword, u32Millis(), &psHandle->u8FailedAttempts, &psHandle->u32LockoutUntilMs);
+
+            if (!Cli_bHandleAuthResult(psHandle, eAuthResult))
+                return;
+
+            // Auth successful - process message type
+            Cli_vProcessAfterAuth(psHandle, psBaseHandle, pcPwdEnd + 1, pcMessage);
         }
         else
         {
-            pcStartString = strstr((char *)pcMessage, _pcCmdBegin);
-            if (pcStartString != NULL)
-                Cli_vCommandFunction(psHandle, pcStartString + strlen(_pcCmdBegin));
+            // Password continues in more fragments
+            size_t szPartialLen = strlen(pcPwdStart);
+            if (szPartialLen > PINCFG_AUTH_HEX_PASSWORD_LEN_D)
+            {
+                Cli_vSetState(psHandle, CLI_CUSTOM_E, _pcInvalidPwdLenMsg, true);
+                Cli_vResetState(psHandle);
+                return;
+            }
+            memcpy(psHandle->pcCfgBuf, pcPwdStart, szPartialLen);
+            psHandle->u16CfgNext = szPartialLen;
+            Cli_vSetState(psHandle, CLI_RECEIVING_AUTH_E, NULL, false);
+            psBaseHandle->pcState = pcMessage;
+            Presentable_vSendState(psBaseHandle);
         }
+        return;
     }
-    if (psHandle->eState == CLI_RECEIVING_E)
+
+    // STATE: RECEIVING_AUTH - Continue receiving fragmented pwd
+    if (psHandle->eState == CLI_RECEIVING_AUTH_E)
     {
-        char *pcEndString = strstr((char *)pcMessage, _pcCfgEND);
+        char *pcPwdEnd = strchr(pcMessage, '/');
+
+        if (pcPwdEnd != NULL)
+        {
+            // Found pwd terminator
+            size_t szFragmentLen = pcPwdEnd - pcMessage;
+            size_t szTotalPwdLen = psHandle->u16CfgNext + szFragmentLen;
+
+            if (szTotalPwdLen > PINCFG_AUTH_HEX_PASSWORD_LEN_D)
+            {
+                Cli_vSetState(psHandle, CLI_CUSTOM_E, _pcInvalidPwdLenMsg, true);
+                Cli_vResetState(psHandle);
+                return;
+            }
+
+            // Complete pwd in buffer
+            memcpy(psHandle->pcCfgBuf + psHandle->u16CfgNext, pcMessage, szFragmentLen);
+            psHandle->pcCfgBuf[szTotalPwdLen] = '\0';
+
+            CLI_AUTH_RESULT_T eAuthResult = CliAuth_eVerifyPasswordRateLimited(
+                psHandle->pcCfgBuf, u32Millis(), &psHandle->u8FailedAttempts, &psHandle->u32LockoutUntilMs);
+
+            if (!Cli_bHandleAuthResult(psHandle, eAuthResult))
+                return;
+
+            // Auth successful - process message type
+            Cli_vProcessAfterAuth(psHandle, psBaseHandle, pcPwdEnd + 1, pcMessage);
+        }
+        else
+        {
+            // Password continues
+            size_t szFragmentLen = strlen(pcMessage);
+            size_t szNewTotal = psHandle->u16CfgNext + szFragmentLen;
+
+            if (szNewTotal > PINCFG_AUTH_HEX_PASSWORD_LEN_D)
+            {
+                Cli_vSetState(psHandle, CLI_CUSTOM_E, _pcInvalidPwdLenMsg, true);
+                Cli_vResetState(psHandle);
+                return;
+            }
+
+            memcpy(psHandle->pcCfgBuf + psHandle->u16CfgNext, pcMessage, szFragmentLen);
+            psHandle->u16CfgNext = szNewTotal;
+            psBaseHandle->pcState = pcMessage;
+            Presentable_vSendState(psBaseHandle);
+        }
+        return;
+    }
+
+    // STATE: RECEIVING_DATA - Continue receiving config or command data
+    if (psHandle->eState == CLI_RECEIVING_DATA_E)
+    {
+        char *pcEndString = strstr((char *)pcMessage, _pcMsgEND);
         if (pcEndString != NULL)
         {
+            // End marker found - finalize
             size_t szLen = pcEndString - pcMessage;
-            psHandle->eState = CLI_RECEIVED_E;
+            if (psHandle->u16CfgNext + szLen >= PINCFG_CONFIG_MAX_SZ_D)
+            {
+                Cli_vSetState(psHandle, CLI_CUSTOM_E, _pcDataTooLargeMsg, true);
+                Cli_vResetState(psHandle);
+                return;
+            }
             memcpy(psHandle->pcCfgBuf + psHandle->u16CfgNext, pcMessage, szLen);
-            bCopied = true;
             psHandle->pcCfgBuf[psHandle->u16CfgNext + szLen] = '\0';
-            Cli_vConfigurationReceived(psHandle);
-            Memory_vTempFreePt(psHandle->pcCfgBuf);
-            psHandle->bAuthenticated = false;  // Reset authentication after use
+            Cli_vFinalizeData(psHandle);
         }
-        if (!bCopied)
+        else
         {
-            strcpy(psHandle->pcCfgBuf + psHandle->u16CfgNext, pcMessage);
-            psHandle->u16CfgNext += strlen(pcMessage);
+            // Continue accumulating
+            size_t szCopy = strlen(pcMessage);
+            if (psHandle->u16CfgNext + szCopy >= PINCFG_CONFIG_MAX_SZ_D)
+            {
+                Cli_vSetState(psHandle, CLI_CUSTOM_E, _pcDataTooLargeMsg, true);
+                Cli_vResetState(psHandle);
+                return;
+            }
+            memcpy(psHandle->pcCfgBuf + psHandle->u16CfgNext, pcMessage, szCopy);
+            psHandle->u16CfgNext += szCopy;
+            psHandle->pcCfgBuf[psHandle->u16CfgNext] = '\0';
+            psBaseHandle->pcState = pcMessage;
+            Presentable_vSendState(psBaseHandle);
         }
+        return;
     }
 }
 
@@ -228,7 +401,7 @@ static void Cli_vConfigurationReceived(CLI_T *psHandle)
 #ifdef USE_MALLOC
     const size_t szFreeMemory = PINCFG_CONFIG_MAX_SZ_D;
 #else
-    const size_t szFreeMemory =  Memory_szGetFree() - (10 * sizeof(char *)); // leave some space for other allocations
+    const size_t szFreeMemory = Memory_szGetFree() - (10 * sizeof(char *)); // leave some space for other allocations
 #endif // USE_MALLOC
     char *pcOut = (char *)Memory_vpTempAlloc(szFreeMemory);
     if (pcOut != NULL)
@@ -244,8 +417,8 @@ static void Cli_vConfigurationReceived(CLI_T *psHandle)
     if (eValidationResult == PINCFG_OK_E)
     {
         Cli_vSetState(psHandle, CLI_VALIDATION_OK_E, NULL, true);
-        // Save config without password (PersistentCfg will preserve existing password)
-        if (PersistentCfg_eSaveConfig(psHandle->pcCfgBuf, strlen(psHandle->pcCfgBuf)) == PERCFG_OK_E)
+        // Save config (PersistentCfg will preserve existing pwd)
+        if (PersistentCfg_eSaveConfig(psHandle->pcCfgBuf) == PERCFG_OK_E)
             resetFunc();
         else
             Cli_vSetState(psHandle, CLI_CUSTOM_E, "Save of cfg unsucessfull.", true);
@@ -262,130 +435,78 @@ static void Cli_vConfigurationReceived(CLI_T *psHandle)
 
     if (pcOut != NULL)
         Memory_vTempFreePt(pcOut);
-    
-    Cli_vSetState(psHandle, CLI_LISTENING_E, NULL, true);
+
+    Cli_vSetState(psHandle, CLI_READY_E, NULL, true);
 }
 
-static void Cli_vCommandFunction(CLI_T *psHandle, char *cmd)
+// Execute command after authentication (pcCmd is command string without pwd)
+static void Cli_vExecuteCommand(CLI_T *psHandle, char *pcCmd)
 {
-    // Commands format: #C:PWD:password:COMMAND or #C:PWD:password:CHANGE_PWD:newpassword
-    
-    // Check if command starts with PWD:
-    if (strncmp(cmd, _pcAuthPrefix, strlen(_pcAuthPrefix)) == 0)
+    if (strncmp(pcCmd, "CHANGE_PWD:", 11) == 0)
     {
-        char *pcPwdStart = cmd + strlen(_pcAuthPrefix);
-        char *pcCmdStart = strchr(pcPwdStart, ':');
-        
-        if (pcCmdStart == NULL)
-        {
-            Cli_vSetState(psHandle, CLI_CUSTOM_E, "Invalid command format. Use: #C:PWD:password:COMMAND", true);
-            Cli_vSetState(psHandle, CLI_LISTENING_E, NULL, true);
-            return;
-        }
-        
-        // Parse authentication password
-        size_t pwdLen = pcCmdStart - pcPwdStart;
-        if (pwdLen == 0 || pwdLen >= PINCFG_AUTH_PASSWORD_MAX_LEN_D)
-        {
-            Cli_vSetState(psHandle, CLI_CUSTOM_E, "Invalid password length.", true);
-            Cli_vSetState(psHandle, CLI_LISTENING_E, NULL, true);
-            return;
-        }
-        
-        char acPassword[PINCFG_AUTH_PASSWORD_MAX_LEN_D];
-        memcpy(acPassword, pcPwdStart, pwdLen);
-        acPassword[pwdLen] = '\0';
-        
-        // Verify authentication
-        if (CliAuth_eVerifyPassword(acPassword) != CLI_AUTH_OK_E)
-        {
-            Cli_vSetState(psHandle, CLI_CUSTOM_E, "Authentication failed.", true);
-            Cli_vSetState(psHandle, CLI_LISTENING_E, NULL, true);
-            return;
-        }
-        
-        // Authentication successful, process command
-        pcCmdStart++; // Skip ':'
-        
-        if (strncmp(pcCmdStart, "CHANGE_PWD:", 11) == 0)
-        {
-            // Change password: #C:PWD:currentpassword:CHANGE_PWD:newpassword
-            char *pcNewPwdStart = pcCmdStart + 11;
-            size_t newPwdLen = strlen(pcNewPwdStart);
-            
-            if (newPwdLen == 0 || newPwdLen >= PINCFG_AUTH_PASSWORD_MAX_LEN_D)
-            {
-                Cli_vSetState(psHandle, CLI_CUSTOM_E, "Invalid new password length.", true);
-                Cli_vSetState(psHandle, CLI_LISTENING_E, NULL, true);
-                return;
-            }
-            
-            CLI_AUTH_RESULT_T eResult = CliAuth_eChangePassword(acPassword, pcNewPwdStart);
-            
-            if (eResult == CLI_AUTH_OK_E)
-            {
-                Cli_vSetState(psHandle, CLI_CUSTOM_E, "Password changed successfully.", true);
-            }
-            else
-            {
-                Cli_vSetState(psHandle, CLI_CUSTOM_E, "Password change failed.", true);
-            }
-            Cli_vSetState(psHandle, CLI_LISTENING_E, NULL, true);
-            return;
-        }
-        else if (strcmp(pcCmdStart, "GET_CFG") == 0)
-        {
-            uint16_t u16CfgSize = 0;
-            if (PersistentCfg_eGetConfigSize(&u16CfgSize) != PERCFG_OK_E)
-            {
-                Cli_vSetState(psHandle, CLI_CUSTOM_E, "Unable to read cfg size.", true);
-                Cli_vSetState(psHandle, CLI_LISTENING_E, NULL, true);
-                return;
-            }
+        // Change pwd: CHANGE_PWD:newpassword
+        char *pcNewPwdStart = pcCmd + 11;
+        size_t newPwdLen = strlen(pcNewPwdStart);
 
-            if (u16CfgSize == 0)
-            {
-                Cli_vSetState(psHandle, CLI_CUSTOM_E, "No config data.", true);
-                Cli_vSetState(psHandle, CLI_LISTENING_E, NULL, true);
-                return;
-            }
-            
-            char *pcCfgBuf = Memory_vpTempAlloc(u16CfgSize + 1);
-            if (pcCfgBuf == NULL)
-            {
-                Cli_vSetState(psHandle, CLI_OUT_OF_MEM_ERR_E, NULL, true);
-                Cli_vSetState(psHandle, CLI_LISTENING_E, NULL, true);
-                return;
-            }
-
-            if (PersistentCfg_eLoadConfig(pcCfgBuf) != PERCFG_OK_E)
-            {
-                Cli_vSetState(psHandle, CLI_CUSTOM_E, "Unable to load cfg.", true);
-                Memory_vTempFreePt(pcCfgBuf);
-                Cli_vSetState(psHandle, CLI_LISTENING_E, NULL, true);
-                return;
-            }
-
-            // Send config data (password already excluded by LoadConfigOnly)
-            Cli_vSendBigMessage(psHandle, pcCfgBuf);
-            Memory_vTempFreePt(pcCfgBuf);
-            Cli_vSetState(psHandle, CLI_LISTENING_E, NULL, true);
-        }
-        else if (strcmp(pcCmdStart, "RESET") == 0)
+        if (newPwdLen == 0 || newPwdLen > PINCFG_AUTH_HEX_PASSWORD_LEN_D)
         {
-            resetFunc();
+            Cli_vSetState(psHandle, CLI_CUSTOM_E, "Invalid new pwd length.", true);
+            return;
+        }
+
+        // For pwd change, we need the current pwd which is already verified
+        // Use the verified pwd from buffer (stored during auth)
+        CLI_AUTH_RESULT_T eResult = CliAuth_eSetPassword(pcNewPwdStart);
+
+        if (eResult == CLI_AUTH_OK_E)
+        {
+            Cli_vSetState(psHandle, CLI_CUSTOM_E, "Pwd changed OK.", true);
         }
         else
         {
-            Cli_vSetState(psHandle, CLI_CUSTOM_E, "Unknown command.", true);
-            Cli_vSetState(psHandle, CLI_LISTENING_E, NULL, true);
+            Cli_vSetState(psHandle, CLI_CUSTOM_E, "Pwd change failed.", true);
         }
+    }
+    else if (strcmp(pcCmd, "GET_CFG") == 0)
+    {
+        uint16_t u16CfgSize = 0;
+        if (PersistentCfg_eGetConfigSize(&u16CfgSize) != PERCFG_OK_E)
+        {
+            Cli_vSetState(psHandle, CLI_CUSTOM_E, "Unable to read cfg size.", true);
+            return;
+        }
+
+        if (u16CfgSize == 0)
+        {
+            Cli_vSetState(psHandle, CLI_CUSTOM_E, "No config data.", true);
+            return;
+        }
+
+        char *pcCfgBuf = Memory_vpTempAlloc(u16CfgSize + 1);
+        if (pcCfgBuf == NULL)
+        {
+            Cli_vSetState(psHandle, CLI_OUT_OF_MEM_ERR_E, NULL, true);
+            return;
+        }
+
+        if (PersistentCfg_eLoadConfig(pcCfgBuf) != PERCFG_OK_E)
+        {
+            Cli_vSetState(psHandle, CLI_CUSTOM_E, "Unable to load cfg.", true);
+            Memory_vTempFreePt(pcCfgBuf);
+            return;
+        }
+
+        Cli_vSendBigMessage(psHandle, pcCfgBuf);
+        Memory_vTempFreePt(pcCfgBuf);
+        Cli_vSetState(psHandle, CLI_READY_E, NULL, true);
+    }
+    else if (strcmp(pcCmd, "RESET") == 0)
+    {
+        resetFunc();
     }
     else
     {
-        // No authentication provided
-        Cli_vSetState(psHandle, CLI_CUSTOM_E, "Authentication required for commands.", true);
-        Cli_vSetState(psHandle, CLI_LISTENING_E, NULL, true);
+        Cli_vSetState(psHandle, CLI_CUSTOM_E, "Unknown command.", true);
     }
 }
 
@@ -393,26 +514,14 @@ static void Cli_vSendBigMessage(CLI_T *psHandle, char *pcBigMsg)
 {
     size_t szMsgSize = strlen(pcBigMsg);
     uint8_t u8MyMsgsCount = szMsgSize / PINCFG_TXTSTATE_MAX_SZ_D;
+
     if ((szMsgSize % PINCFG_TXTSTATE_MAX_SZ_D) > 0)
         u8MyMsgsCount++;
 
     for (uint8_t u8i = 0; u8i < u8MyMsgsCount; u8i++)
     {
-        Cli_vSendMessage(psHandle, pcBigMsg + (u8i * PINCFG_TXTSTATE_MAX_SZ_D));
+        psHandle->sPresentable.pcState = pcBigMsg + (u8i * PINCFG_TXTSTATE_MAX_SZ_D);
+        Presentable_vSendState((PRESENTABLE_T *)psHandle);
         vWait(PINCFG_LONG_MESSAGE_DELAY_MS_D);
     }
-}
-
-static void Cli_vSendMessage(CLI_T *psHandle, const char *pcMessage)
-{
-    PRESENTABLE_T *psBaseHandle = (PRESENTABLE_T *)psHandle;
-    MyMessage msg;
-
-    if (eMyMessageInit(&msg, psBaseHandle->u8Id, psBaseHandle->psVtab->eVType) != WRAP_OK_E)
-        return;
-
-    if (eMyMessageSetCStr(&msg, pcMessage) != WRAP_OK_E)
-        return;
-
-    eSend(&msg, false);
 }

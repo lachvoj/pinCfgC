@@ -65,6 +65,14 @@ void *Memory_vpAlloc(size_t szSize)
         return pvResult;
     }
 
+    // Check for integer overflow before calculating aligned size
+    const size_t szOverheadMax = sizeof(void *) - 1;
+    if (szSize > SIZE_MAX - szOverheadMax)
+    {
+        errno = ENOMEM;
+        return pvResult;
+    }
+
     size_t szToAlloc = ((szSize + sizeof(void *) - 1) / sizeof(void *)) * sizeof(void *);
 
     char *pvNextAfterAllocation = psGlobals->pvMemNext + szToAlloc;
@@ -83,6 +91,15 @@ void *Memory_vpAlloc(size_t szSize)
 void *Memory_vpTempAlloc(size_t szSize)
 {
     if (!psGlobals->bMemIsInitialized)
+    {
+        errno = ENOMEM;
+        return NULL;
+    }
+
+    // Check for integer overflow before calculating aligned size
+    // Maximum safe size before addition would overflow
+    const size_t szOverheadMax = sizeof(MEMORY_TEMP_ITEM_T) + sizeof(void *) - 1;
+    if (szSize > SIZE_MAX - szOverheadMax)
     {
         errno = ENOMEM;
         return NULL;
@@ -149,10 +166,10 @@ size_t Memory_szGetAllocatedSize(size_t szSize)
 {
     return (size_t)(((szSize + sizeof(void *) - 1) / sizeof(void *)) * sizeof(void *));
 }
-#else                         // USE_MALLOC
+#else // USE_MALLOC
 #include <stdlib.h>
 
-#define MEMORY_SZ SIZE_MAX    // Use a large value to indicate "unlimited" memory in malloc mode
+#define MEMORY_SZ SIZE_MAX // Use a large value to indicate "unlimited" memory in malloc mode
 
 MEMORY_RESULT_T Memory_eInit(uint8_t *pu8Memory, size_t szSize)
 {
@@ -218,4 +235,4 @@ size_t Memory_szGetAllocatedSize(size_t szSize)
     // In malloc mode, we return the size as is
     return szSize;
 }
-#endif                        // USE_MALLOC
+#endif                     // USE_MALLOC

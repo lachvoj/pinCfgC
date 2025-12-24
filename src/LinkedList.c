@@ -16,7 +16,7 @@ LINKEDLIST_RESULT_T LinkedList_eAddToLinkedList(LINKEDLIST_ITEM_T **ppsFirst, vo
     if (*ppsFirst == NULL)
         *ppsFirst = psNew;
     else
-     {
+    {
         LINKEDLIST_ITEM_T *psLl = *ppsFirst;
         while (psLl->pvNext != NULL)
             psLl = psLl->pvNext;
@@ -88,7 +88,7 @@ LINKEDLIST_RESULT_T LinkedList_eLinkedListToArray(LINKEDLIST_ITEM_T **ppsFirst, 
 
     void **pvArray = (void **)Memory_vpAlloc(sizeof(void *) * szCount);
     if (pvArray == NULL)
-            return LINKEDLIST_OUTOFMEMORY_ERROR_E;
+        return LINKEDLIST_OUTOFMEMORY_ERROR_E;
 
     *u8Count = 0U;
     void *pvItem = LinkedList_pvPopFront(ppsFirst);

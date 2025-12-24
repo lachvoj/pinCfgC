@@ -17,24 +17,28 @@ extern void hwReadConfigBlock(void *buf, void *addr, size_t length);
 
 extern "C"
 {
-    WRAP_RESULT_T eMyMessageInit(MyMessage *message, const uint8_t _sensorId, const mysensors_data_t _dataType)
+    WRAP_RESULT_T eMyMessageInit(
+        MyMessage *pcMessage,
+        const uint8_t u8SensorId,
+        const mysensors_data_t eDataType,
+        const mysensors_payload_t ePayloadType,
+        const char *pcValue)
     {
-        if (message == NULL)
+        if (pcMessage == NULL)
             return WRAP_NULLPTR_ERROR_E;
 
-        message->clear();
-        message->setSensor(_sensorId);
-        message->setType(static_cast<uint8_t>(_dataType));
-
-        return WRAP_OK_E;
-    }
-
-    WRAP_RESULT_T eMyMessageSetUInt8(MyMessage *message, const uint8_t value)
-    {
-        if (message == NULL)
-            return WRAP_NULLPTR_ERROR_E;
-
-        message->set(value);
+        pcMessage->clear();
+        pcMessage->setSensor(u8SensorId);
+        pcMessage->setType(static_cast<uint8_t>(eDataType));
+        switch (ePayloadType)
+        {
+        case P_STRING: pcMessage->set(pcValue); break;
+        case P_BYTE: pcMessage->set((uint8_t)(uintptr_t)pcValue); break;
+        case P_INT16: pcMessage->set((int16_t)(uintptr_t)pcValue); break;
+        case P_UINT16: pcMessage->set((uint16_t)(uintptr_t)pcValue); break;
+        case P_LONG32: pcMessage->set((int32_t)(uintptr_t)pcValue); break;
+        case P_ULONG32: pcMessage->set((uint32_t)(uintptr_t)pcValue); break;
+        }
 
         return WRAP_OK_E;
     }
@@ -47,6 +51,14 @@ extern "C"
         message->set(value);
 
         return WRAP_OK_E;
+    }
+
+    uint8_t eMessageGetByte(const MyMessage *message)
+    {
+        if (message == NULL)
+            return 0;
+
+        return (uint8_t)message->getByte();
     }
 
     WRAP_RESULT_T eSend(MyMessage *message, const bool requestEcho)
@@ -78,6 +90,11 @@ extern "C"
             return WRAP_OK_E;
 
         return WRAP_ERROR_E;
+    }
+
+    uint32_t u32Millis()
+    {
+        return millis();
     }
 
     void vWait(const uint32_t waitingMS)

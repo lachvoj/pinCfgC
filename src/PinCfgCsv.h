@@ -3,6 +3,7 @@
 
 #include "ILoopable.h"
 #include "LinkedList.h"
+#include "MySensorsWrapper.h"
 #include "Presentable.h"
 #include "Types.h"
 
@@ -35,7 +36,7 @@ void PinCfgCsv_vLoop(uint32_t u32ms);
 
 void PinCfgCsv_vPresentation(void);
 
-void PinCfgCfg_vReceive(const uint8_t u8Id, const void *pvMsgData);
+void PinCfgCsv_vReceiveMessage(const MyMessage *message);
 
 PINCFG_RESULT_T PinCfgCsv_eValidate(
     const char *pcConfig,

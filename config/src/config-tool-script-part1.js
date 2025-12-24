@@ -2,7 +2,8 @@
 // Part 1: Data structures and state management
 
 const configState = {
-    authPassword: '',
+    authPassword: '',      // Plain text password (for display only, not stored)
+    authPasswordHash: '',  // SHA256 hash of password (used in output)
     global: {
         CD: { value: '330', enabled: false },
         CM: { value: '620', enabled: false },
@@ -17,6 +18,16 @@ const configState = {
     measurementSources: [],
     sensorReporters: []
 };
+
+// SHA256 hash function (Web Crypto API)
+async function sha256(message) {
+    if (!message) return '';
+    const msgBuffer = new TextEncoder().encode(message);
+    const hashBuffer = await crypto.subtle.digest('SHA-256', msgBuffer);
+    const hashArray = Array.from(new Uint8Array(hashBuffer));
+    const hashHex = hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+    return hashHex;
+}
 
 // Input event types
 const INPUT_EVENT_TYPES = {
@@ -56,14 +67,70 @@ document.addEventListener('DOMContentLoaded', function() {
     updateSectionVisibility();
 });
 
-function initializeAuthPassword() {
+async function initializeAuthPassword() {
     const passwordInput = document.getElementById('authPassword');
-    passwordInput.value = configState.authPassword;
+    const hashInput = document.getElementById('authPasswordHash');
+    const copyHashBtn = document.getElementById('copyHashBtn');
+    const togglePasswordBtn = document.getElementById('togglePassword');
     
-    passwordInput.addEventListener('change', function() {
-        configState.authPassword = this.value;
+    // If we have a stored hash but no password, show in hash field
+    if (configState.authPasswordHash) {
+        hashInput.value = configState.authPasswordHash;
+    }
+    
+    // Password visibility toggle
+    if (togglePasswordBtn) {
+        togglePasswordBtn.addEventListener('click', function() {
+            const isPassword = passwordInput.type === 'password';
+            passwordInput.type = isPassword ? 'text' : 'password';
+            this.classList.toggle('active', isPassword);
+            this.title = isPassword ? 'Hide password' : 'Show password';
+        });
+    }
+    
+    // Hash password on input change
+    passwordInput.addEventListener('input', async function() {
+        const password = this.value;
+        configState.authPassword = password;
+        
+        if (password) {
+            const hash = await sha256(password);
+            configState.authPasswordHash = hash;
+            hashInput.value = hash;
+        } else {
+            configState.authPasswordHash = '';
+            hashInput.value = '';
+        }
         saveToLocalStorage();
     });
+    
+    // Allow direct hash input (for pasting existing hash)
+    hashInput.addEventListener('change', function() {
+        // If user manually enters a hash (64 hex chars), use it directly
+        const value = this.value.trim();
+        if (/^[a-f0-9]{64}$/i.test(value)) {
+            configState.authPasswordHash = value.toLowerCase();
+            configState.authPassword = ''; // Clear password since we're using direct hash
+            passwordInput.value = '';
+            saveToLocalStorage();
+        }
+    });
+    
+    // Remove readonly to allow manual hash input
+    hashInput.removeAttribute('readonly');
+    hashInput.placeholder = 'Auto-generated or paste existing hash (64 hex chars)';
+    
+    // Copy hash button
+    if (copyHashBtn) {
+        copyHashBtn.addEventListener('click', function() {
+            if (hashInput.value) {
+                copyToClipboard(hashInput.value);
+                const originalText = this.textContent;
+                this.textContent = '✓ Copied!';
+                setTimeout(() => { this.textContent = originalText; }, 2000);
+            }
+        });
+    }
 }
 
 function setupCollapsible() {
@@ -97,7 +164,7 @@ function setupCollapsible() {
 
 function updateSectionVisibility() {
     // Expand sections that have content
-    if (configState.authPassword) {
+    if (configState.authPassword || configState.authPasswordHash) {
         expandSection('authHeader', 'authContent');
     }
     

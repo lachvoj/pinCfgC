@@ -1,9 +1,10 @@
+#include "ArduinoMock.h"
+
 #include <stddef.h>
 #include <stdlib.h>
 #include <string.h>
 #include <time.h>
 
-#include "ArduinoMock.h"
 #include "GPIOMock.h"
 #include "MySensorsMock.h"
 
@@ -24,7 +25,7 @@ uint32_t millis()
 }
 
 // Analog mock functions
-uint16_t mock_analogRead_u16Return = 512;  // Default mid-range (10-bit)
+uint16_t mock_analogRead_u16Return = 512; // Default mid-range (10-bit)
 uint32_t mock_analogRead_u32Called = 0;
 uint8_t mock_analogRead_u8LastPin = 0;
 

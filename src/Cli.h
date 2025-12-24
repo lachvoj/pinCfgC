@@ -16,9 +16,10 @@ typedef enum CLI_RESULT_E
 
 typedef enum CLI_STATE_E
 {
-    CLI_LISTENING_E = 0,
+    CLI_READY_E = 0,
     CLI_OUT_OF_MEM_ERR_E,
-    CLI_RECEIVING_E,
+    CLI_RECEIVING_AUTH_E, // Receiving fragmented password
+    CLI_RECEIVING_DATA_E, // Receiving config/command data (after auth, use bIsConfig to differentiate)
     CLI_RECEIVED_E,
     CLI_VALIDATING_E,
     CLI_VALIDATION_OK_E,
@@ -36,24 +37,23 @@ typedef struct CLI_S
 {
     PRESENTABLE_T sPresentable;
     char *pcCfgBuf;
-    const char *pcState;
     uint16_t u16CfgNext;
     CLI_STATE_T eState;
     CLI_MODE_T eMode;
-    bool bAuthenticated;  // Authentication status
+    bool bIsConfig;      // true = CFG, false = CMD (determined after pwd)
+    bool bAuthenticated; // Authentication status
+    // Rate limiting for brute-force protection
+    uint8_t u8FailedAttempts;   // Consecutive failed attempts
+    uint32_t u32LockoutUntilMs; // Lockout end timestamp (0 = not locked)
 } CLI_T;
 
 void Cli_vInitType(PRESENTABLE_VTAB_T *psVtab);
 
 CLI_RESULT_T Cli_eInit(CLI_T *psHandle, uint8_t u8Id);
 
-void Cli_vSetState(
-    CLI_T *psHandle,
-    CLI_STATE_T estate,
-    const char *psState,
-    bool bSendState);
+void Cli_vSetState(CLI_T *psHandle, CLI_STATE_T estate, const char *psState, bool bSendState);
 
 // presentable IF
-void Cli_vRcvMessage(PRESENTABLE_T *psBaseHandle, const void *pvMessage);
+void Cli_vRcvMessage(PRESENTABLE_T *psBaseHandle, const MyMessage *pcMsg);
 
 #endif // CLI_H

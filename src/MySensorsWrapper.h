@@ -12,9 +12,9 @@
 #endif
 
 #ifdef UNIT_TEST
+#include "ArduinoMock.h"
 #include "MyMessageMock.h"
 #include "MySensorsMock.h"
-#include "ArduinoMock.h"
 #else
 #include <core/MyMessage.h>
 #endif
@@ -32,9 +32,13 @@ extern "C"
     } WRAP_RESULT_T;
 
     // MyMessage
-    WRAP_RESULT_T eMyMessageInit(MyMessage *message, const uint8_t _sensorId, const mysensors_data_t _dataType);
-    WRAP_RESULT_T eMyMessageSetUInt8(MyMessage *message, const uint8_t value);
-    WRAP_RESULT_T eMyMessageSetCStr(MyMessage *message, const char *value);
+    WRAP_RESULT_T eMyMessageInit(
+        MyMessage *pcMessage,
+        const uint8_t u8SensorId,
+        const mysensors_data_t eDataType,
+        const mysensors_payload_t ePayloadType,
+        const char *pcValue);
+    uint8_t eMessageGetByte(const MyMessage *message);
 
     // MySensorsCore
     WRAP_RESULT_T eSend(MyMessage *message, const bool requestEcho);
@@ -47,6 +51,7 @@ extern "C"
     void vWait(const uint32_t waitingMS);
 
     // HAL
+    uint32_t u32Millis();
     void vHwWriteConfigBlock(void *buf, void *addr, size_t length);
     void vHwReadConfigBlock(void *buf, void *addr, size_t length);
     uint8_t u8EEPROMRead(int idx);

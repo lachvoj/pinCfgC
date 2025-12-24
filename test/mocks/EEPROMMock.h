@@ -5,10 +5,10 @@
 
 // EEPROM addresses
 #define EEPROM_NODE_ID_ADDRESS 0x00
-#define EEPROM_LOCAL_CONFIG_ADDRESS 413  // MySensors reserves 0-412
+#define EEPROM_LOCAL_CONFIG_ADDRESS 413 // MySensors reserves 0-412
 
 // STM32F103 EEPROM size (1024 bytes)
-#define E2END 0x3FF  // Last address (0x3FF), size is 0x400 = 1024 bytes
+#define E2END 0x3FF // Last address (0x3FF), size is 0x400 = 1024 bytes
 
 extern int mock_EEPROM_read_idx;
 extern uint32_t mock_EEPROM_read_u32Called;

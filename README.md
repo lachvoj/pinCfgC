@@ -8,21 +8,31 @@ The goal of this library is to provide a CSV-based configuration that specifies 
 3. [Comments](#comments)
 4. [Special Characters](#special-characters)
 5. [Global Configuration Items](#global-configuration-items)
-6. [Switches](#switches)
+6. [CLI](#cli)
+   1. [Configuration Upload](#configuration-upload)
+   2. [Supported Commands](#supported-commands)
+   3. [Quick Start Example](#quick-start-example)
+   4. [State Reporting](#state-reporting)
+   5. [Security](#security)
+   6. [Usage Notes](#usage-notes)
+   7. [Compile-Time Configuration](#compile-time-configuration)
+   8. [Troubleshooting](#troubleshooting)
+   9. [Configuration Generator](#configuration-generator)
+7. [Switches](#switches)
    1. [Basic switch](#basic-switch)
    2. [Basic switch with Feedback](#basic-switch-with-feedback)
    3. [Impulse Output Switch](#impulse-output-switch)
    4. [Impulse Output Switch with Feedback](#impulse-output-switch-with-feedback)
    5. [Timed Output Switch](#timed-output-switch)
-7. [Inputs](#inputs)
-8. [Triggers](#triggers)
-9. [Measurement Sources](#measurement-sources)
-   1. [CPU Temperature Measurement](#cpu-temperature-measurement)
-   2. [I2C Measurement](#i2c-measurement-compile-time-optional)
-   3. [SPI Measurement](#spi-measurement-compile-time-optional)
-   4. [Loop Time Measurement](#loop-time-measurement-debug)
-   5. [Analog Measurement](#analog-measurement-compile-time-optional)
-10. [Sensor Reporters](#sensor-reporters)
+8. [Inputs](#inputs)
+9. [Triggers](#triggers)
+10. [Measurement Sources](#measurement-sources)
+    1. [CPU Temperature Measurement](#cpu-temperature-measurement)
+    2. [I2C Measurement](#i2c-measurement-compile-time-optional)
+    3. [SPI Measurement](#spi-measurement-compile-time-optional)
+    4. [Loop Time Measurement](#loop-time-measurement-debug)
+    5. [Analog Measurement](#analog-measurement-compile-time-optional)
+11. [Sensor Reporters](#sensor-reporters)
 
 ## Format Overview
 ```
@@ -161,39 +171,258 @@ Lines starting with **'C'** are used for defining global parameters:
 
 The CLI (Command Line Interface) allows configuration and control of the device via special messages. It supports receiving configuration data, executing commands, and reporting status.
 
-### Supported Commands
+**All CLI operations require authentication using a SHA-256 password hash.** The password is provided as a 64-character hex string representation of the SHA-256 hash. The default password hash corresponds to `admin123` and should be changed after initial deployment.
 
-* **GET_CFG**: Returns the current configuration as a CSV string.
-* **RESET**: Resets the device.
+**Generating Password Hash:**
+```bash
+# Using the provided script:
+python gen_password_hash.py "yourpassword"
+
+# Or using command line:
+echo -n "yourpassword" | sha256sum | cut -d' ' -f1
+```
+
+**Default Password Hash** (for `admin123`):
+```
+240be518fabd2724ddb6f04eeb1da5967448d7e831c08c8fa822809f74c720a9
+```
 
 ### Configuration Upload
 
-To upload a new configuration, send a message starting with `#[` and ending with `]#`. The configuration content should be in the same CSV format as described in this document.
+To upload a new configuration, send a message in the format: `#[<64-char-hex-hash>/CFG:configuration]#`
+
+The configuration content should be in the same CSV format as described in this document.
+
+#### Format
+
+```
+#[<sha256_hex_hash>/CFG:configuration_data]#
+```
 
 #### Example
 
 ```
-#[CD,330/CM,620/CR,150/CN,1000/CF,30000/S,o01,13,o02,12/]#
+#[240be518fabd2724ddb6f04eeb1da5967448d7e831c08c8fa822809f74c720a9/CFG:CD,330/S,o01,13/]#
 ```
+
+**Note**: The password hash (64 hex characters) must be followed by `/CFG:` before the configuration data.
+
+### Supported Commands
+
+Commands use the format: `#[<sha256_hex_hash>/CMD:COMMAND]#`
+
+**Note**: Commands use the same unified format as configuration with `CMD:` prefix instead of `CFG:`.
+
+#### Available Commands
+
+* **GET_CFG**: Returns the current configuration as a CSV string (without the password).
+  ```
+  #[240be518fabd2724ddb6f04eeb1da5967448d7e831c08c8fa822809f74c720a9/CMD:GET_CFG]#
+  ```
+
+* **RESET**: Resets the device immediately.
+  ```
+  #[240be518fabd2724ddb6f04eeb1da5967448d7e831c08c8fa822809f74c720a9/CMD:RESET]#
+  ```
+
+* **CHANGE_PWD**: Changes the stored password hash. Format: `#[<current_hash>/CMD:CHANGE_PWD:<new_hash>]#`
+  ```
+  #[240be518fabd2724ddb6f04eeb1da5967448d7e831c08c8fa822809f74c720a9/CMD:CHANGE_PWD:5e884898da28047151d0e56f8dc6292773603d0d6aabbdd62a11ef721d1542d8]#
+  ```
+  (This changes from `admin123` to `password`)
+
+**Password Hash Requirements**:
+- Exactly 64 hexadecimal characters (SHA-256 hash)
+- Stored as 32-byte binary in EEPROM with CRC protection
+- Use `gen_password_hash.py` to generate hash from plaintext
+
+### Quick Start Example
+
+Here's a typical workflow for setting up a device:
+
+**First, generate your password hash:**
+```bash
+python gen_password_hash.py "mySecurePassword123"
+# Output: 2b8a8f1f51f5b34b85b3f2fd5ff5b4f1... (64 hex characters)
+```
+
+1. **Initial Setup** - Change the default password (using hex hashes):
+   ```
+   #[240be518fabd2724ddb6f04eeb1da5967448d7e831c08c8fa822809f74c720a9/CMD:CHANGE_PWD:<your_new_hash>]#
+   ```
+   Response: `Pwd changed OK.`
+
+2. **Upload Configuration** - Send your configuration with the new password hash:
+   ```
+   #[<your_new_hash>/CFG:CD,330/CM,620/S,o01,13,o02,12/I,i01,2/T,t01,i01,1,1,o01,0/]#
+   ```
+   The device will:
+   - Respond with `RECEIVING_DATA` status
+   - Echo back received data
+   - Validate the configuration
+   - Report `VALIDATION_OK`
+   - Save and automatically reset
+
+3. **Retrieve Configuration** - Get the current configuration:
+   ```
+   #[<your_hash>/CMD:GET_CFG]#
+   ```
+   Response: The configuration CSV (without password)
+
+4. **Reset Device** - Manually reset if needed:
+   ```
+   #[<your_hash>/CMD:RESET]#
+   ```
 
 ### State Reporting
 
 The CLI reports its state using the following status messages:
-- **LISTENING**: Ready to receive configuration or commands.
+
+**Standard States:**
+- **READY**: Ready to receive configuration or commands.
 - **OUT_OF_MEMORY_ERROR**: Not enough memory to process the request.
-- **RECEIVING**: Receiving configuration data.
+- **RECEIVING_AUTH**: Receiving fragmented password.
+- **RECEIVING_DATA**: Receiving configuration or command data (echoes back received messages).
 - **RECEIVED**: Configuration data received.
 - **VALIDATING**: Validating configuration.
 - **VALIDATION_OK**: Configuration is valid and saved.
 - **VALIDATION_ERROR**: Configuration is invalid.
 
-Custom error messages may also be sent if an operation fails.
+**Authentication-Related Messages:**
+- **Authentication required.**: Sent when attempting operations without password.
+- **Authentication failed.**: Sent when incorrect password is provided.
+- **Locked out. Try again later.**: Sent when too many failed attempts (rate limiting).
+- **Invalid pwd length.**: Sent when password hash length is incorrect.
+- **Invalid message type.**: Sent when message doesn't start with CFG: or CMD: after password.
+- **Pwd changed OK.**: Sent after successful password change.
+- **Pwd change failed.**: Sent if password change operation fails.
+
+**Command-Related Messages:**
+- **Unknown command.**: Sent when command is not recognized.
+- **Data too large.**: Sent when configuration or command exceeds buffer size.
+- **No config data.**: Sent when GET_CFG is called but no configuration exists.
+- **Unable to read cfg size.**: Sent when configuration size cannot be determined.
+- **Unable to load cfg.**: Sent when configuration cannot be loaded from EEPROM.
+- **Save of cfg unsucessfull.**: Sent when configuration save operation fails.
+
+Custom error messages may also be sent if an operation fails. Validation errors include detailed information about what went wrong.
+
+### Security
+
+**Default Password Hash**: The system ships with the default password hash for `admin123`:
+```
+240be518fabd2724ddb6f04eeb1da5967448d7e831c08c8fa822809f74c720a9
+```
+**Change this immediately after deployment** using the `CHANGE_PWD` command.
+
+**Password Hashing**: 
+- Passwords are transmitted as 64-character hex strings (SHA-256 hash)
+- This prevents plaintext passwords from appearing in logs or network captures
+- Use `gen_password_hash.py` to convert plaintext to hash
+
+**Password Storage**: Password hashes are stored in EEPROM as 32-byte binary (converted from hex). They benefit from:
+- CRC16 integrity checking
+- Triple metadata voting for fault tolerance
+- Block checksums
+- Dynamic backup (coverage scales with config size - smaller configs get 100% backup)
+- Fault-tolerant recovery mechanisms
+
+**Authentication**: Every configuration upload and command requires authentication. The provided hex password hash is converted to binary and compared against the stored hash using constant-time comparison to prevent timing attacks. Authentication state is not cached and is reset after each operation.
 
 ### Usage Notes
 
-- Configuration upload and commands are handled via the same interface.
-- Large configuration or response messages may be split into multiple parts.
-- After a successful configuration upload and validation, the device will automatically reset to apply the new configuration.
+- **Authentication Required**: All configuration uploads and commands require password authentication.
+- **Configuration Upload**: Configuration data is processed only after successful authentication. The device echoes back received messages during the RECEIVING state.
+- **Large Messages**: Configuration or response messages are automatically split into chunks (default chunk size defined by `PINCFG_TXTSTATE_MAX_SZ_D`) with delays between transmissions (`PINCFG_LONG_MESSAGE_DELAY_MS_D`).
+- **Automatic Reset**: After a successful configuration upload and validation, the device automatically resets to apply the new configuration.
+- **Password Persistence**: When uploading a new configuration, the existing password is preserved. Only the configuration data is updated unless you explicitly use `CHANGE_PWD`.
+- **Memory Management**: The CLI uses temporary memory allocation (default `PINCFG_CONFIG_MAX_SZ_D` = 480 bytes) for configuration processing. Ensure sufficient free memory is available.
+- **Home Assistant Integration**: For best compatibility with Home Assistant, keep CLI commands to **18 characters or less** per line. This ensures reliable message handling in Home Assistant's MySensors integration.
+
+### Compile-Time Configuration
+
+The following constants can be defined at compile-time to customize CLI behavior:
+
+| Constant | Default | Description |
+|----------|---------|-------------|
+| `PINCFG_AUTH_PASSWORD_LEN_D` | 32 | Binary password hash storage size in EEPROM (bytes). SHA-256 = 32 bytes. |
+| `PINCFG_AUTH_HEX_PASSWORD_LEN_D` | 64 | Hex string length for password hash (2 × binary size). |
+| `PINCFG_CONFIG_MAX_SZ_D` | 480 | Maximum configuration size (bytes). Total size for temporary configuration buffer. |
+| `CLI_AUTH_DEFAULT_PASSWORD` | (SHA-256 of "admin123") | Default password hash for new devices. **Change after deployment!** |
+| `PINCFG_TXTSTATE_MAX_SZ_D` | (varies) | Maximum size of text message chunks for large message transmission. |
+| `PINCFG_LONG_MESSAGE_DELAY_MS_D` | (varies) | Delay (milliseconds) between message chunks when sending large responses. |
+
+**Example** (in `platformio.ini` or compiler flags):
+```ini
+build_flags = 
+    -DPINCFG_CONFIG_MAX_SZ_D=1024
+```
+
+**Note**: Password hash storage size is fixed at 32 bytes for SHA-256. Do not modify `PINCFG_AUTH_PASSWORD_LEN_D`.
+
+### Troubleshooting
+
+**Problem: "Authentication required." or "Authentication failed."**
+- Verify you're using the 64-character hex hash (not plaintext): `#[<64-hex>/CFG:config]#` or `#[<64-hex>/CMD:command]#`
+- Use `gen_password_hash.py "yourpassword"` to generate the correct hash
+- Check if you changed the password from the default hash
+- Ensure the format is `#[password/CFG:...]#` or `#[password/CMD:...]#`
+- Both config and commands use `]#` terminator at the end
+- If locked out, wait for lockout period or reflash the device firmware to reset to default password hash
+
+**Problem: "OUT_OF_MEMORY_ERROR"**
+- Your configuration is too large for available memory
+- Reduce the configuration size or increase `PINCFG_CONFIG_MAX_SZ_D` at compile-time
+- Ensure other parts of your program aren't consuming too much memory
+
+**Problem: "VALIDATION_ERROR" with no details**
+- Enable validation output by ensuring sufficient free memory
+- Check CSV syntax (separators, line endings, missing values)
+- Verify pin numbers are valid for your hardware
+- Ensure all referenced IDs exist (e.g., triggers referencing inputs/outputs)
+
+**Problem: "Invalid message type." or "Invalid pwd length."**
+- Password must be exactly 64 hex characters (SHA-256 hash)
+- Both configuration and commands use unified format: `#[<64-hex>/TYPE:data]#`
+- Configuration must use `CFG:` prefix: `#[<hash>/CFG:config]#`
+- Commands must use `CMD:` prefix: `#[<hash>/CMD:command]#`
+- Check for typos in format strings or incomplete hash
+
+**Problem: Messages getting truncated or lost**
+- Large messages are automatically split into chunks
+- If using Home Assistant, keep commands under 18 characters per line
+- Increase `PINCFG_LONG_MESSAGE_DELAY_MS_D` if messages arrive too quickly
+
+**Problem: Password change doesn't persist after reset**
+- Verify EEPROM is working correctly on your hardware
+- Check that `PersistentCfg` is properly initialized
+- Ensure write operations complete before power loss
+
+### Configuration Generator
+
+An **HTML-based configuration generator** is available to simplify the creation of pinCfgC configurations. This tool provides a graphical interface for building configuration strings without manually writing CSV format.
+
+**Location**: [`config/config-tool.html`](config/config-tool.html)
+
+#### Why Build is Required
+
+The configuration tool is distributed as a **single-file HTML application** for portability and ease of use. However, the source code is maintained in separate files (`config/src/`) for better maintainability:
+- Separate HTML template, CSS styles, and JavaScript modules
+- Automatic extraction of MySensors V_TYPES and S_TYPES from library headers
+- Easier version control and collaborative development
+
+The build process combines these separate files into one standalone HTML file that can be opened directly in any web browser without requiring a web server.
+
+#### How to Build
+
+To build the configuration tool, run:
+
+```bash
+cd config/src
+python3 build-config-tool.py
+```
+
+This will generate the `config-tool.html` file in the `config/` directory. The built file is a self-contained HTML application that can be opened directly in any modern web browser.
 
 ## Switches
 Switches are abstract configuration units that specify how output pins will behave.
@@ -603,14 +832,17 @@ MS,5,<name>/
 #### Example Configuration
 ```
 MS,5,looptime/
-SR,LoopTime,looptime,99,99,1,0,0,5/
+SR,LoopTime,looptime,99,99,1,1,PINCFG_SENSOR_SAMPLING_INTV_MIN_MS_D,5/
 ```
 
 Reports average loop execution time every 5 seconds.
 
+**Note:** Replace `PINCFG_SENSOR_SAMPLING_INTV_MIN_MS_D` with actual value (default: 100ms).
+
 #### Key Characteristics
-- **Always Measured:** Called every loop iteration (bypasses sampling interval)
+- **Always Measured:** Called every loop iteration (sampling interval parameter is ignored)
 - **Requires Cumulative Mode:** Use `cumulative=1` for meaningful statistics
+- **Sampling Interval:** Must specify valid value (`PINCFG_SENSOR_SAMPLING_INTV_MIN_MS_D` to `PINCFG_SENSOR_SAMPLING_INTV_MAX_MS_D`, default range: 100-5000 ms) even though it's not used
 - **Low Overhead:** ~1 µs per loop iteration
 - **Time Units:** Milliseconds
 - **First Sample Skipped:** No delta available on first measurement
@@ -792,9 +1024,11 @@ Lines starting with **'SR'** are parsed as sensor reporter definitions.
 7. 0,        (cumulative mode: 0 or 1)
 8. 1000,     (sampling interval in milliseconds)
 9. 300,      (reporting interval in SECONDS)
-10. 0.0,     (optional temperature offset/scale factor)
-11. 0,       (optional byte offset for multi-value sensors)
-12. 0/       (optional byte count for multi-value sensors)
+10. 1.0,     (optional scale factor - multiplicative, default 1.0)
+11. 0.0,     (optional offset - additive adjustment, default 0.0)
+12. 0,       (optional precision - decimal places 0-6, default 0)
+13. 0,       (optional byte offset for multi-value sensors)
+14. 0/       (optional byte count for multi-value sensors)
 ```
 
 #### Parameters
@@ -818,49 +1052,74 @@ Lines starting with **'SR'** are parsed as sensor reporter definitions.
 6. **Cumulative Mode** (`uint8_t`) - 0 or 1
     * **0** (standard) - Temperature measured once per report interval
     * **1** (cumulative) - Temperature sampled at sampling interval, average reported
-7. **Sampling Interval** (`uint16_t`) - In **milliseconds**, default 1000 ms or `PINCFG_CPUTEMP_SAMPLING_INTV_MS_D`
+7. **Sampling Interval** (`uint16_t`) - In **milliseconds**, default 1000 ms or `PINCFG_SENSOR_SAMPLING_INTV_MS_D`
     * Valid range: 100-5000 ms (100 ms - 5 seconds)
-8. **Report Interval** (`uint16_t`) - In **SECONDS**, default 300 s (5 min) or `PINCFG_CPUTEMP_REPORTING_INTV_SEC_D`
+8. **Report Interval** (`uint16_t`) - In **SECONDS**, default 300 s (5 min) or `PINCFG_SENSOR_REPORTING_INTV_SEC_D`
     * Valid range: 1-3600 seconds (1 second - 1 hour)
-9. **Offset** (optional, fixed-point) - Scaling factor or calibration offset, default 0.0 or `PINCFG_CPUTEMP_OFFSET_D`
-    * Stored internally as fixed-point integer with configurable precision (default: 6 decimal places via `PINCFG_FIXED_POINT_SCALE`)
-    * For temperature: calibration offset in °C (e.g., `-2.1` becomes -2100000 internally)
-    * For I2C: scaling multiplier (e.g., `0.0625` for TMP102 becomes 62500 internally)
-    * Range: ±2147.483647 (limited by INT32_MAX / PINCFG_FIXED_POINT_SCALE)
-10. **Byte Offset** (optional, `uint8_t`) - Starting byte index for multi-value sensors (0-5), default 0
-11. **Byte Count** (optional, `uint8_t`) - Number of bytes to extract (1-6, 0=all), default 0
+9. **Scale** (optional, fixed-point) - Multiplicative scale factor, default 1.0 or `PINCFG_SENSOR_SCALE_D`
+    * Applied first in calibration: `result = (raw × scale) + offset`
+    * Stored internally as fixed-point integer with 6 decimal places via `PINCFG_FIXED_POINT_SCALE`
+    * For I2C sensors: conversion factor (e.g., `0.0625` for TMP102 becomes 62500 internally)
+    * For unit conversion: use appropriate multiplier (e.g., `0.01` for percent to decimal)
+    * Range: ±1000.0 (configurable via `PINCFG_SENSOR_SCALE_MIN_D`/`MAX_D`)
+10. **Offset** (optional, fixed-point) - Additive offset adjustment, default 0.0 or `PINCFG_SENSOR_OFFSET_D`
+    * Applied second in calibration: `result = (raw × scale) + offset`
+    * Stored internally as fixed-point integer with 6 decimal places
+    * For sensor calibration: correction value (e.g., `-2.1` for -2.1°C becomes -2100000 internally)
+    * For zero-point adjustment: shift baseline up or down
+    * Range: ±1000.0 (configurable via `PINCFG_SENSOR_OFFSET_MIN_D`/`MAX_D`)
+11. **Precision** (optional, `uint8_t`) - Decimal places for display/payload sizing, default 0 or `PINCFG_SENSOR_PRECISION_D`
+    * Determines MySensors payload type to accommodate value range with decimals
+    * **0 decimals**: Uses `P_BYTE` (0-255) or `P_INT16` (-32768 to 32767) for signed values
+    * **1-2 decimals**: Uses `P_INT16` (range -32768 to 32767, e.g., ±327.68 with 2 decimals)
+    * **3-6 decimals**: Uses `P_LONG32` (range ±2147483647, e.g., ±2147.483 with 3 decimals or ±2.147483 with 6 decimals)
+    * Range: 0-6, values >6 are clamped with warning message
+12. **Byte Offset** (optional, `uint8_t`) - Starting byte index for multi-value sensors (0-5), default 0
+13. **Byte Count** (optional, `uint8_t`) - Number of bytes to extract (1-6, 0=all), default 0
 
 #### Examples
 ```
-# Basic temperature sensor reporting every 5 minutes
+# Basic temperature sensor reporting every 5 minutes (default scale=1.0, offset=0, precision=0)
 SR,CPUTemp,cpu,6,6,0,0,1000,300/
 
-# Temperature sensor with calibration offset
-SR,CPUTemp_calibrated,cpu,6,6,0,0,1000,300,-2.1/
+# Temperature sensor with calibration offset, 1 decimal place
+SR,CPUTemp_calibrated,cpu,6,6,0,0,1000,300,1.0,-2.1,1/
 
-# Enableable humidity sensor with averaging, reporting every minute
-SR,Humidity_avg,humid_sensor,1,7,1,1,500,60,0.0/
+# I2C TMP102 sensor with scale factor (0.0625°C per LSB), 2 decimal places
+MS,3,tmp102_raw,0x48,0x00,2/                         # I2C measurement
+SR,RoomTemp,tmp102_raw,6,6,0,0,5000,300,0.0625,0,2/  # Scale by 0.0625, no offset, 2 decimals
 
-# Multiple sensors sharing one measurement source with different types
-MS,0,shared/                                           # type 0 = CPU temp
-SR,fast_reporter,shared,6,6,0,0,500,10,0.0/          # V_TEMP, S_TEMP, report every 10 sec
-SR,slow_reporter,shared,6,6,0,0,1000,3600,2.5/       # V_TEMP, S_TEMP, +2.5°C offset, hourly
-SR,calibrated,shared,6,6,0,0,1000,300,-1.0/          # V_TEMP, S_TEMP, -1.0°C offset, 5 min
+# Humidity sensor with both scale and offset, 1 decimal place
+SR,Humidity,humid_raw,1,7,0,0,1000,60,0.01,5.0,1/    # Scale 0.01, add 5.0% offset, 1 decimal
+
+# Enableable sensor with averaging, no decimals (default)
+SR,Humidity_avg,humid_sensor,1,7,1,1,500,60/         # Uses P_BYTE or P_INT16
+
+# Multiple sensors sharing one measurement source with different calibrations
+MS,0,shared/                                          # type 0 = CPU temp
+SR,fast_reporter,shared,6,6,0,0,500,10,1.0,0,0/      # Default, P_BYTE/INT16, every 10 sec
+SR,slow_reporter,shared,6,6,0,0,1000,3600,1.0,2.5,1/ # +2.5°C offset, 1 decimal, hourly
+SR,calibrated,shared,6,6,0,0,1000,300,1.0,-1.0,2/    # -1.0°C offset, 2 decimals, 5 min
+SR,scaled,shared,6,6,0,0,1000,300,1.8,32.0,1/        # Convert to Fahrenheit: F = C×1.8+32
+
+# High precision sensor (6 decimals, uses P_LONG32)
+SR,PrecisionTemp,cpu,6,6,0,0,1000,300,1.0,0,6/       # 6 decimal places
 ```
 
 ### Measurement Reusability
 Multiple sensor reporters can use the same measurement source, allowing different reporting schedules and calibrations without duplicate hardware readings:
 
 ```
-MS,0,cpu_temp/                                    # One raw measurement (type 0 = CPU temp)
-SR,sensor_fast,cpu_temp,6,6,0,0,500,60,0.0/      # V_TEMP, S_TEMP, report every minute
-SR,sensor_slow,cpu_temp,6,6,0,0,1000,600,2.5/    # V_TEMP, S_TEMP, +2.5°C offset, 10 min
-SR,sensor_avg,cpu_temp,6,6,0,1,2000,300,-1.0/    # V_TEMP, S_TEMP, -1.0°C, 5-min average
+MS,0,cpu_temp/                                         # One raw measurement (type 0 = CPU temp)
+SR,sensor_fast,cpu_temp,6,6,0,0,500,60/               # V_TEMP, S_TEMP, defaults, report every minute
+SR,sensor_slow,cpu_temp,6,6,0,0,1000,600,1.0,2.5,1/   # V_TEMP, S_TEMP, +2.5°C offset, 1 decimal, 10 min
+SR,sensor_avg,cpu_temp,6,6,0,1,2000,300,1.0,-1.0,0/   # V_TEMP, S_TEMP, -1.0°C, no decimals, 5-min average
 ```
 
-Each sensor can apply its own calibration offset to the raw measurement, enabling flexible use cases like:
-- Raw reading for debugging
-- Calibrated reading for home automation
-- Different offsets for different zones
+Each sensor can apply its own scale, offset, and precision to the raw measurement, enabling flexible use cases like:
+- Raw reading for debugging (scale=1.0, offset=0, precision=0)
+- Calibrated reading for home automation (scale=1.0, offset=-2.1, precision=1)
+- Unit conversion (scale=1.8, offset=32 for Celsius to Fahrenheit)
+- Different calibrations for different zones or accuracy requirements
 
 **Important:** MS lines must appear **before** SR lines that reference them.

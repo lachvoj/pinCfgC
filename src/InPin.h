@@ -2,8 +2,8 @@
 #define INPIN_H
 
 #include "ILoopable.h"
-#include "Presentable.h"
 #include "PinSubscriberIf.h"
+#include "Presentable.h"
 #include "Types.h"
 
 typedef enum
@@ -50,6 +50,6 @@ void InPin_vSendEvent(INPIN_T *psHandle, uint8_t u8EventType, uint32_t u32Data, 
 void InPin_vLoop(LOOPABLE_T *psLoopableHandle, uint32_t u32ms);
 
 // presentable IF
-void InPin_vRcvMessage(PRESENTABLE_T *psBaseHandle, const void *pvMessage);
+void InPin_vRcvMessage(PRESENTABLE_T *psBaseHandle, const MyMessage *pcMsg);
 
 #endif // INPIN_H

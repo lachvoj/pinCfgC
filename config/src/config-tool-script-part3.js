@@ -176,6 +176,7 @@ function loadFromLocalStorage() {
             }
             
             configState.authPassword = loaded.authPassword || '';
+            configState.authPasswordHash = loaded.authPasswordHash || '';
             configState.switches = loaded.switches || [];
             configState.inputs = loaded.inputs || [];
             configState.triggers = loaded.triggers || [];
@@ -184,7 +185,9 @@ function loadFromLocalStorage() {
             
             // Update auth password UI
             const passwordInput = document.getElementById('authPassword');
+            const hashInput = document.getElementById('authPasswordHash');
             if (passwordInput) passwordInput.value = configState.authPassword;
+            if (hashInput) hashInput.value = configState.authPasswordHash;
             
             // Update global config UI
             Object.keys(configState.global).forEach(key => {
@@ -258,7 +261,9 @@ function loadConfiguration() {
                 
                 // Update UI
                 const passwordInput = document.getElementById('authPassword');
+                const hashInput = document.getElementById('authPasswordHash');
                 if (passwordInput) passwordInput.value = configState.authPassword || '';
+                if (hashInput) hashInput.value = configState.authPasswordHash || '';
                 
                 Object.keys(configState.global).forEach(key => {
                     const input = document.getElementById(`global_${key}`);
@@ -319,12 +324,27 @@ function parseCSVConfiguration(csv) {
     // Remove opening/closing markers
     csv = csv.replace(/^#\[/, '').replace(/\]#$/, '');
     
-    // Check for PWD command (correct format)
+    // Check for PWD command (expects SHA256 hash - 64 hex chars)
     const pwdMatch = csv.match(/^PWD:([^/]+)\//);
     if (pwdMatch) {
-        configState.authPassword = pwdMatch[1];
-        const passwordInput = document.getElementById('authPassword');
-        if (passwordInput) passwordInput.value = configState.authPassword;
+        const hashValue = pwdMatch[1];
+        // Check if it's a valid SHA256 hash (64 hex characters)
+        if (/^[a-f0-9]{64}$/i.test(hashValue)) {
+            configState.authPasswordHash = hashValue.toLowerCase();
+            configState.authPassword = ''; // Can't reverse hash
+            const hashInput = document.getElementById('authPasswordHash');
+            if (hashInput) hashInput.value = configState.authPasswordHash;
+        } else {
+            // Legacy: might be plain text password, hash it
+            configState.authPassword = hashValue;
+            sha256(hashValue).then(hash => {
+                configState.authPasswordHash = hash;
+                const hashInput = document.getElementById('authPasswordHash');
+                if (hashInput) hashInput.value = hash;
+            });
+            const passwordInput = document.getElementById('authPassword');
+            if (passwordInput) passwordInput.value = hashValue;
+        }
         // Remove PWD command from csv
         csv = csv.replace(/^PWD:[^/]+\//, '');
     }
@@ -332,9 +352,22 @@ function parseCSVConfiguration(csv) {
     // Also check for old AUTH format for backward compatibility
     const authMatch = csv.match(/^AUTH:([^/]+)\//);
     if (authMatch) {
-        configState.authPassword = authMatch[1];
-        const passwordInput = document.getElementById('authPassword');
-        if (passwordInput) passwordInput.value = configState.authPassword;
+        const hashValue = authMatch[1];
+        if (/^[a-f0-9]{64}$/i.test(hashValue)) {
+            configState.authPasswordHash = hashValue.toLowerCase();
+            configState.authPassword = '';
+            const hashInput = document.getElementById('authPasswordHash');
+            if (hashInput) hashInput.value = configState.authPasswordHash;
+        } else {
+            configState.authPassword = hashValue;
+            sha256(hashValue).then(hash => {
+                configState.authPasswordHash = hash;
+                const hashInput = document.getElementById('authPasswordHash');
+                if (hashInput) hashInput.value = hash;
+            });
+            const passwordInput = document.getElementById('authPassword');
+            if (passwordInput) passwordInput.value = hashValue;
+        }
         csv = csv.replace(/^AUTH:[^/]+\//, '');
     }
     

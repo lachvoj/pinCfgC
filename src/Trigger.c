@@ -41,8 +41,8 @@ void Trigger_vEventHandle(PINSUBSCRIBER_IF_T *psBaseHandle, uint8_t u8EventType,
         switch (psHandle->pasSwAct[i].eAction)
         {
         case TRIGGER_A_TOGGLE_E: Presentable_vToggle(psMyPresentHnd); break;
-        case TRIGGER_A_UP_E: Presentable_vSetState(psMyPresentHnd, (uint8_t) true, true); break;
-        case TRIGGER_A_DOWN_E: Presentable_vSetState(psMyPresentHnd, (uint8_t) false, true); break;
+        case TRIGGER_A_UP_E: Presentable_vSetState(psMyPresentHnd, (int32_t) true, true); break;
+        case TRIGGER_A_DOWN_E: Presentable_vSetState(psMyPresentHnd, (int32_t) false, true); break;
         case TRIGGER_A_FORWARD_E: Switch_vEventHandle(((SWITCH_T *)psMyPresentHnd), u8EventType, u32Data, u32ms); break;
         default: break;
         }

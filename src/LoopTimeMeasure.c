@@ -14,9 +14,7 @@ static ISENSORMEASURE_RESULT_T LoopTimeMeasure_eMeasure(
     uint8_t *pu8Size,
     uint32_t u32ms);
 
-LOOPTIMEMEASURE_RESULT_T LoopTimeMeasure_eInit(
-    LOOPTIMEMEASURE_T *psHandle,
-    STRING_POINT_T *psName)
+LOOPTIMEMEASURE_RESULT_T LoopTimeMeasure_eInit(LOOPTIMEMEASURE_T *psHandle, STRING_POINT_T *psName)
 {
     if (psHandle == NULL || psName == NULL)
         return LOOPTIMEMEASURE_NULLPTR_ERROR_E;
@@ -27,7 +25,7 @@ LOOPTIMEMEASURE_RESULT_T LoopTimeMeasure_eInit(
 
     // Set measurement function pointer
     psHandle->sSensorMeasure.eMeasure = LoopTimeMeasure_eMeasure;
-    
+
     // Initialize measurement-specific state
     psHandle->u32LastCallTime = 0U;
     psHandle->bFirstCall = true;
@@ -45,31 +43,31 @@ static ISENSORMEASURE_RESULT_T LoopTimeMeasure_eMeasure(
         return ISENSORMEASURE_NULLPTR_ERROR_E;
 
     if (*pu8Size < 4)
-        return ISENSORMEASURE_ERROR_E;  // Buffer too small
+        return ISENSORMEASURE_ERROR_E; // Buffer too small
 
     LOOPTIMEMEASURE_T *psHandle = (LOOPTIMEMEASURE_T *)pSelf;
-    
+
     // First call - just store timestamp, no measurement yet
     if (psHandle->bFirstCall)
     {
         psHandle->u32LastCallTime = u32ms;
         psHandle->bFirstCall = false;
-        return ISENSORMEASURE_ERROR_E;  // Skip this sample (no delta yet)
+        return ISENSORMEASURE_ERROR_E; // Skip this sample (no delta yet)
     }
-    
+
     // Calculate time since last call = loop execution time
     uint32_t u32LoopDuration = PinCfg_u32GetElapsedTime(psHandle->u32LastCallTime, u32ms);
-    
+
     // Store timestamp for next iteration
     psHandle->u32LastCallTime = u32ms;
-    
+
     // Return loop duration in big-endian format (4 bytes)
     pu8Buffer[0] = (uint8_t)(u32LoopDuration >> 24);
     pu8Buffer[1] = (uint8_t)(u32LoopDuration >> 16);
     pu8Buffer[2] = (uint8_t)(u32LoopDuration >> 8);
     pu8Buffer[3] = (uint8_t)(u32LoopDuration & 0xFF);
     *pu8Size = 4;
-    
+
     return ISENSORMEASURE_OK_E;
 }
 

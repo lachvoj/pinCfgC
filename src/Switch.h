@@ -29,9 +29,10 @@ typedef struct SWITCH_S
     uint32_t u32ImpulseStarted;
     uint32_t u32FbReadStarted;
     uint32_t u32TimedAdidtionalDelayMs;
+    SWITCH_MODE_T eMode; // Moved before uint8_t fields to avoid padding
     uint8_t u8OutPin;
     uint8_t u8FbPin;
-    SWITCH_MODE_T eMode;
+    // 1 byte padding here (unavoidable), but saved 2 bytes vs previous layout
 } SWITCH_T;
 
 // static
@@ -53,6 +54,6 @@ SWITCH_RESULT_T Switch_eInit(
     uint32_t u32TimedAdidtionalDelayMs);
 
 // forwarded event handler
-void Switch_vEventHandle(SWITCH_T* psHandle, uint8_t u8EventType, uint32_t u32Data, uint32_t u32ms);
+void Switch_vEventHandle(SWITCH_T *psHandle, uint8_t u8EventType, uint32_t u32Data, uint32_t u32ms);
 
 #endif // SWITCH_H

@@ -61,8 +61,55 @@ def parse_enum(content, enum_name, start_marker):
     
     return entries
 
+def extract_stype_vtype_mappings(s_types, v_types):
+    """
+    Extract S_TYPE to V_TYPE mappings from enum descriptions.
+    
+    S_TYPE descriptions list compatible V_TYPEs (e.g., "Door sensor, V_TRIPPED, V_ARMED")
+    V_TYPE descriptions list compatible S_TYPEs (e.g., "S_DOOR, S_MOTION, S_SMOKE...")
+    
+    We combine both sources for complete mappings.
+    """
+    # Build name to value lookup tables
+    s_name_to_value = {entry['name']: value for value, entry in s_types.items()}
+    v_name_to_value = {entry['name']: value for value, entry in v_types.items()}
+    
+    # Initialize mapping: S_TYPE value -> list of V_TYPE values
+    stype_to_vtypes = {value: set() for value in s_types.keys()}
+    
+    # Extract from S_TYPE descriptions (they list V_TYPEs)
+    for s_value, s_entry in s_types.items():
+        desc = s_entry.get('description', '')
+        # Find all V_* references in the description
+        v_refs = re.findall(r'\bV_([A-Z_]+)\b', desc)
+        for v_ref in v_refs:
+            v_name = 'V_' + v_ref
+            if v_name in v_name_to_value:
+                stype_to_vtypes[s_value].add(v_name_to_value[v_name])
+    
+    # Extract from V_TYPE descriptions (they list S_TYPEs)
+    for v_value, v_entry in v_types.items():
+        desc = v_entry.get('description', '')
+        # Find all S_* references in the description
+        s_refs = re.findall(r'\bS_([A-Z_]+)\b', desc)
+        for s_ref in s_refs:
+            s_name = 'S_' + s_ref
+            if s_name in s_name_to_value:
+                s_value = s_name_to_value[s_name]
+                stype_to_vtypes[s_value].add(v_value)
+    
+    # V_VAR1-5 are always allowed for all S_TYPEs (generic variables)
+    var_types = ['24', '25', '26', '27', '28']  # V_VAR1 through V_VAR5
+    for s_value in stype_to_vtypes:
+        for var_v in var_types:
+            if var_v in v_types:
+                stype_to_vtypes[s_value].add(var_v)
+    
+    # Convert sets to sorted lists
+    return {k: sorted(v, key=lambda x: int(x)) for k, v in stype_to_vtypes.items()}
+
 def generate_mysensors_types_js(mysensors_header_path):
-    """Generate JavaScript code for MySensors V_TYPES and S_TYPES."""
+    """Generate JavaScript code for MySensors V_TYPES, S_TYPES, and mappings."""
     
     if not os.path.exists(mysensors_header_path):
         print(f"Warning: MySensors header not found: {mysensors_header_path}")
@@ -86,6 +133,11 @@ def generate_mysensors_types_js(mysensors_header_path):
         
         print(f"  Found {len(s_types)} sensor types (S_TYPE)")
         print(f"  Found {len(v_types)} variable types (V_TYPE)")
+        
+        # Extract S_TYPE to V_TYPE mappings
+        stype_to_vtypes = extract_stype_vtype_mappings(s_types, v_types)
+        mappings_count = sum(len(v) for v in stype_to_vtypes.values())
+        print(f"  Extracted {mappings_count} S_TYPE to V_TYPE mappings")
         
         # Generate JavaScript code
         js_code = []
@@ -118,6 +170,40 @@ def generate_mysensors_types_js(mysensors_header_path):
             # Remove sensor type references like "S_TEMP."
             desc_short = re.sub(r'^[A-Z_]+\.\s*', '', desc_short)
             js_code.append(f"    '{value}': '{name} - {desc_short}',")
+        
+        js_code.append("};")
+        js_code.append("")
+        
+        # Generate S_TYPE to V_TYPE mappings
+        js_code.append("// S_TYPE to compatible V_TYPEs mapping - auto-generated from MyMessage.h")
+        js_code.append("const STYPE_TO_VTYPES = {")
+        
+        for s_value in sorted(stype_to_vtypes.keys(), key=lambda x: int(x)):
+            v_list = stype_to_vtypes[s_value]
+            if v_list:
+                v_str = ', '.join(f"'{v}'" for v in v_list)
+                s_name = s_types[s_value]['name']
+                js_code.append(f"    '{s_value}': [{v_str}],  // {s_name}")
+            else:
+                s_name = s_types[s_value]['name']
+                js_code.append(f"    '{s_value}': [],  // {s_name} (no specific V_TYPEs)")
+        
+        js_code.append("};")
+        js_code.append("")
+        
+        # Generate default V_TYPE for each S_TYPE (first in the list)
+        js_code.append("// Default V_TYPE for each S_TYPE - auto-generated from MyMessage.h")
+        js_code.append("const STYPE_DEFAULT_VTYPE = {")
+        
+        for s_value in sorted(stype_to_vtypes.keys(), key=lambda x: int(x)):
+            v_list = stype_to_vtypes[s_value]
+            if v_list:
+                # Filter out V_VAR1-5 for default selection
+                non_var_vtypes = [v for v in v_list if v not in ['24', '25', '26', '27', '28']]
+                default_v = non_var_vtypes[0] if non_var_vtypes else v_list[0]
+                s_name = s_types[s_value]['name']
+                v_name = v_types.get(default_v, {}).get('name', 'V_UNKNOWN')
+                js_code.append(f"    '{s_value}': '{default_v}',  // {s_name} -> {v_name}")
         
         js_code.append("};")
         

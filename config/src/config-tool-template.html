@@ -35,8 +35,18 @@
                     <div id="authContent" class="collapsible-content">
                         <div class="form-group">
                             <label>Password</label>
-                            <input type="password" id="authPassword" class="text-input" placeholder="Optional authentication password">
-                            <span class="helper-text">Leave empty to skip authentication</span>
+                            <div class="password-input-wrapper">
+                                <input type="password" id="authPassword" class="text-input" placeholder="Enter password to generate hash">
+                                <button type="button" class="password-toggle" id="togglePassword" title="Show/Hide password">
+                                    <span class="eye-icon">👁</span>
+                                </button>
+                            </div>
+                            <span class="helper-text">Leave empty to skip authentication. Password will be hashed with SHA256.</span>
+                        </div>
+                        <div class="form-group">
+                            <label>SHA256 Hash (auto-generated)</label>
+                            <input type="text" id="authPasswordHash" class="text-input" readonly placeholder="Hash will appear here..." style="font-family: monospace; font-size: 0.85em;">
+                            <button type="button" id="copyHashBtn" class="btn btn-secondary btn-small" style="margin-top: 5px;">📋 Copy Hash</button>
                         </div>
                     </div>
                 </section>

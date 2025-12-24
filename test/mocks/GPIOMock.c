@@ -1,7 +1,7 @@
+#include "GPIOMock.h"
+
 #include <stdlib.h>
 #include <string.h>
-
-#include "GPIOMock.h"
 
 uint8_t mock_pinMode_u8Pin;
 uint8_t mock_pinMode_u8Mode;

@@ -14,7 +14,7 @@ typedef enum SENSOR_RESULT_E
 } SENSOR_RESULT_T;
 
 typedef struct SENSOR_S SENSOR_T;
-typedef struct SENSOR_S 
+typedef struct SENSOR_S
 {
     PRESENTABLE_T sPresentable;
     LOOPABLE_T sLoopable;
