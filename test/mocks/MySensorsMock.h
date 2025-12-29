@@ -61,4 +61,28 @@ void hwWriteConfigBlock(void *buf, void *addr, size_t length);
 void hwReadConfigBlock(void *buf, void *addr, size_t length);
 int8_t hwCPUTemperature(void);
 
+// Transport error log mock
+#ifdef MY_TRANSPORT_ERROR_LOG
+
+typedef struct {
+    uint32_t timestamp;
+    uint8_t errorCode;
+    uint8_t channel;
+    uint8_t extra;
+    uint8_t reserved;
+} TransportErrorLogEntry_t;
+
+extern TransportErrorLogEntry_t mock_transportErrorLog[16];
+extern uint8_t mock_transportErrorLogCount;
+extern uint32_t mock_transportTotalErrorCount;
+
+void transportLogError(uint8_t errorCode, uint8_t channel, uint8_t extra);
+uint8_t transportGetErrorLogCount(void);
+bool transportGetErrorLogEntry(uint8_t index, TransportErrorLogEntry_t *entry);
+void transportClearErrorLog(void);
+uint32_t transportGetTotalErrorCount(void);
+void init_TransportErrorLogMock(void);
+
+#endif // MY_TRANSPORT_ERROR_LOG
+
 #endif // PINCFGIFMOCK_H

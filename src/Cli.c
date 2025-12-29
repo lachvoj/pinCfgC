@@ -1,4 +1,5 @@
 #include <string.h>
+#include <stdio.h>
 
 #include "Cli.h"
 #include "CliAuth.h"
@@ -43,7 +44,7 @@ static void Cli_vProcessAfterAuth(
 static void Cli_vFinalizeData(CLI_T *psHandle);
 
 #if defined(ARDUINO) && !defined(TEST)
-#ifdef ARDUINO_ARCH_STM32F1
+#if defined(ARDUINO_ARCH_STM32) || defined(ARDUINO_ARCH_STM32F1)
 void resetFunc(void)
 {
     asm("b Reset_Handler");
@@ -504,6 +505,54 @@ static void Cli_vExecuteCommand(CLI_T *psHandle, char *pcCmd)
     {
         resetFunc();
     }
+#ifdef MY_TRANSPORT_ERROR_LOG
+    else if (strcmp(pcCmd, "GET_TSP_ERRORS") == 0)
+    {
+        uint8_t u8Count = u8TransportGetErrorLogCount();
+        uint32_t u32Total = u32TransportGetTotalErrorCount();
+        
+        if (u8Count == 0)
+        {
+            char acMsg[32];
+            snprintf(acMsg, sizeof(acMsg), "No errors. Total: %lu", (unsigned long)u32Total);
+            Cli_vSetState(psHandle, CLI_CUSTOM_E, acMsg, true);
+        }
+        else
+        {
+            // Format: "T:<total>,C:<count>|<ts>,<code>,<ch>,<ex>|..."
+            // Each entry ~20 chars, estimate buffer size
+            size_t szBufSize = 32 + (u8Count * 24);
+            char *pcBuf = (char *)Memory_vpTempAlloc(szBufSize);
+            if (pcBuf == NULL)
+            {
+                Cli_vSetState(psHandle, CLI_OUT_OF_MEM_ERR_E, NULL, true);
+                return;
+            }
+            
+            int iPos = snprintf(pcBuf, szBufSize, "T:%lu,C:%u", (unsigned long)u32Total, u8Count);
+            
+            TransportErrorLogEntry_t sEntry;
+            for (uint8_t u8i = 0; u8i < u8Count && iPos < (int)(szBufSize - 24); u8i++)
+            {
+                if (bTransportGetErrorLogEntry(u8i, &sEntry))
+                {
+                    iPos += snprintf(pcBuf + iPos, szBufSize - iPos, "|%lu,%02X,%u,%u",
+                        (unsigned long)sEntry.timestamp, sEntry.errorCode, 
+                        sEntry.channel, sEntry.extra);
+                }
+            }
+            
+            Cli_vSendBigMessage(psHandle, pcBuf);
+            Memory_vTempFreePt(pcBuf);
+            Cli_vSetState(psHandle, CLI_READY_E, NULL, true);
+        }
+    }
+    else if (strcmp(pcCmd, "CLR_TSP_ERRORS") == 0)
+    {
+        vTransportClearErrorLog();
+        Cli_vSetState(psHandle, CLI_CUSTOM_E, "Errors cleared.", true);
+    }
+#endif
     else
     {
         Cli_vSetState(psHandle, CLI_CUSTOM_E, "Unknown command.", true);

@@ -158,5 +158,70 @@ extern "C"
         mock_hwCPUTemperature_u32Called = 0;
 
         init_MyMessageMock();
+
+#ifdef MY_TRANSPORT_ERROR_LOG
+        init_TransportErrorLogMock();
+#endif
     }
+
+#ifdef MY_TRANSPORT_ERROR_LOG
+    TransportErrorLogEntry_t mock_transportErrorLog[16];
+    uint8_t mock_transportErrorLogCount = 0;
+    uint32_t mock_transportTotalErrorCount = 0;
+    static uint8_t mock_transportErrorLogHead = 0;
+
+    void transportLogError(uint8_t errorCode, uint8_t channel, uint8_t extra)
+    {
+        mock_transportErrorLog[mock_transportErrorLogHead].timestamp = 1000 + mock_transportTotalErrorCount * 100;
+        mock_transportErrorLog[mock_transportErrorLogHead].errorCode = errorCode;
+        mock_transportErrorLog[mock_transportErrorLogHead].channel = channel;
+        mock_transportErrorLog[mock_transportErrorLogHead].extra = extra;
+        mock_transportErrorLog[mock_transportErrorLogHead].reserved = 0;
+
+        mock_transportErrorLogHead = (mock_transportErrorLogHead + 1) % 16;
+        if (mock_transportErrorLogCount < 16) {
+            mock_transportErrorLogCount++;
+        }
+        mock_transportTotalErrorCount++;
+    }
+
+    uint8_t transportGetErrorLogCount(void)
+    {
+        return mock_transportErrorLogCount;
+    }
+
+    bool transportGetErrorLogEntry(uint8_t index, TransportErrorLogEntry_t *entry)
+    {
+        if (index >= mock_transportErrorLogCount || entry == NULL) {
+            return false;
+        }
+        uint8_t pos;
+        if (mock_transportErrorLogCount < 16) {
+            pos = index;
+        } else {
+            pos = (mock_transportErrorLogHead + index) % 16;
+        }
+        *entry = mock_transportErrorLog[pos];
+        return true;
+    }
+
+    void transportClearErrorLog(void)
+    {
+        mock_transportErrorLogHead = 0;
+        mock_transportErrorLogCount = 0;
+    }
+
+    uint32_t transportGetTotalErrorCount(void)
+    {
+        return mock_transportTotalErrorCount;
+    }
+
+    void init_TransportErrorLogMock(void)
+    {
+        mock_transportErrorLogHead = 0;
+        mock_transportErrorLogCount = 0;
+        mock_transportTotalErrorCount = 0;
+        memset(mock_transportErrorLog, 0, sizeof(mock_transportErrorLog));
+    }
+#endif // MY_TRANSPORT_ERROR_LOG
 }

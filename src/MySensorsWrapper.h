@@ -17,6 +17,9 @@
 #include "MySensorsMock.h"
 #else
 #include <core/MyMessage.h>
+#ifdef MY_TRANSPORT_ERROR_LOG
+#include <hal/transport/MyTransportErrors.h>
+#endif
 #endif
 
 #ifdef __cplusplus
@@ -56,6 +59,14 @@ extern "C"
     void vHwReadConfigBlock(void *buf, void *addr, size_t length);
     uint8_t u8EEPROMRead(int idx);
     int8_t i8HwCPUTemperature(void);
+
+    // Transport error log
+#ifdef MY_TRANSPORT_ERROR_LOG
+    uint8_t u8TransportGetErrorLogCount(void);
+    bool bTransportGetErrorLogEntry(uint8_t u8Index, TransportErrorLogEntry_t *psEntry);
+    uint32_t u32TransportGetTotalErrorCount(void);
+    void vTransportClearErrorLog(void);
+#endif
 
 #ifdef __cplusplus
 }

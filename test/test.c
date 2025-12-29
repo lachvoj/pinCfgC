@@ -2201,6 +2201,183 @@ void test_vCLI_ChangePassword(void)
 }
 
 // =============================================================================
+// TRANSPORT ERROR LOG CLI TESTS
+// =============================================================================
+
+#ifdef MY_TRANSPORT_ERROR_LOG
+
+/**
+ * Test CLI GET_TSP_ERRORS command with no errors
+ */
+void test_vCLI_GetTransportErrors_Empty(void)
+{
+    Memory_eReset();
+    PinCfgCsv_eInit(testMemory, MEMORY_SZ, NULL);
+
+    init_mock_EEPROM_with_default_password();
+    init_TransportErrorLogMock();
+
+    CLI_T *psCli = (CLI_T *)Memory_vpAlloc(sizeof(CLI_T));
+    Cli_eInit(psCli, 0);
+
+    MyMessage *pcMsg = (MyMessage *)Memory_vpAlloc(sizeof(MyMessage));
+    memset(mock_send_message, 0, sizeof(mock_send_message));
+
+    // Send GET_TSP_ERRORS command with valid auth (fragmented to fit MAX_PAYLOAD_SIZE)
+    // Password: 240be518fabd2724ddb6f04eeb1da5967448d7e831c08c8fa822809f74c720a9
+    strncpy(pcMsg->data, "#[240be518fabd272", MAX_PAYLOAD_SIZE);
+    pcMsg->data[MAX_PAYLOAD_SIZE] = '\0';
+    Cli_vRcvMessage((PRESENTABLE_T *)psCli, pcMsg);
+
+    strncpy(pcMsg->data, "4ddb6f04eeb1da5967448", MAX_PAYLOAD_SIZE);
+    pcMsg->data[MAX_PAYLOAD_SIZE] = '\0';
+    Cli_vRcvMessage((PRESENTABLE_T *)psCli, pcMsg);
+
+    strncpy(pcMsg->data, "d7e831c08c8fa822809f7", MAX_PAYLOAD_SIZE);
+    pcMsg->data[MAX_PAYLOAD_SIZE] = '\0';
+    Cli_vRcvMessage((PRESENTABLE_T *)psCli, pcMsg);
+
+    strcpy(pcMsg->data, "4c720a9/CMD:GET_TSP_ER");
+    Cli_vRcvMessage((PRESENTABLE_T *)psCli, pcMsg);
+
+    // Clear mock before final fragment to capture only the response
+    memset(mock_send_message, 0, sizeof(mock_send_message));
+    strcpy(pcMsg->data, "RORS]#");
+    Cli_vRcvMessage((PRESENTABLE_T *)psCli, pcMsg);
+
+    // Should report no errors
+    TEST_ASSERT_EQUAL_STRING("No errors. Total: 0;", mock_send_message);
+}
+
+/**
+ * Test CLI GET_TSP_ERRORS command with some errors logged
+ */
+void test_vCLI_GetTransportErrors_WithErrors(void)
+{
+    Memory_eReset();
+    PinCfgCsv_eInit(testMemory, MEMORY_SZ, NULL);
+
+    init_mock_EEPROM_with_default_password();
+    init_TransportErrorLogMock();
+
+    // Log some errors
+    transportLogError(0x82, 8, 5);   // CAN TX failed, channel 8, extra 5
+    transportLogError(0x83, 8, 0);   // CAN TX timeout
+    transportLogError(0x8B, 8, 10);  // CAN bus off
+
+    CLI_T *psCli = (CLI_T *)Memory_vpAlloc(sizeof(CLI_T));
+    Cli_eInit(psCli, 0);
+
+    MyMessage *pcMsg = (MyMessage *)Memory_vpAlloc(sizeof(MyMessage));
+    memset(mock_send_message, 0, sizeof(mock_send_message));
+
+    // Send GET_TSP_ERRORS command (fragmented)
+    strncpy(pcMsg->data, "#[240be518fabd272", MAX_PAYLOAD_SIZE);
+    pcMsg->data[MAX_PAYLOAD_SIZE] = '\0';
+    Cli_vRcvMessage((PRESENTABLE_T *)psCli, pcMsg);
+
+    strncpy(pcMsg->data, "4ddb6f04eeb1da5967448", MAX_PAYLOAD_SIZE);
+    pcMsg->data[MAX_PAYLOAD_SIZE] = '\0';
+    Cli_vRcvMessage((PRESENTABLE_T *)psCli, pcMsg);
+
+    strncpy(pcMsg->data, "d7e831c08c8fa822809f7", MAX_PAYLOAD_SIZE);
+    pcMsg->data[MAX_PAYLOAD_SIZE] = '\0';
+    Cli_vRcvMessage((PRESENTABLE_T *)psCli, pcMsg);
+
+    strcpy(pcMsg->data, "4c720a9/CMD:GET_TSP_ER");
+    Cli_vRcvMessage((PRESENTABLE_T *)psCli, pcMsg);
+
+    // Clear mock before final fragment to capture only the response
+    memset(mock_send_message, 0, sizeof(mock_send_message));
+    strcpy(pcMsg->data, "RORS]#");
+    Cli_vRcvMessage((PRESENTABLE_T *)psCli, pcMsg);
+
+    // Message is split every 25 chars by Cli_vSendBigMessage, mock adds ; after each
+    // Full message: "T:3,C:3|1000,82,8,5|1100,83,8,0|1200,8B,8,10" (47 chars)
+    TEST_ASSERT_EQUAL_STRING("T:3,C:3|1000,82,8,5|1100,;83,8,0|1200,8B,8,10;READY;", mock_send_message);
+}
+
+/**
+ * Test CLI CLR_TSP_ERRORS command
+ */
+void test_vCLI_ClearTransportErrors(void)
+{
+    Memory_eReset();
+    PinCfgCsv_eInit(testMemory, MEMORY_SZ, NULL);
+
+    init_mock_EEPROM_with_default_password();
+    init_TransportErrorLogMock();
+
+    // Log some errors first
+    transportLogError(0x82, 8, 1);
+    transportLogError(0x83, 8, 2);
+    TEST_ASSERT_EQUAL(2, transportGetErrorLogCount());
+
+    CLI_T *psCli = (CLI_T *)Memory_vpAlloc(sizeof(CLI_T));
+    Cli_eInit(psCli, 0);
+
+    MyMessage *pcMsg = (MyMessage *)Memory_vpAlloc(sizeof(MyMessage));
+    memset(mock_send_message, 0, sizeof(mock_send_message));
+
+    // Send CLR_TSP_ERRORS command (fragmented)
+    strncpy(pcMsg->data, "#[240be518fabd272", MAX_PAYLOAD_SIZE);
+    pcMsg->data[MAX_PAYLOAD_SIZE] = '\0';
+    Cli_vRcvMessage((PRESENTABLE_T *)psCli, pcMsg);
+
+    strncpy(pcMsg->data, "4ddb6f04eeb1da5967448", MAX_PAYLOAD_SIZE);
+    pcMsg->data[MAX_PAYLOAD_SIZE] = '\0';
+    Cli_vRcvMessage((PRESENTABLE_T *)psCli, pcMsg);
+
+    strncpy(pcMsg->data, "d7e831c08c8fa822809f7", MAX_PAYLOAD_SIZE);
+    pcMsg->data[MAX_PAYLOAD_SIZE] = '\0';
+    Cli_vRcvMessage((PRESENTABLE_T *)psCli, pcMsg);
+
+    strcpy(pcMsg->data, "4c720a9/CMD:CLR_TSP_ER");
+    Cli_vRcvMessage((PRESENTABLE_T *)psCli, pcMsg);
+
+    // Clear mock before final fragment to capture only the response
+    memset(mock_send_message, 0, sizeof(mock_send_message));
+    strcpy(pcMsg->data, "RORS]#");
+    Cli_vRcvMessage((PRESENTABLE_T *)psCli, pcMsg);
+
+    // Should confirm cleared
+    TEST_ASSERT_EQUAL_STRING("Errors cleared.;", mock_send_message);
+
+    // Error count should be 0 now
+    TEST_ASSERT_EQUAL(0, transportGetErrorLogCount());
+
+    // Total count should still be tracked
+    TEST_ASSERT_EQUAL(2, transportGetTotalErrorCount());
+}
+
+/**
+ * Test CLI GET_TSP_ERRORS requires authentication
+ */
+void test_vCLI_GetTransportErrors_AuthRequired(void)
+{
+    Memory_eReset();
+    PinCfgCsv_eInit(testMemory, MEMORY_SZ, NULL);
+
+    init_mock_EEPROM_with_default_password();
+    init_TransportErrorLogMock();
+
+    CLI_T *psCli = (CLI_T *)Memory_vpAlloc(sizeof(CLI_T));
+    Cli_eInit(psCli, 0);
+
+    MyMessage *pcMsg = (MyMessage *)Memory_vpAlloc(sizeof(MyMessage));
+    memset(mock_send_message, 0, sizeof(mock_send_message));
+
+    // Send GET_TSP_ERRORS with wrong password (short enough to fit)
+    strcpy(pcMsg->data, "#[wrongpwd/CMD:GET_TSP");
+    Cli_vRcvMessage((PRESENTABLE_T *)psCli, pcMsg);
+
+    // Should fail authentication immediately when '/' is found
+    TEST_ASSERT_EQUAL_STRING("Authentication failed.;", mock_send_message);
+}
+
+#endif // MY_TRANSPORT_ERROR_LOG
+
+// =============================================================================
 // I2C MEASUREMENT TESTS
 // =============================================================================
 
@@ -5548,6 +5725,14 @@ int test_main(void)
     RUN_TEST(test_vPinCfgCsv_EdgeCases);
     RUN_TEST(test_vCLI_EdgeCases);
     RUN_TEST(test_vCLI_ChangePassword);
+
+#ifdef MY_TRANSPORT_ERROR_LOG
+    // Transport error log CLI tests
+    RUN_TEST(test_vCLI_GetTransportErrors_Empty);
+    RUN_TEST(test_vCLI_GetTransportErrors_WithErrors);
+    RUN_TEST(test_vCLI_ClearTransportErrors);
+    RUN_TEST(test_vCLI_GetTransportErrors_AuthRequired);
+#endif
 
 #ifdef PINCFG_FEATURE_I2C_MEASUREMENT
     // I2C measurement tests

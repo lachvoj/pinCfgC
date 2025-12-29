@@ -121,4 +121,26 @@ extern "C"
     {
         return hwCPUTemperature();
     }
+
+#ifdef MY_TRANSPORT_ERROR_LOG
+    uint8_t u8TransportGetErrorLogCount(void)
+    {
+        return transportGetErrorLogCount();
+    }
+
+    bool bTransportGetErrorLogEntry(uint8_t u8Index, TransportErrorLogEntry_t *psEntry)
+    {
+        return transportGetErrorLogEntry(u8Index, psEntry);
+    }
+
+    uint32_t u32TransportGetTotalErrorCount(void)
+    {
+        return transportGetTotalErrorCount();
+    }
+
+    void vTransportClearErrorLog(void)
+    {
+        transportClearErrorLog();
+    }
+#endif
 }
