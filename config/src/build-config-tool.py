@@ -3,6 +3,7 @@
 pinCfgC Config Tool Builder
 Combines separate HTML, CSS, and JavaScript files into a single HTML file.
 Automatically extracts V_TYPES and S_TYPES from MySensors header.
+Also extracts CLI commands from Cli.c and error codes from MyTransportErrors.h.
 """
 
 import os
@@ -305,6 +306,164 @@ def parse_pincfg_defines(types_header_path):
         print("Using fallback constraints...")
         return generate_fallback_constraints()
 
+def parse_cli_commands(cli_c_path):
+    """Parse CLI commands from Cli.c source file."""
+    
+    if not os.path.exists(cli_c_path):
+        print(f"Warning: Cli.c not found: {cli_c_path}")
+        return generate_fallback_cli_commands()
+    
+    try:
+        with open(cli_c_path, 'r', encoding='utf-8') as f:
+            content = f.read()
+        
+        print(f"Parsing CLI commands from: {cli_c_path}")
+        
+        commands = []
+        
+        # Parse strcmp(pcCmd, "COMMAND") patterns
+        strcmp_pattern = r'strcmp\(pcCmd,\s*"([A-Z_]+)"\)'
+        for match in re.finditer(strcmp_pattern, content):
+            cmd_name = match.group(1)
+            commands.append({
+                'name': cmd_name,
+                'hasParam': False,
+                'description': get_command_description(cmd_name)
+            })
+        
+        # Parse strncmp(pcCmd, "PREFIX:", len) patterns
+        strncmp_pattern = r'strncmp\(pcCmd,\s*"([A-Z_]+:)",\s*\d+\)'
+        for match in re.finditer(strncmp_pattern, content):
+            cmd_name = match.group(1)
+            commands.append({
+                'name': cmd_name,
+                'hasParam': True,
+                'description': get_command_description(cmd_name.rstrip(':'))
+            })
+        
+        print(f"  Found {len(commands)} CLI commands")
+        
+        # Generate JavaScript
+        js_code = []
+        js_code.append("// CLI commands - auto-generated from Cli.c")
+        js_code.append("const CLI_COMMANDS = [")
+        
+        for cmd in commands:
+            js_code.append(f"    {{name: '{cmd['name']}', hasParam: {str(cmd['hasParam']).lower()}, description: '{cmd['description']}'}},")
+        
+        js_code.append("];")
+        
+        return '\n'.join(js_code)
+        
+    except Exception as e:
+        print(f"Error parsing Cli.c: {e}")
+        return generate_fallback_cli_commands()
+
+def get_command_description(cmd_name):
+    """Return description for known CLI commands."""
+    descriptions = {
+        'GET_CFG': 'Retrieve current configuration from device',
+        'RESET': 'Reset/reboot the device',
+        'CHANGE_PWD': 'Change authentication password (requires new hash)',
+        'GET_TSP_ERRORS': 'Get transport error log (requires MY_TRANSPORT_ERROR_LOG)',
+        'CLR_TSP_ERRORS': 'Clear transport error log (requires MY_TRANSPORT_ERROR_LOG)',
+    }
+    return descriptions.get(cmd_name, f'Execute {cmd_name} command')
+
+def generate_fallback_cli_commands():
+    """Generate fallback CLI commands if Cli.c is not available."""
+    return """// CLI commands - fallback
+const CLI_COMMANDS = [
+    {name: 'GET_CFG', hasParam: false, description: 'Retrieve current configuration from device'},
+    {name: 'RESET', hasParam: false, description: 'Reset/reboot the device'},
+    {name: 'CHANGE_PWD:', hasParam: true, description: 'Change authentication password (requires new hash)'},
+    {name: 'GET_TSP_ERRORS', hasParam: false, description: 'Get transport error log'},
+    {name: 'CLR_TSP_ERRORS', hasParam: false, description: 'Clear transport error log'},
+];"""
+
+def parse_error_codes(errors_h_path):
+    """Parse transport error codes from MyTransportErrors.h."""
+    
+    if not os.path.exists(errors_h_path):
+        print(f"Warning: MyTransportErrors.h not found: {errors_h_path}")
+        return generate_fallback_error_codes()
+    
+    try:
+        with open(errors_h_path, 'r', encoding='utf-8') as f:
+            content = f.read()
+        
+        print(f"Parsing error codes from: {errors_h_path}")
+        
+        # Pattern: #define TSP_ERR_NAME 0xXX // Description
+        pattern = r'#define\s+(TSP_ERR_[A-Z_0-9]+)\s+(0x[0-9A-Fa-f]+)\s*//\s*(.+)'
+        
+        errors = {}
+        for match in re.finditer(pattern, content):
+            name = match.group(1)
+            code = int(match.group(2), 16)
+            description = match.group(3).strip()
+            
+            # Determine severity
+            severity = get_error_severity(code, name)
+            
+            errors[code] = {
+                'name': name,
+                'description': description,
+                'severity': severity
+            }
+        
+        print(f"  Found {len(errors)} error codes")
+        
+        # Generate JavaScript
+        js_code = []
+        js_code.append("// Transport error codes - auto-generated from MyTransportErrors.h")
+        js_code.append("const ERROR_CODES = {")
+        
+        for code in sorted(errors.keys()):
+            err = errors[code]
+            # Escape single quotes in description
+            desc = err['description'].replace("'", "\\'")
+            js_code.append(f"    0x{code:02X}: {{name: '{err['name']}', description: '{desc}', severity: '{err['severity']}'}},")
+        
+        js_code.append("};")
+        
+        return '\n'.join(js_code)
+        
+    except Exception as e:
+        print(f"Error parsing MyTransportErrors.h: {e}")
+        return generate_fallback_error_codes()
+
+def get_error_severity(code, name):
+    """Determine error severity based on code and name."""
+    # Critical: Bus-off, init failures, recovery failed
+    if 'INIT' in name or 'BUS_OFF' in name or 'RECOVERY_FAILED' in name:
+        return 'critical'
+    
+    # Info: Recovery OK, no error
+    if code == 0x00 or 'RECOVERY_OK' in name:
+        return 'info'
+    
+    # Warning: Passive, warning, overflow states
+    if 'PASSIVE' in name or 'WARNING' in name or 'OVERFLOW' in name or 'OVF' in name or 'FULL' in name:
+        return 'warning'
+    
+    return 'default'
+
+def generate_fallback_error_codes():
+    """Generate fallback error codes if header is not available."""
+    return """// Transport error codes - fallback
+const ERROR_CODES = {
+    0x00: {name: 'TSP_ERR_NONE', description: 'No error', severity: 'info'},
+    0x01: {name: 'TSP_ERR_INIT_FAILED', description: 'Transport initialization failed', severity: 'critical'},
+    0x0C: {name: 'TSP_ERR_RECOVERY_OK', description: 'Recovery successful', severity: 'info'},
+    0x0D: {name: 'TSP_ERR_RECOVERY_FAILED', description: 'Recovery failed', severity: 'critical'},
+    0x80: {name: 'TSP_ERR_CAN_INIT', description: 'CAN init failed', severity: 'critical'},
+    0x82: {name: 'TSP_ERR_CAN_TX_FAILED', description: 'CAN TX failed', severity: 'default'},
+    0x8B: {name: 'TSP_ERR_CAN_BUS_OFF', description: 'Bus-off state', severity: 'critical'},
+    0x8C: {name: 'TSP_ERR_CAN_BUS_PASSIVE', description: 'Error passive state', severity: 'warning'},
+    0x8D: {name: 'TSP_ERR_CAN_BUS_WARNING', description: 'Error warning threshold', severity: 'warning'},
+};"""
+
 def generate_fallback_constraints():
     """Generate fallback constraints if Types.h is not available."""
     return """// pinCfgC constraints and defaults - fallback
@@ -379,6 +538,8 @@ def main():
         os.path.join(script_dir, 'config-tool-script-part2.js'),
         os.path.join(script_dir, 'config-tool-script-part3.js'),
         os.path.join(script_dir, 'config-tool-script-part4.js'),
+        os.path.join(script_dir, 'config-tool-script-part5.js'),
+        os.path.join(script_dir, 'config-tool-script-part6.js'),
     ]
     # Output in config directory
     output_file = os.path.join(config_dir, 'config-tool.html')
@@ -394,12 +555,24 @@ def main():
         script_dir, '..', '..', 'src', 'Types.h'
     )
     
+    # Cli.c path (from config/src -> ../src/Cli.c)
+    cli_c_file = os.path.join(
+        script_dir, '..', '..', 'src', 'Cli.c'
+    )
+    
+    # MyTransportErrors.h path
+    errors_header = os.path.join(
+        script_dir, '..', '..', '..', 'MySensors', 'hal', 'transport', 'MyTransportErrors.h'
+    )
+    
     print("Building pinCfgC Configuration Tool...")
     print(f"Template: {template_file}")
     print(f"CSS: {css_file}")
     print(f"JavaScript parts: {len(js_files)}")
     print(f"MySensors header: {mysensors_header}")
     print(f"Types.h header: {types_header}")
+    print(f"Cli.c: {cli_c_file}")
+    print(f"MyTransportErrors.h: {errors_header}")
     print(f"Output: {output_file}")
     print()
     
@@ -417,6 +590,16 @@ def main():
     # Parse pinCfgC constraints
     print("Parsing pinCfgC constraints...")
     pincfg_limits_js = parse_pincfg_defines(types_header)
+    print()
+    
+    # Parse CLI commands
+    print("Parsing CLI commands...")
+    cli_commands_js = parse_cli_commands(cli_c_file)
+    print()
+    
+    # Parse error codes
+    print("Parsing error codes...")
+    error_codes_js = parse_error_codes(errors_header)
     print()
     
     # Read and combine JavaScript files
@@ -447,8 +630,8 @@ def main():
                 js_part,
                 flags=re.DOTALL
             )
-            # Insert generated types and limits at the beginning
-            js_part = mysensors_types_js + "\n\n" + pincfg_limits_js + "\n\n" + js_part
+            # Insert generated types, limits, CLI commands, and error codes at the beginning
+            js_part = mysensors_types_js + "\n\n" + pincfg_limits_js + "\n\n" + cli_commands_js + "\n\n" + error_codes_js + "\n\n" + js_part
         
         js_content += js_part + "\n\n"
     

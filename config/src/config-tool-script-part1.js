@@ -268,6 +268,9 @@ function initializeGlobalConfig() {
 }
 
 function setupEventListeners() {
+    // Tab navigation
+    setupTabListeners();
+    
     // Switch controls
     document.getElementById('addSwitchBtn').addEventListener('click', addSwitch);
     
@@ -310,6 +313,38 @@ function setupEventListeners() {
             generateOutput();
         });
     }
+    
+    // Setup Commands Tab
+    if (typeof setupCommandsTab === 'function') {
+        setupCommandsTab();
+    }
+    
+    // Setup Errors Tab
+    if (typeof setupErrorsTab === 'function') {
+        setupErrorsTab();
+    }
+}
+
+function setupTabListeners() {
+    const tabBtns = document.querySelectorAll('.tab-btn');
+    const tabContents = document.querySelectorAll('.tab-content');
+    
+    tabBtns.forEach(btn => {
+        btn.addEventListener('click', function() {
+            const targetTab = this.dataset.tab;
+            
+            // Remove active from all tabs and contents
+            tabBtns.forEach(b => b.classList.remove('active'));
+            tabContents.forEach(c => c.classList.remove('active'));
+            
+            // Add active to clicked button and corresponding content
+            this.classList.add('active');
+            const targetContent = document.getElementById(`tab-${targetTab}`);
+            if (targetContent) {
+                targetContent.classList.add('active');
+            }
+        });
+    });
 }
 
 function addSwitch() {

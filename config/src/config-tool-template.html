@@ -10,10 +10,15 @@
 </head>
 <body>
     <div class="container">
-        <header>
-            <h1>pinCfgC Config Tool</h1>
-            <p class="subtitle">Visual Builder & Validator</p>
-        </header>
+        <!-- Tab Navigation (replaces header) -->
+        <div class="tab-nav">
+            <button class="tab-btn active" data-tab="config">📝 Config Tool</button>
+            <button class="tab-btn" data-tab="commands">⚡ CLI Commands</button>
+            <button class="tab-btn" data-tab="errors">🔴 Error Decoder</button>
+        </div>
+
+        <!-- Config Tool Tab -->
+        <div class="tab-content active" id="tab-config">
 
         <div class="toolbar">
             <button id="saveBtn" class="btn btn-primary">💾 Save</button>
@@ -176,6 +181,150 @@
                 </div>
             </div>
         </div>
+        </div><!-- End Config Tool Tab -->
+
+        <!-- CLI Commands Tab -->
+        <div class="tab-content" id="tab-commands">
+            <div class="main-layout">
+                <!-- Input Section (Left) -->
+                <div class="builder-section">
+                    <h2>Command Input</h2>
+                    
+                    <!-- Authentication (shared with config tab) -->
+                    <section class="config-section">
+                        <h3>Authentication</h3>
+                        <div class="form-group">
+                            <label>Password</label>
+                            <div class="password-input-wrapper">
+                                <input type="password" id="cmdAuthPassword" class="text-input" placeholder="Enter password to generate hash">
+                                <button type="button" class="password-toggle" id="toggleCmdPassword" title="Show/Hide password">
+                                    <span class="eye-icon">👁</span>
+                                </button>
+                            </div>
+                        </div>
+                        <div class="form-group">
+                            <label>SHA256 Hash</label>
+                            <input type="text" id="cmdAuthPasswordHash" class="text-input" placeholder="Auto-generated or paste existing hash" style="font-family: monospace; font-size: 0.85em;">
+                        </div>
+                    </section>
+
+                    <!-- Command Selection -->
+                    <section class="config-section">
+                        <h3>Command</h3>
+                        <div class="form-group">
+                            <label>Select Command</label>
+                            <select id="cmdSelect" class="select-input">
+                                <option value="">-- Select a command --</option>
+                                <!-- Options populated from CLI_COMMANDS by JavaScript -->
+                            </select>
+                        </div>
+                        <div id="cmdDescription" class="helper-text" style="margin-top: 10px;"></div>
+                        
+                        <!-- CHANGE_PWD parameter -->
+                        <div id="cmdChangePwdParams" class="cmd-params" style="display: none; margin-top: 15px;">
+                            <div class="form-group">
+                                <label>New Password</label>
+                                <div class="password-input-wrapper">
+                                    <input type="password" id="newPassword" class="text-input" placeholder="Enter new password">
+                                    <button type="button" class="password-toggle" id="toggleNewPassword" title="Show/Hide password">
+                                        <span class="eye-icon">👁</span>
+                                    </button>
+                                </div>
+                            </div>
+                            <div class="form-group">
+                                <label>New Password Hash (auto-generated)</label>
+                                <input type="text" id="newPasswordHash" class="text-input" readonly style="font-family: monospace; font-size: 0.85em;">
+                            </div>
+                        </div>
+                    </section>
+                </div>
+
+                <!-- Output Section (Right) -->
+                <div class="output-section">
+                    <h2>Generated Command</h2>
+                    
+                    <div class="output-controls">
+                        <button id="generateCmdBtn" class="btn btn-success">🔄 Generate Command</button>
+                        <button id="copyCmdAllBtn" class="btn btn-secondary">📋 Copy All</button>
+                    </div>
+
+                    <div class="output-area">
+                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
+                            <h3>Fixed-Width Lines (CLI Format)</h3>
+                            <div class="line-break-control">
+                                <label for="cmdLineBreakCount">Break every</label>
+                                <input type="number" id="cmdLineBreakCount" min="5" max="25" value="18" class="number-input" style="width: 60px;">
+                                <label>characters</label>
+                            </div>
+                        </div>
+                        <div id="cmdLinesOutput" class="lines-output"></div>
+                    </div>
+                </div>
+            </div>
+        </div><!-- End CLI Commands Tab -->
+
+        <!-- Error Decoder Tab -->
+        <div class="tab-content" id="tab-errors">
+            <div class="main-layout">
+                <!-- Input Section (Left) -->
+                <div class="builder-section">
+                    <h2>Error Log Input</h2>
+                    
+                    <!-- Boot Time Input -->
+                    <section class="config-section">
+                        <h3>Settings</h3>
+                        <div class="form-group">
+                            <label>Device Boot Time</label>
+                            <input type="datetime-local" id="bootTime" class="text-input">
+                            <span class="helper-text">Used to convert millisecond timestamps to actual time. Defaults to current time.</span>
+                        </div>
+                    </section>
+
+                    <!-- Error Log Input -->
+                    <section class="config-section">
+                        <h3>Raw Error Log</h3>
+                        <div class="form-group">
+                            <label>Paste Error Log Response</label>
+                            <textarea id="errorLogInput" class="output-textarea" rows="6" placeholder="Paste GET_TSP_ERRORS response here, e.g.: T:5,C:3|12345,82,0,1|12400,8B,0,128|..."></textarea>
+                        </div>
+                        <div class="output-controls">
+                            <button id="decodeErrorsBtn" class="btn btn-success">🔍 Decode Errors</button>
+                            <button id="clearErrorsBtn" class="btn btn-danger">🗑️ Clear</button>
+                        </div>
+                    </section>
+                </div>
+
+                <!-- Output Section (Right) -->
+                <div class="output-section">
+                    <h2>Decoded Errors</h2>
+                    
+                    <div id="errorSummary" class="error-summary" style="display: none;">
+                        <span id="errorTotalCount"></span>
+                        <span id="errorDisplayCount"></span>
+                    </div>
+                    
+                    <div id="errorTableContainer" class="error-table-container">
+                        <table class="error-table" id="errorTable">
+                            <thead>
+                                <tr>
+                                    <th>Time</th>
+                                    <th>Code</th>
+                                    <th>Name</th>
+                                    <th>Channel</th>
+                                    <th>Extra</th>
+                                    <th>Description</th>
+                                </tr>
+                            </thead>
+                            <tbody id="errorTableBody">
+                                <!-- Populated by JavaScript -->
+                            </tbody>
+                        </table>
+                        <p id="noErrorsMessage" class="helper-text" style="text-align: center; padding: 20px;">No errors decoded yet. Paste error log above and click "Decode Errors".</p>
+                    </div>
+                </div>
+            </div>
+        </div><!-- End Error Decoder Tab -->
+
     </div>
 
     <script>
