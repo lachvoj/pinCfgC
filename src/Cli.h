@@ -19,7 +19,8 @@ typedef enum CLI_STATE_E
     CLI_READY_E = 0,
     CLI_OUT_OF_MEM_ERR_E,
     CLI_RECEIVING_AUTH_E, // Receiving fragmented password
-    CLI_RECEIVING_DATA_E, // Receiving config/command data (after auth, use bIsConfig to differentiate)
+    CLI_RECEIVING_TYPE_E, // Receiving fragmented CFG:/CMD: prefix
+    CLI_RECEIVING_DATA_E, // Receiving config/command data (after type determined)
     CLI_RECEIVED_E,
     CLI_VALIDATING_E,
     CLI_VALIDATION_OK_E,

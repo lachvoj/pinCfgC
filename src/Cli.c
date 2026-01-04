@@ -13,6 +13,7 @@ static const char *_apcStateStrings[] = {
     "READY",
     "OUT_OF_MEMORY_ERROR",
     "RECEIVING_AUTH",
+    "RECEIVING_TYPE",
     "RECEIVING_DATA",
     "RECEIVED",
     "VALIDATING",
@@ -164,6 +165,28 @@ static void Cli_vFinalizeData(CLI_T *psHandle)
     Cli_vResetState(psHandle);
 }
 
+// Helper: Append data to buffer, returns false if too large
+static bool Cli_bAppendToBuffer(CLI_T *psHandle, const char *pcData, size_t szLen, size_t szMaxLen)
+{
+    if (psHandle->u16CfgNext + szLen >= szMaxLen)
+    {
+        Cli_vSetState(psHandle, CLI_CUSTOM_E, _pcDataTooLargeMsg, true);
+        Cli_vResetState(psHandle);
+        return false;
+    }
+    memcpy(psHandle->pcCfgBuf + psHandle->u16CfgNext, pcData, szLen);
+    psHandle->u16CfgNext += szLen;
+    psHandle->pcCfgBuf[psHandle->u16CfgNext] = '\0';
+    return true;
+}
+
+// Helper: Echo message back and send state
+static void Cli_vEchoAndSend(CLI_T *psHandle, PRESENTABLE_T *psBaseHandle, const char *pcMessage)
+{
+    psBaseHandle->pcState = pcMessage;
+    Presentable_vSendState(psBaseHandle);
+}
+
 // Helper: Process message type (CFG:/CMD:) after successful authentication
 // pcDataStart points to position after '/' (where CFG: or CMD: should be)
 static void Cli_vProcessAfterAuth(
@@ -172,16 +195,30 @@ static void Cli_vProcessAfterAuth(
     char *pcDataStart,
     const char *pcMessage)
 {
+    size_t szFragmentLen = strlen(pcDataStart);
+    
+    // If fragment is too short to check for CFG:/CMD:, buffer and wait
+    if (szFragmentLen < 4)
+    {
+        memcpy(psHandle->pcCfgBuf, pcDataStart, szFragmentLen);
+        psHandle->pcCfgBuf[szFragmentLen] = '\0';
+        psHandle->u16CfgNext = szFragmentLen;
+        Cli_vSetState(psHandle, CLI_RECEIVING_TYPE_E, NULL, false);
+        psBaseHandle->pcState = pcMessage;
+        Presentable_vSendState(psBaseHandle);
+        return;
+    }
+    
     // Check for CFG: or CMD: prefix
-    if (strncmp(pcDataStart, _pcCfgPrefix, strlen(_pcCfgPrefix)) == 0)
+    if (strncmp(pcDataStart, _pcCfgPrefix, 4) == 0)
     {
         psHandle->bIsConfig = true;
-        pcDataStart += strlen(_pcCfgPrefix);
+        pcDataStart += 4;
     }
-    else if (strncmp(pcDataStart, _pcCmdPrefix, strlen(_pcCmdPrefix)) == 0)
+    else if (strncmp(pcDataStart, _pcCmdPrefix, 4) == 0)
     {
         psHandle->bIsConfig = false;
-        pcDataStart += strlen(_pcCmdPrefix);
+        pcDataStart += 4;
     }
     else
     {
@@ -308,51 +345,76 @@ void Cli_vRcvMessage(PRESENTABLE_T *psBaseHandle, const MyMessage *pcMsg)
     if (psHandle->eState == CLI_RECEIVING_AUTH_E)
     {
         char *pcPwdEnd = strchr(pcMessage, '/');
+        size_t szFragmentLen = pcPwdEnd ? (size_t)(pcPwdEnd - pcMessage) : strlen(pcMessage);
+
+        if (psHandle->u16CfgNext + szFragmentLen > PINCFG_AUTH_HEX_PASSWORD_LEN_D)
+        {
+            Cli_vSetState(psHandle, CLI_CUSTOM_E, _pcInvalidPwdLenMsg, true);
+            Cli_vResetState(psHandle);
+            return;
+        }
+
+        memcpy(psHandle->pcCfgBuf + psHandle->u16CfgNext, pcMessage, szFragmentLen);
+        psHandle->u16CfgNext += szFragmentLen;
+        psHandle->pcCfgBuf[psHandle->u16CfgNext] = '\0';
 
         if (pcPwdEnd != NULL)
         {
-            // Found pwd terminator
-            size_t szFragmentLen = pcPwdEnd - pcMessage;
-            size_t szTotalPwdLen = psHandle->u16CfgNext + szFragmentLen;
-
-            if (szTotalPwdLen > PINCFG_AUTH_HEX_PASSWORD_LEN_D)
-            {
-                Cli_vSetState(psHandle, CLI_CUSTOM_E, _pcInvalidPwdLenMsg, true);
-                Cli_vResetState(psHandle);
-                return;
-            }
-
-            // Complete pwd in buffer
-            memcpy(psHandle->pcCfgBuf + psHandle->u16CfgNext, pcMessage, szFragmentLen);
-            psHandle->pcCfgBuf[szTotalPwdLen] = '\0';
-
+            // Password complete - verify and continue
             CLI_AUTH_RESULT_T eAuthResult = CliAuth_eVerifyPasswordRateLimited(
                 psHandle->pcCfgBuf, u32Millis(), &psHandle->u8FailedAttempts, &psHandle->u32LockoutUntilMs);
 
             if (!Cli_bHandleAuthResult(psHandle, eAuthResult))
                 return;
 
-            // Auth successful - process message type
             Cli_vProcessAfterAuth(psHandle, psBaseHandle, pcPwdEnd + 1, pcMessage);
         }
         else
         {
-            // Password continues
-            size_t szFragmentLen = strlen(pcMessage);
-            size_t szNewTotal = psHandle->u16CfgNext + szFragmentLen;
+            Cli_vEchoAndSend(psHandle, psBaseHandle, pcMessage);
+        }
+        return;
+    }
 
-            if (szNewTotal > PINCFG_AUTH_HEX_PASSWORD_LEN_D)
+    // STATE: RECEIVING_TYPE - Continue receiving fragmented CFG:/CMD: prefix
+    if (psHandle->eState == CLI_RECEIVING_TYPE_E)
+    {
+        if (!Cli_bAppendToBuffer(psHandle, pcMessage, strlen(pcMessage), PINCFG_CONFIG_MAX_SZ_D))
+            return;
+        
+        if (psHandle->u16CfgNext >= 4)
+        {
+            // Determine message type
+            if (strncmp(psHandle->pcCfgBuf, _pcCfgPrefix, 4) == 0)
+                psHandle->bIsConfig = true;
+            else if (strncmp(psHandle->pcCfgBuf, _pcCmdPrefix, 4) == 0)
+                psHandle->bIsConfig = false;
+            else
             {
-                Cli_vSetState(psHandle, CLI_CUSTOM_E, _pcInvalidPwdLenMsg, true);
+                Cli_vSetState(psHandle, CLI_CUSTOM_E, _pcInvalidMsgTypeMsg, true);
                 Cli_vResetState(psHandle);
                 return;
             }
-
-            memcpy(psHandle->pcCfgBuf + psHandle->u16CfgNext, pcMessage, szFragmentLen);
-            psHandle->u16CfgNext = szNewTotal;
-            psBaseHandle->pcState = pcMessage;
-            Presentable_vSendState(psBaseHandle);
+            
+            // Move data after prefix to start of buffer
+            size_t szDataLen = psHandle->u16CfgNext - 4;
+            if (szDataLen > 0)
+                memmove(psHandle->pcCfgBuf, psHandle->pcCfgBuf + 4, szDataLen);
+            psHandle->pcCfgBuf[szDataLen] = '\0';
+            psHandle->u16CfgNext = szDataLen;
+            
+            // Check for end marker
+            char *pcEndString = strstr(psHandle->pcCfgBuf, _pcMsgEND);
+            if (pcEndString != NULL)
+            {
+                *pcEndString = '\0';
+                Cli_vFinalizeData(psHandle);
+                return;
+            }
+            Cli_vSetState(psHandle, CLI_RECEIVING_DATA_E, NULL, false);
         }
+        
+        Cli_vEchoAndSend(psHandle, psBaseHandle, pcMessage);
         return;
     }
 
@@ -360,36 +422,15 @@ void Cli_vRcvMessage(PRESENTABLE_T *psBaseHandle, const MyMessage *pcMsg)
     if (psHandle->eState == CLI_RECEIVING_DATA_E)
     {
         char *pcEndString = strstr((char *)pcMessage, _pcMsgEND);
+        size_t szLen = pcEndString ? (size_t)(pcEndString - pcMessage) : strlen(pcMessage);
+
+        if (!Cli_bAppendToBuffer(psHandle, pcMessage, szLen, PINCFG_CONFIG_MAX_SZ_D))
+            return;
+
         if (pcEndString != NULL)
-        {
-            // End marker found - finalize
-            size_t szLen = pcEndString - pcMessage;
-            if (psHandle->u16CfgNext + szLen >= PINCFG_CONFIG_MAX_SZ_D)
-            {
-                Cli_vSetState(psHandle, CLI_CUSTOM_E, _pcDataTooLargeMsg, true);
-                Cli_vResetState(psHandle);
-                return;
-            }
-            memcpy(psHandle->pcCfgBuf + psHandle->u16CfgNext, pcMessage, szLen);
-            psHandle->pcCfgBuf[psHandle->u16CfgNext + szLen] = '\0';
             Cli_vFinalizeData(psHandle);
-        }
         else
-        {
-            // Continue accumulating
-            size_t szCopy = strlen(pcMessage);
-            if (psHandle->u16CfgNext + szCopy >= PINCFG_CONFIG_MAX_SZ_D)
-            {
-                Cli_vSetState(psHandle, CLI_CUSTOM_E, _pcDataTooLargeMsg, true);
-                Cli_vResetState(psHandle);
-                return;
-            }
-            memcpy(psHandle->pcCfgBuf + psHandle->u16CfgNext, pcMessage, szCopy);
-            psHandle->u16CfgNext += szCopy;
-            psHandle->pcCfgBuf[psHandle->u16CfgNext] = '\0';
-            psBaseHandle->pcState = pcMessage;
-            Presentable_vSendState(psBaseHandle);
-        }
+            Cli_vEchoAndSend(psHandle, psBaseHandle, pcMessage);
         return;
     }
 }

@@ -518,6 +518,44 @@ function copyAllOutput() {
     }, 2000);
 }
 
+function buildFullCliMessage(config, isConfig = true) {
+    if (!config) return null;
+    
+    // Remove newlines and create continuous string
+    let continuous = config.replace(/\n/g, '');
+    
+    // Build full CLI message: #[hash/TYPE:data]#
+    let fullMessage = '#[';
+    
+    if (configState.authPasswordHash) {
+        fullMessage += `${configState.authPasswordHash}/`;
+    }
+    
+    fullMessage += isConfig ? 'CFG:' : 'CMD:';
+    fullMessage += continuous;
+    fullMessage += ']#';
+    
+    return fullMessage;
+}
+
+function copyFullCliMessage() {
+    const output = document.getElementById('fullOutput').value;
+    if (!output) {
+        alert('Generate configuration first!');
+        return;
+    }
+    
+    const fullMessage = buildFullCliMessage(output, true);
+    copyToClipboard(fullMessage);
+    
+    const btn = document.getElementById('copyFullCliBtn');
+    const originalText = btn.textContent;
+    btn.textContent = '✓ Copied!';
+    setTimeout(() => {
+        btn.textContent = originalText;
+    }, 2000);
+}
+
 function copyToClipboard(text) {
     if (navigator.clipboard && navigator.clipboard.writeText) {
         navigator.clipboard.writeText(text).catch(err => {

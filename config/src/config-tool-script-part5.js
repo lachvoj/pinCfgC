@@ -41,6 +41,12 @@ function setupCommandsTab() {
         copyAllBtn.addEventListener('click', copyAllCommandLines);
     }
     
+    // Setup copy full CLI message button
+    const copyFullCliBtn = document.getElementById('copyCmdFullCliBtn');
+    if (copyFullCliBtn) {
+        copyFullCliBtn.addEventListener('click', copyCmdFullCliMessage);
+    }
+    
     // Setup line break change handler
     const lineBreakInput = document.getElementById('cmdLineBreakCount');
     if (lineBreakInput) {
@@ -291,5 +297,29 @@ function copyAllCommandLines() {
             copyBtn.textContent = '✓ Copied!';
             setTimeout(() => { copyBtn.textContent = originalText; }, 2000);
         }
+    }
+}
+
+function copyCmdFullCliMessage() {
+    const container = document.getElementById('cmdLinesOutput');
+    if (!container) return;
+    
+    const lines = container.querySelectorAll('.line-text');
+    let fullText = '';
+    lines.forEach(line => {
+        fullText += line.textContent;
+    });
+    
+    if (fullText) {
+        copyToClipboard(fullText);
+        
+        const copyBtn = document.getElementById('copyCmdFullCliBtn');
+        if (copyBtn) {
+            const originalText = copyBtn.textContent;
+            copyBtn.textContent = '✓ Copied!';
+            setTimeout(() => { copyBtn.textContent = originalText; }, 2000);
+        }
+    } else {
+        alert('Generate command first!');
     }
 }

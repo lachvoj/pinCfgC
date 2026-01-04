@@ -296,6 +296,7 @@ function setupEventListeners() {
     document.getElementById('parseBtn').addEventListener('click', parseAndLoadConfiguration);
     document.getElementById('validateBtn').addEventListener('click', validateConfiguration);
     document.getElementById('copyAllBtn').addEventListener('click', copyAllOutput);
+    document.getElementById('copyFullCliBtn').addEventListener('click', copyFullCliMessage);
     
     // Update size indicator when textarea is manually edited
     const fullOutput = document.getElementById('fullOutput');
