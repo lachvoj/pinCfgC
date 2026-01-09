@@ -29,9 +29,10 @@
 #define PINCFG_AUTH_PASSWORD_LEN_D 32 // SHA-256 binary hash (32 bytes)
 
 // Hex representation of password for CLI (64 hex chars for 32 bytes)
-#ifndef PINCFG_AUTH_HEX_PASSWORD_LEN_D
-#define PINCFG_AUTH_HEX_PASSWORD_LEN_D 64
+#ifdef PINCFG_AUTH_HEX_PASSWORD_LEN_D
+#error "PINCFG_AUTH_HEX_PASSWORD_LEN_D must not be redefined! It is fixed at 64 chars (hex representation of 32 bytes)."
 #endif
+#define PINCFG_AUTH_HEX_PASSWORD_LEN_D 64
 
 // Config data section size
 #ifndef PINCFG_CONFIG_MAX_SZ_D
@@ -70,7 +71,7 @@
 #endif
 
 #ifndef PINCFG_LONG_MESSAGE_DELAY_MS_D
-#define PINCFG_LONG_MESSAGE_DELAY_MS_D 500
+#define PINCFG_LONG_MESSAGE_DELAY_MS_D 50
 #endif
 
 #ifndef PINCFG_LINE_SEPARATOR_D

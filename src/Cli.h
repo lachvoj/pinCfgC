@@ -18,21 +18,17 @@ typedef enum CLI_STATE_E
 {
     CLI_READY_E = 0,
     CLI_OUT_OF_MEM_ERR_E,
-    CLI_RECEIVING_AUTH_E, // Receiving fragmented password
-    CLI_RECEIVING_TYPE_E, // Receiving fragmented CFG:/CMD: prefix
-    CLI_RECEIVING_DATA_E, // Receiving config/command data (after type determined)
-    CLI_RECEIVED_E,
-    CLI_VALIDATING_E,
+    CLI_RECEIVING_AUTH_E,     // Receiving fragmented password
+    CLI_RECEIVING_TYPE_E,     // Receiving fragmented CFG:/CMD: prefix
+    CLI_RECEIVING_CFG_DATA_E, // Receiving config data
+    CLI_RECEIVING_CMD_DATA_E, // Receiving command data
     CLI_VALIDATION_OK_E,
+#ifdef FWCHECK_ENABLED
+    CLI_CRC_ERROR_E,
+#endif
     CLI_VALIDATION_ERROR_E,
     CLI_CUSTOM_E
 } CLI_STATE_T;
-
-typedef enum CLI_MODE_E
-{
-    CLI_LINE_E = 0,
-    CLI_FULL_E
-} CLI_MODE_T;
 
 typedef struct CLI_S
 {
@@ -40,9 +36,6 @@ typedef struct CLI_S
     char *pcCfgBuf;
     uint16_t u16CfgNext;
     CLI_STATE_T eState;
-    CLI_MODE_T eMode;
-    bool bIsConfig;      // true = CFG, false = CMD (determined after pwd)
-    bool bAuthenticated; // Authentication status
     // Rate limiting for brute-force protection
     uint8_t u8FailedAttempts;   // Consecutive failed attempts
     uint32_t u32LockoutUntilMs; // Lockout end timestamp (0 = not locked)

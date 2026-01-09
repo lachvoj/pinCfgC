@@ -71,7 +71,7 @@ CLI_AUTH_RESULT_T CliAuth_eVerifyPassword(const char *pcPassword)
 
     // Validate password length (SHA-256 hex = 64 chars)
     size_t passwordLen = strlen(pcPassword);
-    if (passwordLen != 64)
+    if (passwordLen != PINCFG_AUTH_HEX_PASSWORD_LEN_D)
         return CLI_AUTH_WRONG_PASSWORD_E;
 
     // Convert incoming hex password to binary
