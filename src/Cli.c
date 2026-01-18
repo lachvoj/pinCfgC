@@ -475,7 +475,7 @@ static void Cli_vExecuteCommand(CLI_T *psHandle, char *pcCmd)
             return;
         }
 
-        char *pcCfgBuf = Memory_vpTempAlloc(u16CfgSize + 1);
+        char *pcCfgBuf = (char *)Memory_vpTempAlloc(u16CfgSize + 1);
         if (pcCfgBuf == NULL)
         {
             Cli_vSetState(psHandle, CLI_OUT_OF_MEM_ERR_E, NULL, true);

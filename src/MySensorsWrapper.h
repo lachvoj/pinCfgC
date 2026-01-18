@@ -1,6 +1,11 @@
 #ifndef MYSENSORSWRAPPER_H
 #define MYSENSORSWRAPPER_H
 
+#ifdef __cplusplus
+extern "C"
+{
+#endif
+
 #include "Types.h"
 
 #ifndef GATEWAY_ADDRESS
@@ -20,11 +25,6 @@
 #ifdef MY_TRANSPORT_ERROR_LOG
 #include <hal/transport/MyTransportErrors.h>
 #endif
-#endif
-
-#ifdef __cplusplus
-extern "C"
-{
 #endif
 
     typedef enum

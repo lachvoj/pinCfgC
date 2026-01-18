@@ -1,6 +1,6 @@
 #include <EEPROM.h>
 
-#ifdef UNIT_TEST
+#if defined(UNIT_TEST)
 extern "C"
 {
 #include "MySensorsMock.h"
@@ -12,11 +12,17 @@ extern "C"
 
 #include "MySensorsWrapper.h"
 
+#if defined(ARDUINO_ARCH_AVR)
+#include <hal/architecture/AVR/MyHwAVR.h>
+#else
 extern void hwWriteConfigBlock(void *buf, void *addr, size_t length);
 extern void hwReadConfigBlock(void *buf, void *addr, size_t length);
+#endif
 
+#ifdef __cplusplus
 extern "C"
 {
+#endif
     WRAP_RESULT_T eMyMessageInit(
         MyMessage *pcMessage,
         const uint8_t u8SensorId,
@@ -143,4 +149,6 @@ extern "C"
         transportClearErrorLog();
     }
 #endif
+#ifdef __cplusplus
 }
+#endif

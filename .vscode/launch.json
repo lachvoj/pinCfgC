@@ -1,0 +1,152 @@
+{
+    // Use IntelliSense to learn about possible attributes.
+    // Hover to view descriptions of existing attributes.
+    // For more information, visit: https://go.microsoft.com/fwlink/?linkid=830387
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "name": "QEMU Test1 (Core)",
+            "type": "cppdbg",
+            "request": "launch",
+            "miDebuggerServerAddress": "localhost:1234",
+            "program": "${workspaceFolder}/test/qemu_test/build/test1.elf",
+            "args": [],
+            "stopAtEntry": true,
+            "miDebuggerPath": "~/.platformio/packages/toolchain-gccarmnoneeabi/bin/arm-none-eabi-gdb",
+            "cwd": "${workspaceFolder}/test/qemu_test",
+            "MIMode": "gdb",
+            "setupCommands": [
+                {
+                    "description": "Enable pretty-printing for gdb",
+                    "text": "-enable-pretty-printing",
+                    "ignoreFailures": true
+                },
+                {
+                    "description": "Set architecture",
+                    "text": "set architecture arm",
+                    "ignoreFailures": true
+                }
+            ]
+        },
+        {
+            "name": "QEMU Test2 (Components+Parsing)",
+            "type": "cppdbg",
+            "request": "launch",
+            "miDebuggerServerAddress": "localhost:1234",
+            "program": "${workspaceFolder}/test/qemu_test/build/test2.elf",
+            "args": [],
+            "stopAtEntry": true,
+            "miDebuggerPath": "~/.platformio/packages/toolchain-gccarmnoneeabi/bin/arm-none-eabi-gdb",
+            "cwd": "${workspaceFolder}/test/qemu_test",
+            "MIMode": "gdb",
+            "setupCommands": [
+                {
+                    "description": "Enable pretty-printing for gdb",
+                    "text": "-enable-pretty-printing",
+                    "ignoreFailures": true
+                },
+                {
+                    "description": "Set architecture",
+                    "text": "set architecture arm",
+                    "ignoreFailures": true
+                }
+            ]
+        },
+        {
+            "name": "QEMU Test3 (CLI)",
+            "type": "cppdbg",
+            "request": "launch",
+            "miDebuggerServerAddress": "localhost:1234",
+            "program": "${workspaceFolder}/test/qemu_test/build/test3.elf",
+            "args": [],
+            "stopAtEntry": true,
+            "miDebuggerPath": "~/.platformio/packages/toolchain-gccarmnoneeabi/bin/arm-none-eabi-gdb",
+            "cwd": "${workspaceFolder}/test/qemu_test",
+            "MIMode": "gdb",
+            "setupCommands": [
+                {
+                    "description": "Enable pretty-printing for gdb",
+                    "text": "-enable-pretty-printing",
+                    "ignoreFailures": true
+                },
+                {
+                    "description": "Set architecture",
+                    "text": "set architecture arm",
+                    "ignoreFailures": true
+                }
+            ]
+        },
+        {
+            "name": "QEMU Test4 (Measurements)",
+            "type": "cppdbg",
+            "request": "launch",
+            "miDebuggerServerAddress": "localhost:1234",
+            "program": "${workspaceFolder}/test/qemu_test/build/test4.elf",
+            "args": [],
+            "stopAtEntry": true,
+            "miDebuggerPath": "~/.platformio/packages/toolchain-gccarmnoneeabi/bin/arm-none-eabi-gdb",
+            "cwd": "${workspaceFolder}/test/qemu_test",
+            "MIMode": "gdb",
+            "setupCommands": [
+                {
+                    "description": "Enable pretty-printing for gdb",
+                    "text": "-enable-pretty-printing",
+                    "ignoreFailures": true
+                },
+                {
+                    "description": "Set architecture",
+                    "text": "set architecture arm",
+                    "ignoreFailures": true
+                }
+            ]
+        },
+        {
+            "name": "QEMU Test5 (PersistentCfg+Integration)",
+            "type": "cppdbg",
+            "request": "launch",
+            "miDebuggerServerAddress": "localhost:1234",
+            "program": "${workspaceFolder}/test/qemu_test/build/test5.elf",
+            "args": [],
+            "stopAtEntry": true,
+            "miDebuggerPath": "~/.platformio/packages/toolchain-gccarmnoneeabi/bin/arm-none-eabi-gdb",
+            "cwd": "${workspaceFolder}/test/qemu_test",
+            "MIMode": "gdb",
+            "setupCommands": [
+                {
+                    "description": "Enable pretty-printing for gdb",
+                    "text": "-enable-pretty-printing",
+                    "ignoreFailures": true
+                },
+                {
+                    "description": "Set architecture",
+                    "text": "set architecture arm",
+                    "ignoreFailures": true
+                }
+            ]
+        },
+        {
+            "name": "QEMU Test6 (Stress+EdgeCases)",
+            "type": "cppdbg",
+            "request": "launch",
+            "miDebuggerServerAddress": "localhost:1234",
+            "program": "${workspaceFolder}/test/qemu_test/build/test6.elf",
+            "args": [],
+            "stopAtEntry": true,
+            "miDebuggerPath": "~/.platformio/packages/toolchain-gccarmnoneeabi/bin/arm-none-eabi-gdb",
+            "cwd": "${workspaceFolder}/test/qemu_test",
+            "MIMode": "gdb",
+            "setupCommands": [
+                {
+                    "description": "Enable pretty-printing for gdb",
+                    "text": "-enable-pretty-printing",
+                    "ignoreFailures": true
+                },
+                {
+                    "description": "Set architecture",
+                    "text": "set architecture arm",
+                    "ignoreFailures": true
+                }
+            ]
+        }
+    ]
+}

@@ -6,8 +6,10 @@
 #include <stddef.h>
 #include <stdint.h>
 
-#ifdef UNIT_TEST
+#if defined(UNIT_TEST)
 #include "ArduinoMock.h"
+#elif defined(ARDUINO_ARCH_AVR)
+#include <Arduino.h>
 #else
 #include <wiring_constants.h>
 #include <wiring_digital.h>

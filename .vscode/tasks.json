@@ -1,0 +1,31 @@
+{
+    // See https://go.microsoft.com/fwlink/?LinkId=733558
+    // for the documentation about the tasks.json format
+    "version": "2.0.0",
+    "tasks": [
+        {
+			"label": "test_qemu_pre-debug",
+			"type": "shell",
+			"command": "echo 'QEMU debug started'; /home/test/workspace/qemu/build/qemu-system-arm -M stm32f103c8-bluepill -semihosting -kernel ${workspaceFolder}/test/qemu/build/test_qemu.elf -monitor none -nographic -serial stdio -s -S",
+			"isBackground": true,
+			"problemMatcher": [
+			{
+				"pattern": [
+				{
+					"regexp": ".",
+					"file": 1,
+					"location": 2,
+					"message": 3
+				}
+				],
+				"background": {
+					"activeOnStart": true,
+					"beginsPattern": "QEMU debug started",
+					"endsPattern": "LED Off",
+				}
+			}
+			]
+		}
+    ]
+}
+//-M stm32f103c8-bluepill -monitor none -nographic -semihosting-config enable=on,target=native -icount shift=6,align=on -kernel ../submodules/pinCfgC/test/qemu/build/test_qemu.elf -s -S

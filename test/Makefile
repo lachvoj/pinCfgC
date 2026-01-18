@@ -5,6 +5,7 @@ BUILDDIR=build
 SRCDIR=../src
 UNITY_ROOT=Unity
 MOCKDIR=mocks
+TESTDIR=.
 
 CC = gcc
 CPP = g++
@@ -13,6 +14,11 @@ SRCC = $(wildcard $(SRCDIR)/*.c)
 MOCKSC = $(wildcard $(MOCKDIR)/*.c)
 SRCCPP = $(wildcard $(SRCDIR)/*.cpp)
 MOCKSCPP = $(wildcard $(MOCKDIR)/*.cpp)
+
+# Modular test source files
+TESTC = test_main.c test_helpers.c test_core.c test_components.c test_parsing.c \
+        test_cli.c test_measurements.c test_edge_cases.c test_integration.c \
+        test_persistent_config.c test_stress.c
 
 INCLUDES = -I. -I../include -I$(MOCKDIR) -I$(UNITY_ROOT)/src -I$(SRCDIR)
 LIBS = -lm
@@ -55,6 +61,20 @@ CFLAGS4 = $(CFLAGS_BASE)
 
 all: $(EXE1) $(EXE2) $(EXE3) $(EXE4)
 
+# Quick test target: core + edge cases only (faster iteration)
+EXE_QUICK = test_quick
+CFLAGS_QUICK = $(CFLAGS_BASE) -D USE_MALLOC -D PINCFG_USE_ERROR_MESSAGES \
+               -U RUN_STRESS_TESTS -U RUN_INTEGRATION_TESTS
+
+.PHONY: quick
+quick: $(EXE_QUICK)
+	@echo "\n=== Running Quick Tests (Core + Edge Cases + CLI + Measurements) ==="
+	@ASAN_OPTIONS=detect_leaks=0 ./$(BUILDDIR)/$(EXE_QUICK) 2>&1 | tail -3
+
+.PHONY: full
+full: all
+	@$(MAKE) run
+
 debug:
 	@echo "=== Source Files ==="
 	@echo "SRCC: $(SRCC)"
@@ -83,8 +103,17 @@ run: all
 	@./$(BUILDDIR)/$(EXE4) 2>&1 | tail -3
 	@echo ""
 
+qemu:
+	@echo "\n=== Building and running QEMU tests ==="
+	@cd qemu_test && $(MAKE)
+
+qemu-run:
+	@echo "\n=== Building and running QEMU tests ==="
+	@cd qemu_test && $(MAKE) run-all
+
 clean:
 	-rm -fr $(BUILDDIR)
+	@cd qemu_test && $(MAKE) clean 2>/dev/null || true
 
 $(BUILDDIR):
 	mkdir -p $@
@@ -103,7 +132,10 @@ $(BUILDDIR)/$(1)_obj/%.o: $(MOCKDIR)/%.c | $(BUILDDIR)/$(1)_obj
 $(BUILDDIR)/$(1)_obj/%.o: $(UNITY_ROOT)/src/%.c | $(BUILDDIR)/$(1)_obj
 	$(CC) $(2) $(INCLUDES) -c $$< -o $$@
 
-$(BUILDDIR)/$(1)_obj/test.o: test.c | $(BUILDDIR)/$(1)_obj
+$(BUILDDIR)/$(1)_obj/%.o: $(TESTDIR)/test_%.c | $(BUILDDIR)/$(1)_obj
+	$(CC) $(2) $(INCLUDES) -c $$< -o $$@
+
+$(BUILDDIR)/$(1)_obj/test_%.o: $(TESTDIR)/test_%.c | $(BUILDDIR)/$(1)_obj
 	$(CC) $(2) $(INCLUDES) -c $$< -o $$@
 
 $(BUILDDIR)/$(1)_obj/%.o: $(SRCDIR)/%.cpp | $(BUILDDIR)/$(1)_obj
@@ -115,7 +147,7 @@ $(BUILDDIR)/$(1)_obj/%.o: $(MOCKDIR)/%.cpp | $(BUILDDIR)/$(1)_obj
 $(1)_OBJC = $$(patsubst $(SRCDIR)/%.c, $(BUILDDIR)/$(1)_obj/%.o, $(SRCC))
 $(1)_OBJC += $$(patsubst $(MOCKDIR)/%.c, $(BUILDDIR)/$(1)_obj/%.o, $(MOCKSC))
 $(1)_OBJC += $(BUILDDIR)/$(1)_obj/unity.o
-$(1)_OBJC += $(BUILDDIR)/$(1)_obj/test.o
+$(1)_OBJC += $$(patsubst %.c, $(BUILDDIR)/$(1)_obj/%.o, $(TESTC))
 $(1)_OBJCPP = $$(patsubst $(SRCDIR)/%.cpp, $(BUILDDIR)/$(1)_obj/%.o, $(SRCCPP))
 $(1)_OBJCPP += $$(patsubst $(MOCKDIR)/%.cpp, $(BUILDDIR)/$(1)_obj/%.o, $(MOCKSCPP))
 
@@ -128,4 +160,5 @@ $(eval $(call compile_variant,$(EXE1),$(CFLAGS1)))
 $(eval $(call compile_variant,$(EXE2),$(CFLAGS2)))
 $(eval $(call compile_variant,$(EXE3),$(CFLAGS3)))
 $(eval $(call compile_variant,$(EXE4),$(CFLAGS4)))
+$(eval $(call compile_variant,$(EXE_QUICK),$(CFLAGS_QUICK)))
 

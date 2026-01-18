@@ -1695,7 +1695,7 @@ static PRESENTABLE_T *PinCfgCsv_psFindInTempPresentablesByName(const STRING_POIN
         if (szPcHeyNameLength == psName->szLen && memcmp(psName->pcStrStart, psReturn->pcName, szPcHeyNameLength) == 0)
             break;
 
-        psLLItem = LinkedList_psGetNext((void *)psLLItem);
+        psLLItem = LinkedList_psGetNext(psLLItem);
         psReturn = NULL;
     }
 
