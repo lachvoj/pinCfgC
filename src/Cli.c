@@ -574,7 +574,21 @@ static void Cli_vExecuteCommand(CLI_T *psHandle, char *pcCmd)
             Cli_vSetState(psHandle, CLI_CRC_ERROR_E, NULL, true);
         }
     }
-#endif
+#ifdef FWCHECK_INCLUDE_FW_VERSION
+    else if (strcmp(pcCmd, "GET_FW_VERSION") == 0)
+    {
+        const char *pcFwVersion = FWCheck_GetFwVersion();
+        if (pcFwVersion != NULL)
+        {
+            Cli_vSetState(psHandle, CLI_CUSTOM_E, pcFwVersion, true);
+        }
+        else
+        {
+            Cli_vSetState(psHandle, CLI_CUSTOM_E, "FW version not available.", true);
+        }
+    }
+#endif // FWCHECK_INCLUDE_FW_VERSION
+#endif // FWCHECK_ENABLED
     else
     {
         Cli_vSetState(psHandle, CLI_CUSTOM_E, "Unknown command.", true);
