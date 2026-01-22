@@ -9,7 +9,6 @@ const configState = {
         CM: { value: '620', enabled: false },
         CR: { value: '150', enabled: false },
         CN: { value: '1000', enabled: false },
-        CF: { value: '30000', enabled: false },
         CA: { value: '1966080', enabled: false }
     },
     switches: [],
@@ -208,8 +207,7 @@ function initializeGlobalConfig() {
         { key: 'CD', label: 'Debounce (ms)', type: 'number', min: 0, max: 10000 },
         { key: 'CM', label: 'Multiclick (ms)', type: 'number', min: 0, max: 10000 },
         { key: 'CR', label: 'Relay Impulse (ms)', type: 'number', min: 50, max: 10000 },
-        { key: 'CN', label: 'Feedback ON (ms)', type: 'number', min: 0, max: 100000 },
-        { key: 'CF', label: 'Feedback OFF (ms)', type: 'number', min: 0, max: 100000 },
+        { key: 'CN', label: 'Feedback (ms)', type: 'number', min: 0, max: 100000 },
         { key: 'CA', label: 'Announcement (ms)', type: 'number', min: 0, max: 10000000 }
     ];
 

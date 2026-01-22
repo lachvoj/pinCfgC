@@ -41,7 +41,6 @@ CD,330/
 CM,620/
 CR,150/
 CN,1000/
-CF,30000/
 CA,1966080/
 S,o01,13,o02,12,o03,11,o04,10,o05,3,o06,2,o07,7/
 SI,o10,4/
@@ -158,14 +157,12 @@ CD,330/
 CM,620/
 CR,150/
 CN,1000/
-CF,30000/
 ```
 Lines starting with **'C'** are used for defining global parameters:
 * **CD**: Debounce interval in milliseconds. Used by inputs to define the period during which input changes are ignored. Default: 100 ms or `PINCFG_DEBOUNCE_MS_D`.
 * **CM**: Multiclick maximum delay in milliseconds. Maximum time to recognize a multiclick as separate from single clicks. Used by inputs. Default: 500 ms or `PINCFG_MULTICLICK_MAX_DELAY_MS_D`.
 * **CR**: Impulse duration in milliseconds. Global constant used by switches to define how long a switch stays ON in impulse mode. Default: 300 ms or `PINCFG_SWITCH_IMPULSE_DURATIN_MS_D`.
-* **CN**: Feedback pin ON delay in milliseconds. Global constant used by switches to specify the maximum waiting period for feedback to match the switch state when turned ON. If feedback remains OFF after this period, the switch is set back to OFF and a status message is sent. Default: 1000 ms or `PINCFG_SWITCH_FB_ON_DELAY_MS_D`.
-* **CF**: Feedback pin OFF delay in milliseconds. Global constant used by switches to specify the maximum waiting period for feedback to match the switch state when turned OFF. If feedback remains ON after this period, the switch is set back to ON and a status message is sent. Default: 30000 ms or `PINCFG_SWITCH_FB_OFF_DELAY_MS_D`.
+* **CN**: Feedback pin delay in milliseconds. Global constant used by switches to specify the maximum waiting period for feedback to match the switch state when state changes. If feedback remains same after this period, the switch is set to feedback value and a status message is sent. Default: 1000 ms or `PINCFG_SWITCH_FB_DELAY_MS_D`.
 
 ## CLI
 
@@ -445,7 +442,7 @@ y. xx/   (pin of switch x)
 
 ### Basic switch with Feedback
 A [Basic switch](#basic-switch) with state reporting logic driven by a feedback pin.
-Feedback pin behavior is adjusted by **CN/CF** in [Global Configuration Items](#global-configuration-items).
+Feedback pin behavior is adjusted by **CN** in [Global Configuration Items](#global-configuration-items).
 #### Line Format
 ```
 1. SF,   (Switch type definition)

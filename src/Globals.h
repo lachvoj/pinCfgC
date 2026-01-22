@@ -44,8 +44,7 @@ typedef struct
     uint32_t u32InPinMulticlickMaxDelayMs;
     // Switch
     uint32_t u32SwitchImpulseDurationMs;
-    uint32_t u32SwitchFbOnDelayMs;
-    uint32_t u32SwitchFbOffDelayMs;
+    uint32_t u32SwitchFbDelayMs;
 } GLOBALS_T;
 
 extern GLOBALS_T *psGlobals;

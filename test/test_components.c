@@ -133,7 +133,7 @@ void test_vSwitch(void)
     eLinkedListResult =
         LinkedList_eLinkedListToArray((LINKEDLIST_ITEM_T **)(&psGlobals->ppsLoopables), &psGlobals->u8LoopablesCount);
     TEST_ASSERT_EQUAL(LINKEDLIST_OK_E, eLinkedListResult);
-    TEST_ASSERT_EQUAL(6, psGlobals->u8LoopablesCount);
+    TEST_ASSERT_EQUAL(7, psGlobals->u8LoopablesCount);
 
     eLinkedListResult = LinkedList_eLinkedListToArray(
         (LINKEDLIST_ITEM_T **)(&psGlobals->ppsPresentables), &psGlobals->u8PresentablesCount);
@@ -208,7 +208,7 @@ void test_vTrigger(void)
     eLinkedListResult =
         LinkedList_eLinkedListToArray((LINKEDLIST_ITEM_T **)(&psGlobals->ppsLoopables), &psGlobals->u8LoopablesCount);
     TEST_ASSERT_EQUAL(LINKEDLIST_OK_E, eLinkedListResult);
-    TEST_ASSERT_EQUAL(2, psGlobals->u8LoopablesCount);
+    TEST_ASSERT_EQUAL(3, psGlobals->u8LoopablesCount);
 
     eLinkedListResult = LinkedList_eLinkedListToArray(
         (LINKEDLIST_ITEM_T **)(&psGlobals->ppsPresentables), &psGlobals->u8PresentablesCount);

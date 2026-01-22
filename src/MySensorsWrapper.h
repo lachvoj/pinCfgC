@@ -59,6 +59,7 @@ extern "C"
     void vHwReadConfigBlock(void *buf, void *addr, size_t length);
     uint8_t u8EEPROMRead(int idx);
     int8_t i8HwCPUTemperature(void);
+    uint16_t u16HwAnalogRead(uint8_t u8Pin); // LL-based ADC read (no HAL)
 
     // Transport error log
 #ifdef MY_TRANSPORT_ERROR_LOG

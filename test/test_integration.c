@@ -22,7 +22,7 @@ void test_vFlow_timedSwitch(void)
 
     eResult = PinCfgCsv_eInit(testMemory, MEMORY_SZ, pcCfg);
     TEST_ASSERT_EQUAL(PINCFG_OK_E, eResult);
-    TEST_ASSERT_EQUAL(2, psGlobals->u8LoopablesCount);
+    TEST_ASSERT_EQUAL(3, psGlobals->u8LoopablesCount);
 
     // Verify CLI setup
     PRESENTABLE_T *psCLI = (PRESENTABLE_T *)psGlobals->ppsPresentables[0];

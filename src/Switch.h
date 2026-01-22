@@ -37,8 +37,7 @@ typedef struct SWITCH_S
 
 // static
 void Switch_SetImpulseDurationMs(uint32_t u32ImpulseDuration);
-void Switch_SetFbOnDelayMs(uint32_t u32FbOnDelayMs);
-void Switch_SetFbOffDelayMs(uint32_t u32FbOffDelayMs);
+void Switch_SetFbDelayMs(uint32_t u32FbOnDelayMs);
 
 // type init
 void Switch_vInitType(PRESENTABLE_VTAB_T *psVtab);

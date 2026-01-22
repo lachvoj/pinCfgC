@@ -22,14 +22,9 @@ void Switch_SetImpulseDurationMs(uint32_t u32ImpulseDuration)
     psGlobals->u32SwitchImpulseDurationMs = u32ImpulseDuration;
 }
 
-void Switch_SetFbOnDelayMs(uint32_t u32FbOnDelayMs)
+void Switch_SetFbDelayMs(uint32_t u32FbOnDelayMs)
 {
-    psGlobals->u32SwitchFbOnDelayMs = u32FbOnDelayMs;
-}
-
-void Switch_SetFbOffDelayMs(uint32_t u32FbOffDelayMs)
-{
-    psGlobals->u32SwitchFbOffDelayMs = u32FbOffDelayMs;
+    psGlobals->u32SwitchFbDelayMs = u32FbOnDelayMs;
 }
 
 void Switch_vInitType(PRESENTABLE_VTAB_T *psVtab)
@@ -40,8 +35,7 @@ void Switch_vInitType(PRESENTABLE_VTAB_T *psVtab)
     psVtab->vPresent = Presentable_vPresent;
 
     Switch_SetImpulseDurationMs(PINCFG_SWITCH_IMPULSE_DURATIN_MS_D);
-    Switch_SetFbOnDelayMs(PINCFG_SWITCH_FB_ON_DELAY_MS_D);
-    Switch_SetFbOffDelayMs(PINCFG_SWITCH_FB_OFF_DELAY_MS_D);
+    Switch_SetFbDelayMs(PINCFG_SWITCH_FB_DELAY_MS_D);
 }
 
 SWITCH_RESULT_T Switch_eInit(
@@ -112,29 +106,47 @@ SWITCH_RESULT_T Switch_eInit(
     return SWITCH_OK_E;
 }
 
-static inline void Switch_vCheckFbPin(SWITCH_T *psHandle, uint32_t u32ms)
+static void Switch_vCheckFbPin(SWITCH_T *psHandle, uint32_t u32ms)
 {
     uint8_t u8ActualPinState = (uint8_t)!digitalRead(psHandle->u8FbPin);
-    if (psHandle->sPresentable.u8State != u8ActualPinState)
+
+    // u8ActualPinState == 1 means feedback pin is active
+    if (u8ActualPinState)
     {
-        if (psHandle->u32FbReadStarted == 0U)
+        psHandle->u32FbReadStarted = u32ms;
+        if (psHandle->sPresentable.u8State == 0)
         {
-            psHandle->u32FbReadStarted = u32ms;
+             Presentable_vSetState((PRESENTABLE_T *)psHandle, 1, true);
+             psHandle->sPresentable.bStateChanged = false;
         }
-        else if (
-            (psHandle->sPresentable.u8State == 1 &&
-             PinCfg_u32GetElapsedTime(psHandle->u32FbReadStarted, u32ms) > psGlobals->u32SwitchFbOnDelayMs) ||
-            (psHandle->sPresentable.u8State == 0 &&
-             PinCfg_u32GetElapsedTime(psHandle->u32FbReadStarted, u32ms) > psGlobals->u32SwitchFbOffDelayMs))
-        {
-            psHandle->u32FbReadStarted = 0U;
-            Presentable_vSetState((PRESENTABLE_T *)psHandle, (int32_t)u8ActualPinState, true);
-        }
+
+        return;
     }
-    else
+
+    // u8ActualPinState == 0 means feedback pin is inactive
+
+    // wanted or set state is off
+    if (psHandle->sPresentable.u8State == 0)
     {
         psHandle->u32FbReadStarted = 0U;
+        return;
     }
+
+    // wanted or set state is on
+    if (psHandle->u32FbReadStarted == 0U)
+    {
+        psHandle->u32FbReadStarted = u32ms;
+
+        return;
+    }
+
+    uint32_t u32SilenceDuration = PinCfg_u32GetElapsedTime(psHandle->u32FbReadStarted, u32ms);
+    if (u32SilenceDuration < psGlobals->u32SwitchFbDelayMs)
+        return;
+
+    psHandle->u32FbReadStarted = 0U;
+    Presentable_vSetState((PRESENTABLE_T *)psHandle, 0, true);
+    psHandle->sPresentable.bStateChanged = false;
 }
 
 static inline void Switch_vHandleClassic(SWITCH_T *psHandle)

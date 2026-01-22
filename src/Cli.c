@@ -8,7 +8,7 @@
 #include "MySensorsWrapper.h"
 #include "PersistentConfiguration.h"
 #include "PinCfgCsv.h"
-
+#include "PinCfgUtils.h"
 #ifdef FWCHECK_ENABLED
 #include "FWCheck.h"
 #endif
@@ -61,6 +61,8 @@ void resetFunc(void)
 }
 #endif
 
+void Cli_vLoop(LOOPABLE_T *psLoopableHandle, uint32_t u32ms);
+
 void Cli_vInitType(PRESENTABLE_VTAB_T *psVtab)
 {
     psVtab->eVType = V_TEXT;
@@ -97,6 +99,10 @@ CLI_RESULT_T Cli_eInit(CLI_T *psHandle, uint8_t u8Id)
     psHandle->u8FailedAttempts = 0;
     psHandle->u32LockoutUntilMs = 0;
 
+    // Loopable init (always needed for receive timeout)
+    psHandle->sLoopable.vLoop = Cli_vLoop;
+    psHandle->u32ReceivingStartedMs = 0;
+
 #ifdef FWCHECK_ENABLED
     // Initialize firmware CRC check module and verify firmware integrity
     FWCheck_Init();
@@ -106,6 +112,7 @@ CLI_RESULT_T Cli_eInit(CLI_T *psHandle, uint8_t u8Id)
         psHandle->eState = CLI_CRC_ERROR_E;
         psHandle->sPresentable.pcState = _apcStateStrings[CLI_CRC_ERROR_E];
     }
+    psHandle->u32LastFwCrcCheckMs = 0;
 #endif
 
     return CLI_OK_E;
@@ -263,6 +270,7 @@ void Cli_vRcvMessage(PRESENTABLE_T *psBaseHandle, const MyMessage *pcMsg)
 
         // Starting string confirmed shift buffer and go to next state
         Cli_vShiftBuffer(psHandle, strlen(_pcMsgBegin));
+        psHandle->u32ReceivingStartedMs = u32Millis(); // Start timeout tracking
         Cli_vSetState(psHandle, CLI_RECEIVING_AUTH_E, NULL, true);
     }
 
@@ -571,6 +579,46 @@ static void Cli_vExecuteCommand(CLI_T *psHandle, char *pcCmd)
     {
         Cli_vSetState(psHandle, CLI_CUSTOM_E, "Unknown command.", true);
     }
+}
+
+void Cli_vLoop(LOOPABLE_T *psLoopableHandle, uint32_t u32ms)
+{
+    CLI_T *psHandle = container_of(psLoopableHandle, CLI_T, sLoopable);
+
+    // Check for fragmented message receive timeout
+    if (psHandle->u32ReceivingStartedMs != 0)
+    {
+        bool bIsReceiving =
+            (psHandle->eState == CLI_RECEIVING_AUTH_E || psHandle->eState == CLI_RECEIVING_TYPE_E ||
+             psHandle->eState == CLI_RECEIVING_CFG_DATA_E || psHandle->eState == CLI_RECEIVING_CMD_DATA_E);
+
+        if (bIsReceiving &&
+            PinCfg_u32GetElapsedTime(psHandle->u32ReceivingStartedMs, u32ms) >= PINCFG_CLI_RECEIVE_TIMEOUT_MS_D)
+        {
+            // Timeout - reset state and free buffer
+            Cli_vResetState(psHandle);
+            psHandle->u32ReceivingStartedMs = 0;
+        }
+        else if (!bIsReceiving)
+        {
+            // Not in receiving state anymore, clear timeout tracking
+            psHandle->u32ReceivingStartedMs = 0;
+        }
+    }
+
+#ifdef FWCHECK_ENABLED
+    // Periodic firmware CRC check (once per day)
+    if (PinCfg_u32GetElapsedTime(psHandle->u32LastFwCrcCheckMs, u32ms) >= PINCFG_FW_CRC_CHECK_INTERVAL_MS_D)
+    {
+        psHandle->u32LastFwCrcCheckMs = u32ms;
+
+        if (FWCheck_Verify() != FWCHECK_OK)
+        {
+            // Firmware CRC mismatch - enter unrecoverable error state
+            Cli_vSetState(psHandle, CLI_CRC_ERROR_E, NULL, true);
+        }
+    }
+#endif
 }
 
 static void Cli_vSendBigMessage(CLI_T *psHandle, char *pcBigMsg)

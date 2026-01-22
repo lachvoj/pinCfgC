@@ -4,7 +4,7 @@
 #ifdef PINCFG_FEATURE_ANALOG_MEASUREMENT
 
 #include "AnalogMeasure.h"
-#include "AnalogWrapper.h"
+#include "MySensorsWrapper.h"
 #include "SensorMeasure.h"
 
 // Forward declaration of measurement function
@@ -51,7 +51,7 @@ static ISENSORMEASURE_RESULT_T AnalogMeasure_eMeasure(
     (void)u32ms;
 
     // Read raw ADC value (uint16: 0-1023 or 0-4095 depending on platform)
-    uint16_t u16RawADC = Analog_u16Read(psHandle->u8Pin);
+    uint16_t u16RawADC = u16HwAnalogRead(psHandle->u8Pin);
 
     // Convert to big-endian format (MSB first)
     pu8Buffer[0] = (uint8_t)(u16RawADC >> 8);   // High byte

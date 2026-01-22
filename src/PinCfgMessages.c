@@ -73,7 +73,7 @@ static const char *_parseStrings[] = {
     "InPinDebounceMs:",                   // IPDMS_E
     "InPinMulticlickMaxDelayMs:",         // IPMCDMS_E
     "SwitchImpulseDurationMs:",           // SWIDMS_E
-    "SwitchFbOnDelayMs:",                 // SWFNDMS_E
+    "SwitchFbDelayMs:",                 // SWFNDMS_E
     "SwitchFbOffDelayMs:",                // SWFFDMS_E
     "OOM",                                // OOM_E
     "init failed",                        // INITF_E

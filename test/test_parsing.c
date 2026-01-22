@@ -23,6 +23,7 @@ void test_vPinCfgCsv(void)
     szRequiredMem = Memory_szGetAllocatedSize(sizeof(GLOBALS_T));
     szRequiredMem += Memory_szGetAllocatedSize(sizeof(CLI_T));
     szRequiredMem += Memory_szGetAllocatedSize(sizeof(LINKEDLIST_ITEM_T) + sizeof(void *));
+    szRequiredMem += Memory_szGetAllocatedSize(sizeof(LINKEDLIST_ITEM_T) + sizeof(void *));
     TEST_ASSERT_EQUAL(szRequiredMem, szMemoryRequired);
     TEST_ASSERT_EQUAL(PINCFG_OUTOFMEMORY_ERROR_E, eParseResult);
     // Accept either full error message or error code
@@ -38,6 +39,7 @@ void test_vPinCfgCsv(void)
     szRequiredMem = Memory_szGetAllocatedSize(sizeof(GLOBALS_T));
     szRequiredMem += Memory_szGetAllocatedSize(sizeof(CLI_T));
     szRequiredMem += Memory_szGetAllocatedSize(sizeof(LINKEDLIST_ITEM_T) + sizeof(void *));
+    szRequiredMem += Memory_szGetAllocatedSize(sizeof(LINKEDLIST_ITEM_T) + sizeof(void *));
     TEST_ASSERT_EQUAL(szRequiredMem, szMemoryRequired);
     TEST_ASSERT_EQUAL(PINCFG_NULLPTR_ERROR_E, eParseResult);
 #ifdef PINCFG_USE_ERROR_MESSAGES
@@ -52,6 +54,7 @@ void test_vPinCfgCsv(void)
     szRequiredMem = Memory_szGetAllocatedSize(sizeof(GLOBALS_T));
     szRequiredMem += Memory_szGetAllocatedSize(sizeof(CLI_T));
     szRequiredMem += Memory_szGetAllocatedSize(sizeof(LINKEDLIST_ITEM_T) + sizeof(void *));
+    szRequiredMem += Memory_szGetAllocatedSize(sizeof(LINKEDLIST_ITEM_T) + sizeof(void *));
     TEST_ASSERT_EQUAL(szRequiredMem, szMemoryRequired);
     TEST_ASSERT_EQUAL(PINCFG_ERROR_E, eParseResult);
 #ifdef PINCFG_USE_ERROR_MESSAGES
@@ -65,6 +68,7 @@ void test_vPinCfgCsv(void)
     eParseResult = PinCfgCsv_eParse(&sParams);
     szRequiredMem = Memory_szGetAllocatedSize(sizeof(GLOBALS_T));
     szRequiredMem += Memory_szGetAllocatedSize(sizeof(CLI_T));
+    szRequiredMem += Memory_szGetAllocatedSize(sizeof(LINKEDLIST_ITEM_T) + sizeof(void *));
     szRequiredMem += Memory_szGetAllocatedSize(sizeof(LINKEDLIST_ITEM_T) + sizeof(void *));
     // Note: Memory size check skipped - depends on error message string length
     // TEST_ASSERT_EQUAL(szRequiredMem, szMemoryRequired);
@@ -81,6 +85,7 @@ void test_vPinCfgCsv(void)
     szRequiredMem = Memory_szGetAllocatedSize(sizeof(GLOBALS_T));
     szRequiredMem += Memory_szGetAllocatedSize(sizeof(CLI_T));
     szRequiredMem += Memory_szGetAllocatedSize(sizeof(LINKEDLIST_ITEM_T) + sizeof(void *));
+    szRequiredMem += Memory_szGetAllocatedSize(sizeof(LINKEDLIST_ITEM_T) + sizeof(void *));
     // Note: Memory size check skipped - depends on error message string length
     // TEST_ASSERT_EQUAL(szRequiredMem, szMemoryRequired);
     TEST_ASSERT_EQUAL(PINCFG_WARNINGS_E, eParseResult);
@@ -95,6 +100,7 @@ void test_vPinCfgCsv(void)
     eParseResult = PinCfgCsv_eParse(&sParams);
     szRequiredMem = Memory_szGetAllocatedSize(sizeof(GLOBALS_T));
     szRequiredMem += Memory_szGetAllocatedSize(sizeof(CLI_T));
+    szRequiredMem += Memory_szGetAllocatedSize(sizeof(LINKEDLIST_ITEM_T) + sizeof(void *));
     szRequiredMem += Memory_szGetAllocatedSize(sizeof(LINKEDLIST_ITEM_T) + sizeof(void *));
     // Note: Memory size check skipped - depends on error message string length
     // TEST_ASSERT_EQUAL(szRequiredMem, szMemoryRequired);
@@ -111,6 +117,7 @@ void test_vPinCfgCsv(void)
     szRequiredMem = Memory_szGetAllocatedSize(sizeof(GLOBALS_T));
     szRequiredMem += Memory_szGetAllocatedSize(sizeof(CLI_T));
     szRequiredMem += Memory_szGetAllocatedSize(sizeof(LINKEDLIST_ITEM_T) + sizeof(void *));
+    szRequiredMem += Memory_szGetAllocatedSize(sizeof(LINKEDLIST_ITEM_T) + sizeof(void *));
     TEST_ASSERT_EQUAL(szRequiredMem, szMemoryRequired);
     TEST_ASSERT_EQUAL(PINCFG_WARNINGS_E, eParseResult);
 #ifdef PINCFG_USE_ERROR_MESSAGES
@@ -126,6 +133,7 @@ void test_vPinCfgCsv(void)
     eParseResult = PinCfgCsv_eParse(&sParams);
     szRequiredMem = Memory_szGetAllocatedSize(sizeof(GLOBALS_T));
     szRequiredMem += Memory_szGetAllocatedSize(sizeof(CLI_T));
+    szRequiredMem += Memory_szGetAllocatedSize(sizeof(LINKEDLIST_ITEM_T) + sizeof(void *));
     szRequiredMem += Memory_szGetAllocatedSize(sizeof(LINKEDLIST_ITEM_T) + sizeof(void *));
     szRequiredMem += Memory_szGetAllocatedSize(sizeof(SWITCH_T));
     szRequiredMem += Memory_szGetAllocatedSize(sizeof(char) * 3);
@@ -153,6 +161,7 @@ void test_vPinCfgCsv(void)
     szRequiredMem = Memory_szGetAllocatedSize(sizeof(GLOBALS_T));
     szRequiredMem += Memory_szGetAllocatedSize(sizeof(CLI_T));
     szRequiredMem += Memory_szGetAllocatedSize(sizeof(LINKEDLIST_ITEM_T) + sizeof(void *));
+    szRequiredMem += Memory_szGetAllocatedSize(sizeof(LINKEDLIST_ITEM_T) + sizeof(void *));
     TEST_ASSERT_EQUAL(szRequiredMem, szMemoryRequired);
     Memory_eReset();
 
@@ -160,6 +169,7 @@ void test_vPinCfgCsv(void)
     eParseResult = PinCfgCsv_eParse(&sParams);
     szRequiredMem = Memory_szGetAllocatedSize(sizeof(GLOBALS_T));
     szRequiredMem += Memory_szGetAllocatedSize(sizeof(CLI_T));
+    szRequiredMem += Memory_szGetAllocatedSize(sizeof(LINKEDLIST_ITEM_T) + sizeof(void *));
     szRequiredMem += Memory_szGetAllocatedSize(sizeof(LINKEDLIST_ITEM_T) + sizeof(void *));
     szRequiredMem += Memory_szGetAllocatedSize(sizeof(SWITCH_T)) * 2;
     szRequiredMem += Memory_szGetAllocatedSize(sizeof(char) * 3) * 2;
@@ -171,6 +181,7 @@ void test_vPinCfgCsv(void)
     eParseResult = PinCfgCsv_eParse(&sParams);
     szRequiredMem = Memory_szGetAllocatedSize(sizeof(GLOBALS_T));
     szRequiredMem += Memory_szGetAllocatedSize(sizeof(CLI_T));
+    szRequiredMem += Memory_szGetAllocatedSize(sizeof(LINKEDLIST_ITEM_T) + sizeof(void *));
     szRequiredMem += Memory_szGetAllocatedSize(sizeof(LINKEDLIST_ITEM_T) + sizeof(void *));
     szRequiredMem += Memory_szGetAllocatedSize(sizeof(INPIN_T));
     szRequiredMem += Memory_szGetAllocatedSize(sizeof(char) * 3);
@@ -184,6 +195,7 @@ void test_vPinCfgCsv(void)
     eParseResult = PinCfgCsv_eParse(&sParams);
     szRequiredMem = Memory_szGetAllocatedSize(sizeof(GLOBALS_T));
     szRequiredMem += Memory_szGetAllocatedSize(sizeof(CLI_T));
+    szRequiredMem += Memory_szGetAllocatedSize(sizeof(LINKEDLIST_ITEM_T) + sizeof(void *));
     szRequiredMem += Memory_szGetAllocatedSize(sizeof(LINKEDLIST_ITEM_T) + sizeof(void *));
     szRequiredMem += Memory_szGetAllocatedSize(sizeof(SWITCH_T)) * 2;
     szRequiredMem += Memory_szGetAllocatedSize(sizeof(char) * 3) * 2;
@@ -206,6 +218,7 @@ void test_vPinCfgCsv(void)
 
     szRequiredMem = Memory_szGetAllocatedSize(sizeof(GLOBALS_T));
     szRequiredMem += Memory_szGetAllocatedSize(sizeof(CLI_T));
+    szRequiredMem += Memory_szGetAllocatedSize(sizeof(LINKEDLIST_ITEM_T) + sizeof(void *));
     szRequiredMem += Memory_szGetAllocatedSize(sizeof(LINKEDLIST_ITEM_T) + sizeof(void *));
     szRequiredMem += Memory_szGetAllocatedSize(sizeof(SWITCH_T)) * 10;
     szRequiredMem += Memory_szGetAllocatedSize(sizeof(char) * 3) * 7;
@@ -243,8 +256,7 @@ void test_vGlobalConfig(void)
     sParams.pcConfig = "CD,330/"
                        "CM,620/"
                        "CR,150/"
-                       "CN,1000/"
-                       "CF,30000/";
+                       "CN,1000/";
 
     eParseResult = PinCfgCsv_eParse(&sParams);
 
@@ -323,7 +335,7 @@ void test_vGlobalConfig(void)
     TEST_ASSERT_EQUAL_STRING("L0:W20;W1\n", acOutStr);
 #endif
 
-    // Switch feedback on delay
+    // Switch feedback delay
     memset(acOutStr, 0, OUT_STR_MAX_LEN_D);
     sParams.pcConfig = "CN";
 
@@ -341,30 +353,7 @@ void test_vGlobalConfig(void)
     eParseResult = PinCfgCsv_eParse(&sParams);
 
 #ifdef PINCFG_USE_ERROR_MESSAGES
-    TEST_ASSERT_EQUAL_STRING("W:L:0:SwitchFbOnDelayMs:Invalid number\nI: Configuration parsed.\n", acOutStr);
-#else
-    TEST_ASSERT_EQUAL_STRING("L0:W20;W1\n", acOutStr);
-#endif
-
-    // Switch feedback off delay
-    memset(acOutStr, 0, OUT_STR_MAX_LEN_D);
-    sParams.pcConfig = "CF";
-
-    eParseResult = PinCfgCsv_eParse(&sParams);
-
-#ifdef PINCFG_USE_ERROR_MESSAGES
-    TEST_ASSERT_EQUAL_STRING("W:L:0:Not defined or invalid format\nI: Configuration parsed.\n", acOutStr);
-#else
-    TEST_ASSERT_EQUAL_STRING("L0:W3;W1\n", acOutStr);
-#endif
-
-    memset(acOutStr, 0, OUT_STR_MAX_LEN_D);
-    sParams.pcConfig = "CF,abc";
-
-    eParseResult = PinCfgCsv_eParse(&sParams);
-
-#ifdef PINCFG_USE_ERROR_MESSAGES
-    TEST_ASSERT_EQUAL_STRING("W:L:0:SwitchFbOffDelayMs:Invalid number\nI: Configuration parsed.\n", acOutStr);
+    TEST_ASSERT_EQUAL_STRING("W:L:0:SwitchFbDelayMs:Invalid number\nI: Configuration parsed.\n", acOutStr);
 #else
     TEST_ASSERT_EQUAL_STRING("L0:W20;W1\n", acOutStr);
 #endif

@@ -3,7 +3,6 @@
 #include "MySensorsWrapper.h"
 #include "SensorMeasure.h"
 
-
 static ISENSORMEASURE_RESULT_T CPUTempMeasure_eMeasure(
     ISENSORMEASURE_T *pSelf,
     uint8_t *pu8Buffer,

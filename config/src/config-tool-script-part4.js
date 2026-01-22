@@ -16,9 +16,6 @@ function generateOutput() {
     if (configState.global.CN.enabled && configState.global.CN.value) {
         lines.push(`CN,${configState.global.CN.value}/`);
     }
-    if (configState.global.CF.enabled && configState.global.CF.value) {
-        lines.push(`CF,${configState.global.CF.value}/`);
-    }
     if (configState.global.CA.enabled && configState.global.CA.value) {
         lines.push(`CA,${configState.global.CA.value}/`);
     }

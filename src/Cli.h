@@ -33,6 +33,11 @@ typedef enum CLI_STATE_E
 typedef struct CLI_S
 {
     PRESENTABLE_T sPresentable;
+    LOOPABLE_T sLoopable;
+#ifdef FWCHECK_ENABLED
+    uint32_t u32LastFwCrcCheckMs;
+#endif
+    uint32_t u32ReceivingStartedMs;
     char *pcCfgBuf;
     uint16_t u16CfgNext;
     CLI_STATE_T eState;

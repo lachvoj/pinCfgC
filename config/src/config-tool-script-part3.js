@@ -393,8 +393,6 @@ function parseCSVConfiguration(csv) {
             configState.global.CR = { value: parts[1], enabled: true };
         } else if (type === 'CN' && parts.length === 2) {
             configState.global.CN = { value: parts[1], enabled: true };
-        } else if (type === 'CF' && parts.length === 2) {
-            configState.global.CF = { value: parts[1], enabled: true };
         } else if (type === 'CA' && parts.length === 2) {
             configState.global.CA = { value: parts[1], enabled: true };
         } else if (type === 'S' && parts.length > 1) {

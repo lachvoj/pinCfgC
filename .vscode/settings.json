@@ -1,0 +1,46 @@
+{
+    "files.associations": {
+        "pincfgstr.h": "c",
+        "pincfgstrings.h": "c",
+        "sensor.h": "c",
+        "pincfgparse.h": "c",
+        "pincfgmessages.h": "c",
+        "pincfgcsv.h": "c",
+        "types.h": "c"
+    }
+    ,
+        "C_Cpp.default.defines": [
+            "STM32F103xB",
+            "PINCFG_USE_ERROR_MESSAGES",
+            "PINCFG_FEATURE_I2C_MEASUREMENT",
+            "PINCFG_FEATURE_SPI_MEASUREMENT",
+            "PINCFG_FEATURE_ANALOG_MEASUREMENT",
+            "PINCFG_FEATURE_LOOPTIME_MEASUREMENT",
+	        "FWCHECK_ENABLED",
+	        "FWCHECK_USE_HW_CRC",
+	        "ARDUINO_ARCH_STM32",
+	        "TEMP_SENSOR_AVAILABLE",
+	        "VREF_AVAILABLE",
+	        "MY_CONTROLLER_HA",
+	        "MY_CAN",
+	        "MY_CAN_FAST_SLOT_ACCESS",
+	        "PIO_FRAMEWORK_ARDUINO_SERIAL_DISABLED",
+	        "MY_DISABLED_SERIAL",
+	        "MY_DEBUG",
+	        "MY_DEBUG_VERBOSE_TRANSPORT",
+	        "MY_TRANSPORT_ERROR_LOG",
+	        "PINCFG_USE_ERROR_MESSAGES",
+	        "MY_HW_TX_LED_PIN=17",
+	        "PINCFG_MEMORY_SZ=10000",
+        ],
+        "C_Cpp.default.includePath": [
+            "${workspaceFolder}/test/qemu_test",
+            "${workspaceFolder}/test",
+            "${workspaceFolder}/src",
+            "${workspaceFolder}/test/mocks",
+            "${workspaceFolder}/test/Unity/src"
+        ],
+        "C_Cpp.default.compilerPath": "/home/test/.platformio/packages/toolchain-gccarmnoneeabi/bin/arm-none-eabi-gcc",
+        "C_Cpp.default.intelliSenseMode": "gcc-arm",
+        "C_Cpp.default.configurationProvider": "ms-vscode.makefile-tools"
+}

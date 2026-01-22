@@ -8,6 +8,9 @@ extern "C"
 #else
 #include <core/MySensorsCore.h>
 #include <hal/architecture/MyHwHAL.h>
+#if defined(ARDUINO_ARCH_STM32)
+#include <hal/architecture/STM32/MyHwSTM32.h>
+#endif
 #endif
 
 #include "MySensorsWrapper.h"
@@ -126,6 +129,27 @@ extern "C"
     int8_t i8HwCPUTemperature(void)
     {
         return hwCPUTemperature();
+    }
+
+#ifdef UNIT_TEST
+    // Mock variables defined in ArduinoMock.c
+    extern uint16_t mock_analogRead_u16Return;
+    extern uint32_t mock_analogRead_u32Called;
+    extern uint8_t mock_analogRead_u8LastPin;
+#endif
+
+    uint16_t u16HwAnalogRead(uint8_t u8Pin)
+    {
+#ifdef UNIT_TEST
+        mock_analogRead_u32Called++;
+        mock_analogRead_u8LastPin = u8Pin;
+        return mock_analogRead_u16Return;
+#elif defined(ARDUINO_ARCH_STM32)
+        return hwAnalogRead(u8Pin);
+#else
+        // Fallback to Arduino analogRead for other platforms
+        return (uint16_t)analogRead(u8Pin);
+#endif
     }
 
 #ifdef MY_TRANSPORT_ERROR_LOG
