@@ -28,6 +28,11 @@ async function sha256(message) {
     return hashHex;
 }
 
+// Get UTF-8 byte length of a string (for unit field validation)
+function getUtf8ByteLength(str) {
+    return new TextEncoder().encode(str).length;
+}
+
 // Input event types
 const INPUT_EVENT_TYPES = {
     '0': 'Down',

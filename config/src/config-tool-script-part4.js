@@ -110,12 +110,13 @@ function generateOutput() {
             sr.reportingInterval
         ];
         
-        // Optional parameters: scale (index 9), offset (index 10), precision (index 11), byteOffset (index 12), byteCount (index 13)
+        // Optional parameters: scale (index 9), offset (index 10), precision (index 11), byteOffset (index 12), byteCount (index 13), unit (index 14)
         const scale = sr.scale || '1.0';
         const offset = sr.offset || '0.0';
         const precision = sr.precision || '0';
         const byteOffset = sr.byteOffset || '0';
         const byteCount = sr.byteCount || '0';
+        const unit = sr.unit || '';
         
         // Include optional parameters only if any are non-default
         const scaleNonDefault = scale !== '1.0' && scale !== '1';
@@ -123,11 +124,12 @@ function generateOutput() {
         const precisionNonDefault = precision !== '0';
         const byteOffsetNonDefault = byteOffset !== '0';
         const byteCountNonDefault = byteCount !== '0';
+        const unitNonDefault = unit !== '';
         
         // Build optional params array and trim trailing defaults
-        if (scaleNonDefault || offsetNonDefault || precisionNonDefault || byteOffsetNonDefault || byteCountNonDefault) {
-            const optionalParams = [scale, offset, precision, byteOffset, byteCount];
-            const isNonDefault = [scaleNonDefault, offsetNonDefault, precisionNonDefault, byteOffsetNonDefault, byteCountNonDefault];
+        if (scaleNonDefault || offsetNonDefault || precisionNonDefault || byteOffsetNonDefault || byteCountNonDefault || unitNonDefault) {
+            const optionalParams = [scale, offset, precision, byteOffset, byteCount, unit];
+            const isNonDefault = [scaleNonDefault, offsetNonDefault, precisionNonDefault, byteOffsetNonDefault, byteCountNonDefault, unitNonDefault];
             
             // Find the last non-default parameter
             let lastNonDefault = -1;

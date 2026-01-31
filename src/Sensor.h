@@ -72,9 +72,9 @@ SENSOR_RESULT_T Sensor_eInit(
     ISENSORMEASURE_T *psSensorMeasure,
     uint16_t u16SamplingIntervalMs,
     uint16_t u16ReportIntervalSec,
-    int32_t i32Scale,    // Fixed-point: scale × PINCFG_FIXED_POINT_SCALE
-    int32_t i32Offset,   // Fixed-point: offset × PINCFG_FIXED_POINT_SCALE
-    uint8_t u8Precision, // Decimal places (0-6)
-    const char *pcUnit); // Unit string for V_UNIT_PREFIX (NULL if not used)
+    int32_t i32Scale,     // Fixed-point: scale × PINCFG_FIXED_POINT_SCALE
+    int32_t i32Offset,    // Fixed-point: offset × PINCFG_FIXED_POINT_SCALE
+    uint8_t u8Precision,  // Decimal places (0-6)
+    STRING_POINT_T *psUnit); // Unit string for V_UNIT_PREFIX (NULL if not used)
 
 #endif // SENSOR_H

@@ -318,7 +318,8 @@ function addSensorReporter() {
         offset: String(PINCFG_LIMITS.SENSOR_OFFSET || 0.0),
         precision: String(PINCFG_LIMITS.SENSOR_PRECISION_DEFAULT || 0),
         byteOffset: '0',
-        byteCount: '0'
+        byteCount: '0',
+        unit: ''
     };
     
     configState.sensorReporters.push(srObj);
@@ -735,6 +736,70 @@ function renderSensorReporter(srObj) {
     group5.style.display = isDigitalBus ? 'block' : 'none';
     
     fields.appendChild(group5);
+    
+    // Group 6: Display Options (Unit)
+    const group6 = document.createElement('fieldset');
+    group6.className = 'sensor-field-group';
+    const legend6 = document.createElement('legend');
+    legend6.textContent = 'Display';
+    legend6.title = 'Options affecting how the sensor value is displayed';
+    legend6.style.cursor = 'help';
+    group6.appendChild(legend6);
+    
+    // Unit field with byte counter
+    const unitGroup = document.createElement('div');
+    unitGroup.className = 'form-group';
+    
+    const unitLabel = document.createElement('label');
+    unitLabel.textContent = 'Unit';
+    unitLabel.title = 'Unit string sent via V_UNIT_PREFIX (e.g., °C, hPa, ppm). Max 8 bytes UTF-8.';
+    unitLabel.style.cursor = 'help';
+    unitGroup.appendChild(unitLabel);
+    
+    const unitInputWrapper = document.createElement('div');
+    unitInputWrapper.style.display = 'flex';
+    unitInputWrapper.style.alignItems = 'center';
+    unitInputWrapper.style.gap = '8px';
+    
+    const unitInput = document.createElement('input');
+    unitInput.type = 'text';
+    unitInput.value = srObj.unit || '';
+    unitInput.placeholder = 'e.g., °C';
+    unitInput.style.flex = '1';
+    
+    const unitByteCounter = document.createElement('span');
+    unitByteCounter.style.fontSize = '0.85em';
+    unitByteCounter.style.color = '#9cdcfe';
+    unitByteCounter.style.minWidth = '60px';
+    const maxUnitBytes = PINCFG_LIMITS.SENSOR_UNIT_MAX_LEN || 8;
+    const updateByteCounter = () => {
+        const bytes = getUtf8ByteLength(unitInput.value);
+        unitByteCounter.textContent = `${bytes}/${maxUnitBytes} bytes`;
+        if (bytes > maxUnitBytes) {
+            unitByteCounter.style.color = '#f14c4c';
+            unitInput.style.borderColor = '#f14c4c';
+        } else {
+            unitByteCounter.style.color = '#9cdcfe';
+            unitInput.style.borderColor = '';
+        }
+    };
+    updateByteCounter();
+    
+    unitInput.addEventListener('input', function() {
+        const bytes = getUtf8ByteLength(this.value);
+        if (bytes <= maxUnitBytes) {
+            srObj.unit = this.value;
+            saveToLocalStorage();
+        }
+        updateByteCounter();
+    });
+    
+    unitInputWrapper.appendChild(unitInput);
+    unitInputWrapper.appendChild(unitByteCounter);
+    unitGroup.appendChild(unitInputWrapper);
+    group6.appendChild(unitGroup);
+    
+    fields.appendChild(group6);
     
     card.appendChild(header);
     card.appendChild(fields);

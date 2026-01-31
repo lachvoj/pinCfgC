@@ -22,10 +22,10 @@ SENSOR_RESULT_T Sensor_eInit(
     ISENSORMEASURE_T *psSensorMeasure,
     uint16_t u16SamplingIntervalMs,
     uint16_t u16ReportIntervalSec,
-    int32_t i32Scale,    // Fixed-point: scale × PINCFG_FIXED_POINT_SCALE
-    int32_t i32Offset,   // Fixed-point: offset × PINCFG_FIXED_POINT_SCALE
-    uint8_t u8Precision, // Decimal places (0-6)
-    const char *pcUnit)  // Unit string for V_UNIT_PREFIX (NULL if not used)
+    int32_t i32Scale,     // Fixed-point: scale × PINCFG_FIXED_POINT_SCALE
+    int32_t i32Offset,    // Fixed-point: offset × PINCFG_FIXED_POINT_SCALE
+    uint8_t u8Precision,  // Decimal places (0-6)
+    STRING_POINT_T *psUnit) // Unit string for V_UNIT_PREFIX (NULL if not used)
 {
     if (psHandle == NULL || sName == NULL || psSensorMeasure == NULL)
         return SENSOR_NULLPTR_ERROR_E;
@@ -78,8 +78,20 @@ SENSOR_RESULT_T Sensor_eInit(
     if (psSensorMeasure->eType == MEASUREMENT_TYPE_LOOPTIME_E)
         bCumulative = true;
 
-    // Store unit string (can be NULL)
-    psHandle->pcUnit = pcUnit;
+    // Allocate and store unit string (can be NULL)
+    if (psUnit != NULL && psUnit->szLen > 0)
+    {
+        char *pcUnitBuf = (char *)Memory_vpAlloc(psUnit->szLen + 1);
+        if (pcUnitBuf == NULL)
+            return SENSOR_MEMORY_ALLOCATION_ERROR_E;
+        memcpy(pcUnitBuf, psUnit->pcStrStart, psUnit->szLen);
+        pcUnitBuf[psUnit->szLen] = '\0';
+        psHandle->pcUnit = pcUnitBuf;
+    }
+    else
+    {
+        psHandle->pcUnit = NULL;
+    }
 
     // Initialize mode flags
     psHandle->u8Flags = 0U;

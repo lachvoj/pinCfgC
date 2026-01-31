@@ -1025,7 +1025,8 @@ Lines starting with **'SR'** are parsed as sensor reporter definitions.
 11. 0.0,     (optional offset - additive adjustment, default 0.0)
 12. 0,       (optional precision - decimal places 0-6, default 0)
 13. 0,       (optional byte offset for multi-value sensors)
-14. 0/       (optional byte count for multi-value sensors)
+14. 0,       (optional byte count for multi-value sensors)
+15. °C/      (optional unit string for V_UNIT_PREFIX, max 8 bytes UTF-8)
 ```
 
 #### Parameters
@@ -1073,6 +1074,11 @@ Lines starting with **'SR'** are parsed as sensor reporter definitions.
     * Range: 0-6, values >6 are clamped with warning message
 12. **Byte Offset** (optional, `uint8_t`) - Starting byte index for multi-value sensors (0-5), default 0
 13. **Byte Count** (optional, `uint8_t`) - Number of bytes to extract (1-6, 0=all), default 0
+14. **Unit** (optional, `char[]`) - Unit string sent via MySensors `V_UNIT_PREFIX` message, default empty
+    * Maximum 8 bytes (UTF-8 encoded, so "°C" = 3 bytes)
+    * Sent once on first sensor report to controller
+    * Examples: `°C`, `%`, `hPa`, `ppm`, `ms`, `lux`
+    * If empty, uses default unit for measurement type (e.g., "ms" for loop time)
 
 #### Examples
 ```
@@ -1091,6 +1097,12 @@ SR,Humidity,humid_raw,1,7,0,0,1000,60,0.01,5.0,1/    # Scale 0.01, add 5.0% offs
 
 # Enableable sensor with averaging, no decimals (default)
 SR,Humidity_avg,humid_sensor,1,7,1,1,500,60/         # Uses P_BYTE or P_INT16
+
+# Temperature sensor with custom unit string (sent via V_UNIT_PREFIX)
+SR,RoomTemp,tmp102,6,6,0,0,5000,300,0.0625,0,2,0,0,°C/  # Unit: °C
+
+# Pressure sensor with hPa unit
+SR,Pressure,bme280,17,4,0,0,5000,300,0.01,0,1,3,3,hPa/  # Unit: hPa
 
 # Multiple sensors sharing one measurement source with different calibrations
 MS,0,shared/                                          # type 0 = CPU temp

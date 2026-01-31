@@ -282,6 +282,7 @@ def parse_pincfg_defines(types_header_path):
             'PINCFG_SENSOR_PRECISION_MIN_D',
             'PINCFG_SENSOR_PRECISION_MAX_D',
             'PINCFG_SENSOR_PRECISION_D',
+            'PINCFG_SENSOR_UNIT_MAX_LEN_D',
             'PINCFG_TIMED_SWITCH_MIN_PERIOD_MS_D',
             'PINCFG_TIMED_SWITCH_MAX_PERIOD_MS_D',
         ]

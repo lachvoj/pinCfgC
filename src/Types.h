@@ -116,6 +116,11 @@
 #define PINCFG_SENSOR_PRECISION_D 0 // No decimals by default
 #endif
 
+// Sensor unit string max length (bytes, UTF-8)
+#ifndef PINCFG_SENSOR_UNIT_MAX_LEN_D
+#define PINCFG_SENSOR_UNIT_MAX_LEN_D 8
+#endif
+
 #ifndef PINCFG_CLI_MAX_LINE_SZ_D
 #define PINCFG_CLI_MAX_LINE_SZ_D 30
 #endif

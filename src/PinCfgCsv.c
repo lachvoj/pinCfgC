@@ -1312,14 +1312,14 @@ static PINCFG_RESULT_T PinCfgCsv_ParseMeasurementSource(PINCFG_PARSE_SUBFN_PARAM
 }
 
 // Phase 2: Parse Sensor Reporter (SR)
-// Format: SR,<name>,<measurementName>,<vType>,<sType>,<enableable>,<cumulative>,<samplingMs>,<reportSec>,<scale>,<offset>,<precision>,<byteOffset>,<byteCount>/
-// Example: SR,sensor1,temp0,6,6,0,0,1000,300,1.0,0,0/
+// Format: SR,<name>,<measurementName>,<vType>,<sType>,<enableable>,<cumulative>,<samplingMs>,<reportSec>,<scale>,<offset>,<precision>,<byteOffset>,<byteCount>,<unit>/
+// Example: SR,sensor1,temp0,6,6,0,0,1000,300,1.0,0,0,0,0,°C/
 static PINCFG_RESULT_T PinCfgCsv_ParseSensorReporter(PINCFG_PARSE_SUBFN_PARAMS_T *psPrms)
 {
-    // SR,<name>,<measurement>,<vType>,<sType>,<enableable>,<cumulative>,<sampMs>,<reportSec>,<scale>,<offset>,<precision>,<byteOffset>,<byteCount>
-    // Min: SR,name,meas,6,6,0,0,1000,300 = 9 items (scale, offset, precision, byte offset/count optional)
-    // Max: SR,name,meas,6,6,0,0,1000,300,0.0625,-2.1,2,0,2 = 15 items
-    if (psPrms->u8LineItemsLen < 9 || psPrms->u8LineItemsLen > 15)
+    // SR,<name>,<measurement>,<vType>,<sType>,<enableable>,<cumulative>,<sampMs>,<reportSec>,<scale>,<offset>,<precision>,<byteOffset>,<byteCount>,<unit>
+    // Min: SR,name,meas,6,6,0,0,1000,300 = 9 items (scale, offset, precision, byte offset/count, unit optional)
+    // Max: SR,name,meas,6,6,0,0,1000,300,0.0625,-2.1,2,0,2,°C = 16 items
+    if (psPrms->u8LineItemsLen < 9 || psPrms->u8LineItemsLen > 16)
     {
         psPrms->pcOutStringLast += LOG_WARNING(psPrms, PinCfgMessages_getString(SR_E), ERR_INVALID_ARGS);
         return PINCFG_OK_E;
@@ -1510,11 +1510,28 @@ static PINCFG_RESULT_T PinCfgCsv_ParseSensorReporter(PINCFG_PARSE_SUBFN_PARAMS_T
         }
     }
 
+    // Get unit string (index 14, optional, for V_UNIT_PREFIX)
+    // Note: sTempStrPt is reused here and remains valid since unit is the last parsed field
+    if (psPrms->u8LineItemsLen >= 15)
+    {
+        psPrms->sTempStrPt = psPrms->sLine;
+        PinCfgStr_vGetSplitElemByIndex(&(psPrms->sTempStrPt), PINCFG_VALUE_SEPARATOR_D, 14);
+        if (psPrms->sTempStrPt.szLen > PINCFG_SENSOR_UNIT_MAX_LEN_D)
+        {
+            psPrms->pcOutStringLast += LOG_WARNING(psPrms, PinCfgMessages_getString(SR_E), ERR_INVALID_UNIT);
+            return PINCFG_OK_E;
+        }
+    }
+
     // Calculate memory
     if (psPrms->psParsePrms->pszMemoryRequired != NULL)
     {
         *(psPrms->psParsePrms->pszMemoryRequired) +=
             Memory_szGetAllocatedSize(sizeof(SENSOR_T)) + Memory_szGetAllocatedSize(sSensorName.szLen + 1);
+
+        // Add unit string memory if provided
+        if (psPrms->u8LineItemsLen >= 15 && psPrms->sTempStrPt.szLen > 0)
+            *(psPrms->psParsePrms->pszMemoryRequired) += Memory_szGetAllocatedSize(psPrms->sTempStrPt.szLen + 1);
 
         if (psPrms->psParsePrms->eAddToPresentables != NULL)
             *(psPrms->psParsePrms->pszMemoryRequired) +=
@@ -1550,10 +1567,11 @@ static PINCFG_RESULT_T PinCfgCsv_ParseSensorReporter(PINCFG_PARSE_SUBFN_PARAMS_T
              psMeasurement, // Link to measurement
              u16SamplingIntervalMs,
              u16ReportIntervalSec,
-             i32Scale,              // Multiplicative scale factor (fixed-point)
-             i32Offset,             // Additive offset adjustment (fixed-point)
-             u8Precision,           // Decimal places (0-6)
-             NULL) == SENSOR_OK_E); // Unit string (NULL = use default for measurement type)
+             i32Scale,    // Multiplicative scale factor (fixed-point)
+             i32Offset,   // Additive offset adjustment (fixed-point)
+             u8Precision, // Decimal places (0-6)
+             (psPrms->u8LineItemsLen >= 15 && psPrms->sTempStrPt.szLen > 0) ? &psPrms->sTempStrPt : NULL) ==
+         SENSOR_OK_E); // Unit string
 
     // Add main sensor to presentables
     if (bInitOk && psPrms->psParsePrms->eAddToPresentables != NULL)

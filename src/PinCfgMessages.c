@@ -42,12 +42,13 @@ static const char *_errorMessages[] = {
     "Invalid sensor precision",      // 30 - ERR_INVALID_PRECISION
     "Invalid byte offset",           // 31 - ERR_INVALID_BYTE_OFFSET
     "Invalid byte count",            // 32 - ERR_INVALID_BYTE_COUNT
-    "Type not implemented",          // 33 - ERR_TYPE_NOT_IMPLEMENTED
-    "Invalid I2C params",            // 32 - ERR_INVALID_I2C_PARAMS
-    "Invalid I2C address",           // 33 - ERR_INVALID_I2C_ADDRESS
-    "Invalid I2C command",           // 34 - ERR_INVALID_I2C_CMD
-    "Invalid data size",             // 35 - ERR_INVALID_DATA_SIZE
-    "Invalid global config"          // 36 - ERR_INVALID_GLOBAL_CFG
+    "Invalid unit (max 8 bytes)",    // 33 - ERR_INVALID_UNIT
+    "Type not implemented",          // 34 - ERR_TYPE_NOT_IMPLEMENTED
+    "Invalid I2C params",            // 35 - ERR_INVALID_I2C_PARAMS
+    "Invalid I2C address",           // 36 - ERR_INVALID_I2C_ADDRESS
+    "Invalid I2C command",           // 37 - ERR_INVALID_I2C_CMD
+    "Invalid data size",             // 38 - ERR_INVALID_DATA_SIZE
+    "Invalid global config"          // 39 - ERR_INVALID_GLOBAL_CFG
 };
 #endif
 

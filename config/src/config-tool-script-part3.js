@@ -550,7 +550,7 @@ function parseCSVConfiguration(csv) {
             configState.measurementSources.push(ms);
             renderMeasurementSource(ms);
         } else if (type === 'SR' && parts.length >= 9) {
-            // Sensor reporters - minimum 9 fields, optional scale/offset/precision/byteOffset/byteCount
+            // Sensor reporters - minimum 9 fields, optional scale/offset/precision/byteOffset/byteCount/unit
             const sr = {
                 id: Date.now() + Math.random(),
                 name: parts[1],
@@ -565,7 +565,8 @@ function parseCSVConfiguration(csv) {
                 offset: parts[10] || '0.0',    // Index 10
                 precision: parts[11] || '0',   // Index 11
                 byteOffset: parts[12] || '0',  // Index 12
-                byteCount: parts[13] || '0'    // Index 13
+                byteCount: parts[13] || '0',   // Index 13
+                unit: parts[14] || ''          // Index 14
             };
             
             configState.sensorReporters.push(sr);
