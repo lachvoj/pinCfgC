@@ -85,9 +85,6 @@ CLI_RESULT_T Cli_eInit(CLI_T *psHandle, uint8_t u8Id)
     psHandle->sPresentable.ePayloadType = P_STRING;
     psHandle->sPresentable.pcName = "CLI";
     psHandle->sPresentable.u8Id = u8Id;
-#ifdef MY_CONTROLLER_HA
-    psHandle->sPresentable.bStatePresented = false;
-#endif
 
     // Initialize handle items
     psHandle->pcCfgBuf = NULL;
@@ -193,7 +190,7 @@ void Cli_vRcvMessage(PRESENTABLE_T *psBaseHandle, const MyMessage *pcMsg)
     bool bAlreadyAppended = false;
 
 #ifdef MY_CONTROLLER_HA
-    psHandle->sPresentable.bStatePresented = true;
+    psHandle->sPresentable.u8Flags |= PRESENTABLE_FLAG_STATE_PRESENTED;
 #endif
 
 #ifdef FWCHECK_ENABLED

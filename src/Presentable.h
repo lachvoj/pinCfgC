@@ -32,11 +32,12 @@ typedef struct PRESENTABLE_S
     mysensors_payload_t ePayloadType;
     uint8_t u8Id;
     uint8_t u8Precision; // Decimal places for string formatting (0 = integer)
-    bool bStateChanged;
-#ifdef MY_CONTROLLER_HA
-    bool bStatePresented;
-#endif
+    uint8_t u8Flags;     // Status flags - saves 4 bytes (eliminates padding)
 } PRESENTABLE_T;
+
+// Presentable flag bit masks (upper bits, lower bits reserved for future use)
+#define PRESENTABLE_FLAG_STATE_CHANGED   0x10  // State has changed, needs processing
+#define PRESENTABLE_FLAG_STATE_PRESENTED 0x20  // Controller has acknowledged this presentable
 
 typedef enum
 {

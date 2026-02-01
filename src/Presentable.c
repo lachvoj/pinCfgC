@@ -16,12 +16,9 @@ PRESENTABLE_RESULT_T Presentable_eInitReuseName(PRESENTABLE_T *psHandle, const c
     psHandle->pcName = pcName;
     psHandle->u8Id = u8Id;
     psHandle->u32State = 0UL;
-    psHandle->bStateChanged = false;
+    psHandle->u8Flags = 0U;
     psHandle->ePayloadType = P_BYTE;
     psHandle->u8Precision = 0U;
-#ifdef MY_CONTROLLER_HA
-    psHandle->bStatePresented = false;
-#endif
 
     return PRESENTABLE_OK_E;
 }
@@ -65,9 +62,10 @@ void Presentable_vSetState(PRESENTABLE_T *psHandle, int32_t i32State, bool bSend
     int32_t i32OldState = (psHandle->i32State & u32Mask);
     psHandle->i32State = (i32State & u32Mask);
 
-    psHandle->bStateChanged = (i32OldState != psHandle->i32State);
+    if (i32OldState != psHandle->i32State)
+        psHandle->u8Flags |= PRESENTABLE_FLAG_STATE_CHANGED;
 #ifdef MY_CONTROLLER_HA
-    if (bSendStatus && psHandle->bStatePresented)
+    if (bSendStatus && (psHandle->u8Flags & PRESENTABLE_FLAG_STATE_PRESENTED))
 #else
     if (bSendStatus)
 #endif
@@ -91,14 +89,14 @@ void Presentable_vToggle(PRESENTABLE_T *psHandle)
     else
         psHandle->u8State = (uint8_t) false;
 
-    psHandle->bStateChanged = true;
+    psHandle->u8Flags |= PRESENTABLE_FLAG_STATE_CHANGED;
     Presentable_vSendState(psHandle);
 }
 
 void Presentable_vRcvMessage(PRESENTABLE_T *psHandle, const MyMessage *pcMsg)
 {
 #ifdef MY_CONTROLLER_HA
-    psHandle->bStatePresented = true;
+    psHandle->u8Flags |= PRESENTABLE_FLAG_STATE_PRESENTED;
 #endif
     int32_t i32NewState = 0UL | eMessageGetByte(pcMsg);
     Presentable_vSetState(psHandle, i32NewState, false);

@@ -218,7 +218,7 @@ void PinCfgCsv_vLoop(uint32_t u32ms)
         for (uint8_t i = 0; i < psGlobals->u8PresentablesCount; i++)
         {
             PRESENTABLE_T *psCurrent = psGlobals->ppsPresentables[i];
-            if (!psCurrent->bStatePresented)
+            if (!(psCurrent->u8Flags & PRESENTABLE_FLAG_STATE_PRESENTED))
             {
                 Presentable_vPresentState(psCurrent);
                 vWait(50);

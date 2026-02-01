@@ -189,7 +189,7 @@ void InPin_vRcvMessage(PRESENTABLE_T *psBaseHandle, const MyMessage *pcMsg)
 {
     (void)pcMsg;
 #ifdef MY_CONTROLLER_HA
-    psBaseHandle->bStatePresented = true;
+    psBaseHandle->u8Flags |= PRESENTABLE_FLAG_STATE_PRESENTED;
 #else
     (void)psBaseHandle;
 #endif

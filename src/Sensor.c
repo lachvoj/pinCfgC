@@ -138,9 +138,9 @@ static void Sensor_vLoop(LOOPABLE_T *psLoopableHandle, uint32_t u32ms)
     // Handle enableable state changes
     if (psHandle->u8Flags & SENSOR_FLAG_ENABLEABLE)
     {
-        if (psHandle->psEnableable->sPresentable.bStateChanged)
+        if (psHandle->psEnableable->sPresentable.u8Flags & PRESENTABLE_FLAG_STATE_CHANGED)
         {
-            psHandle->psEnableable->sPresentable.bStateChanged = false;
+            psHandle->psEnableable->sPresentable.u8Flags &= ~PRESENTABLE_FLAG_STATE_CHANGED;
 
             if (psHandle->psEnableable->sPresentable.u8State)
                 psHandle->u8Flags |= SENSOR_FLAG_ENABLED;

@@ -117,7 +117,7 @@ static void Switch_vCheckFbPin(SWITCH_T *psHandle, uint32_t u32ms)
         if (psHandle->sPresentable.u8State == 0)
         {
              Presentable_vSetState((PRESENTABLE_T *)psHandle, 1, true);
-             psHandle->sPresentable.bStateChanged = false;
+             psHandle->sPresentable.u8Flags &= ~PRESENTABLE_FLAG_STATE_CHANGED;
         }
 
         return;
@@ -146,12 +146,12 @@ static void Switch_vCheckFbPin(SWITCH_T *psHandle, uint32_t u32ms)
 
     psHandle->u32FbReadStarted = 0U;
     Presentable_vSetState((PRESENTABLE_T *)psHandle, 0, true);
-    psHandle->sPresentable.bStateChanged = false;
+    psHandle->sPresentable.u8Flags &= ~PRESENTABLE_FLAG_STATE_CHANGED;
 }
 
 static inline void Switch_vHandleClassic(SWITCH_T *psHandle)
 {
-    psHandle->sPresentable.bStateChanged = false;
+    psHandle->sPresentable.u8Flags &= ~PRESENTABLE_FLAG_STATE_CHANGED;
     Switch_vWritePin(psHandle, psHandle->sPresentable.u8State);
 }
 
@@ -165,7 +165,7 @@ static inline void Switch_vHandleImpulse(SWITCH_T *psHandle, uint32_t u32ms)
     else if (PinCfg_u32GetElapsedTime(psHandle->u32ImpulseStarted, u32ms) >= psHandle->u32ImpulseDuration)
     {
         psHandle->u32ImpulseStarted = 0U;
-        psHandle->sPresentable.bStateChanged = false;
+        psHandle->sPresentable.u8Flags &= ~PRESENTABLE_FLAG_STATE_CHANGED;
         Switch_vWritePin(psHandle, (uint8_t) false);
     }
 }
@@ -179,7 +179,7 @@ static inline void Switch_vHandleTimed(SWITCH_T *psHandle, uint32_t u32ms)
         psHandle->u32ImpulseDuration = 0U;
         Switch_vWritePin(psHandle, (uint8_t) false);
         Presentable_vSetState((PRESENTABLE_T *)psHandle, (int32_t) false, true);
-        psHandle->sPresentable.bStateChanged = false;
+        psHandle->sPresentable.u8Flags &= ~PRESENTABLE_FLAG_STATE_CHANGED;
     }
 }
 
@@ -189,7 +189,7 @@ void Switch_vLoopClassic(LOOPABLE_T *psLoopableHandle, uint32_t u32ms)
 
     SWITCH_T *psHandle = container_of(psLoopableHandle, SWITCH_T, sLoopable);
 
-    if (psHandle->sPresentable.bStateChanged != true)
+    if (!(psHandle->sPresentable.u8Flags & PRESENTABLE_FLAG_STATE_CHANGED))
         return;
 
     Switch_vHandleClassic(psHandle);
@@ -201,7 +201,7 @@ void Switch_vLoopClassicFeedback(LOOPABLE_T *psLoopableHandle, uint32_t u32ms)
 
     Switch_vCheckFbPin(psHandle, u32ms);
 
-    if (psHandle->sPresentable.bStateChanged != true)
+    if (!(psHandle->sPresentable.u8Flags & PRESENTABLE_FLAG_STATE_CHANGED))
         return;
 
     Switch_vHandleClassic(psHandle);
@@ -211,7 +211,7 @@ void Switch_vLoopImpulse(LOOPABLE_T *psLoopableHandle, uint32_t u32ms)
 {
     SWITCH_T *psHandle = container_of(psLoopableHandle, SWITCH_T, sLoopable);
 
-    if (psHandle->sPresentable.bStateChanged != true)
+    if (!(psHandle->sPresentable.u8Flags & PRESENTABLE_FLAG_STATE_CHANGED))
         return;
 
     Switch_vHandleImpulse(psHandle, u32ms);
@@ -223,7 +223,7 @@ void Switch_vLoopImpulseFeedback(LOOPABLE_T *psLoopableHandle, uint32_t u32ms)
 
     Switch_vCheckFbPin(psHandle, u32ms);
 
-    if (psHandle->sPresentable.bStateChanged != true)
+    if (!(psHandle->sPresentable.u8Flags & PRESENTABLE_FLAG_STATE_CHANGED))
         return;
 
     Switch_vHandleImpulse(psHandle, u32ms);
@@ -288,7 +288,7 @@ void Switch_vEventHandle(SWITCH_T *psHandle, uint8_t u8EventType, uint32_t u32Da
             psHandle->u32ImpulseDuration = 0U;
             Switch_vWritePin(psHandle, (uint8_t) false);
             Presentable_vSetState((PRESENTABLE_T *)psHandle, (int32_t) false, true);
-            psHandle->sPresentable.bStateChanged = false;
+            psHandle->sPresentable.u8Flags &= ~PRESENTABLE_FLAG_STATE_CHANGED;
         }
     }
 }
