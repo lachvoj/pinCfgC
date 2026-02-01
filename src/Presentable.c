@@ -5,6 +5,9 @@
 #include "MySensorsWrapper.h"
 #include "Presentable.h"
 
+// Formatting
+static const char *Presentable_pcFormatDecimal(int32_t i32Value, uint8_t u8Precision, char *pcBuffer, size_t szBufSize);
+
 PRESENTABLE_RESULT_T Presentable_eInitReuseName(PRESENTABLE_T *psHandle, const char *pcName, uint8_t u8Id)
 {
     if (psHandle == NULL || pcName == NULL)
@@ -15,6 +18,7 @@ PRESENTABLE_RESULT_T Presentable_eInitReuseName(PRESENTABLE_T *psHandle, const c
     psHandle->u32State = 0UL;
     psHandle->bStateChanged = false;
     psHandle->ePayloadType = P_BYTE;
+    psHandle->u8Precision = 0U;
 #ifdef MY_CONTROLLER_HA
     psHandle->bStatePresented = false;
 #endif
@@ -114,9 +118,52 @@ void Presentable_vPresentState(PRESENTABLE_T *psHandle)
 void Presentable_vSendState(PRESENTABLE_T *psHandle)
 {
     MyMessage msg;
-    if (eMyMessageInit(&msg, psHandle->u8Id, psHandle->psVtab->eVType, psHandle->ePayloadType, psHandle->pcState) !=
-        WRAP_OK_E)
+    mysensors_payload_t ePayloadType = psHandle->ePayloadType;
+    const char *pcValue = psHandle->pcState;
+    char acBuffer[16];
+
+    // Format as decimal string when precision > 0
+    if (psHandle->u8Precision > 0U)
+    {
+        pcValue = Presentable_pcFormatDecimal(psHandle->i32State, psHandle->u8Precision, acBuffer, sizeof(acBuffer));
+        ePayloadType = P_STRING;
+    }
+
+    if (eMyMessageInit(&msg, psHandle->u8Id, psHandle->psVtab->eVType, ePayloadType, pcValue) != WRAP_OK_E)
         return;
 
     eSend(&msg, false);
+}
+
+const char *Presentable_pcFormatDecimal(int32_t i32Value, uint8_t u8Precision, char *pcBuffer, size_t szBufSize)
+{
+    static const int32_t ai32Divisors[7] = {1, 10, 100, 1000, 10000, 100000, 1000000};
+
+    if (u8Precision > 6)
+        u8Precision = 6;
+
+    if (u8Precision == 0)
+    {
+        snprintf(pcBuffer, szBufSize, "%ld", (long)i32Value);
+        return pcBuffer;
+    }
+
+    int32_t i32Divisor = ai32Divisors[u8Precision];
+    int32_t i32IntPart = i32Value / i32Divisor;
+    int32_t i32FracPart = i32Value % i32Divisor;
+
+    // Handle negative values: -0.5 should be "-0.5" not "0.-5"
+    if (i32Value < 0 && i32IntPart == 0)
+    {
+        i32FracPart = -i32FracPart;
+        snprintf(pcBuffer, szBufSize, "-%ld.%0*ld", (long)i32IntPart, (int)u8Precision, (long)i32FracPart);
+    }
+    else
+    {
+        if (i32FracPart < 0)
+            i32FracPart = -i32FracPart;
+        snprintf(pcBuffer, szBufSize, "%ld.%0*ld", (long)i32IntPart, (int)u8Precision, (long)i32FracPart);
+    }
+
+    return pcBuffer;
 }

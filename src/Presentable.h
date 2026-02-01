@@ -31,6 +31,7 @@ typedef struct PRESENTABLE_S
     };
     mysensors_payload_t ePayloadType;
     uint8_t u8Id;
+    uint8_t u8Precision; // Decimal places for string formatting (0 = integer)
     bool bStateChanged;
 #ifdef MY_CONTROLLER_HA
     bool bStatePresented;

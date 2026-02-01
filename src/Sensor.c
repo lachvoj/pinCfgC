@@ -67,6 +67,9 @@ SENSOR_RESULT_T Sensor_eInit(
         psHandle->u8Precision = u8Precision;
     }
 
+    // Copy precision to presentable for string formatting during send
+    psHandle->sPresentable.u8Precision = psHandle->u8Precision;
+
     // Determine appropriate payload type based on precision and V_TYPE
     psHandle->sPresentable.ePayloadType = Sensor_eGetPayloadType(eVType, psHandle->u8Precision);
 
