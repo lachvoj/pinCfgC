@@ -193,12 +193,14 @@ function addMeasurementSource() {
         i2cAddr: type === '3' ? '' : undefined,
         register: type === '3' ? '' : undefined,
         dataSize: type === '3' ? '2' : undefined,
+        cache: type === '3' ? '' : undefined,
         cmd2: type === '3' ? '' : undefined,
         cmd3: type === '3' ? '' : undefined,
         spiCs: type === '4' ? '' : undefined,
         spiCmd: type === '4' ? '' : undefined,
         spiDataSize: type === '4' ? '2' : undefined,
-        spiDelay: type === '4' ? '0' : undefined
+        spiDelay: type === '4' ? '0' : undefined,
+        // AHT10 has no extra parameters - just name
     };
     
     configState.measurementSources.push(msObj);
@@ -262,6 +264,10 @@ function renderMeasurementSource(msObj) {
             msObj.dataSize = value;
             saveToLocalStorage();
         }, { min: 1, max: 6 }));
+        fields.appendChild(createFormField('Cache (ms, 0=disabled)', 'number', msObj.cache, (value) => {
+            msObj.cache = value;
+            saveToLocalStorage();
+        }, { min: 0, max: 5000, placeholder: '100 (default)', integer: true }));
         fields.appendChild(createFormField('Cmd2 (optional)', 'text', msObj.cmd2, (value) => {
             msObj.cmd2 = value;
             saveToLocalStorage();
@@ -287,6 +293,18 @@ function renderMeasurementSource(msObj) {
             msObj.spiDelay = value;
             saveToLocalStorage();
         }, { min: 0, max: 1000 }));
+    } else if (msObj.type === '5') { // Loop Time
+        // No additional fields for Loop Time measurement
+        const infoBox = document.createElement('div');
+        infoBox.className = 'info-box';
+        infoBox.innerHTML = `
+            <strong>Loop Time Measurement:</strong><br>
+            <em>Measures main loop execution time in microseconds.</em><br>
+            <strong>Temperature (-50 to +150°C):</strong><br>
+            • Byte Offset: <code>3</code>, Byte Count: <code>3</code><br>
+            • Scale: <code>0.000190</code>, Offset: <code>-50</code>
+        `;
+        fields.appendChild(infoBox);
     }
     
     card.appendChild(header);
@@ -319,6 +337,9 @@ function addSensorReporter() {
         precision: String(PINCFG_LIMITS.SENSOR_PRECISION_DEFAULT || 0),
         byteOffset: '0',
         byteCount: '0',
+        bitShift: '0',
+        bitMask: '',
+        endianness: '0',
         unit: ''
     };
     
@@ -332,15 +353,29 @@ function renderSensorReporter(srObj) {
     const container = document.getElementById('srList');
     
     const card = document.createElement('div');
-    card.className = 'item-card';
+    card.className = 'item-card collapsible';
     card.dataset.id = srObj.id;
     
     const header = document.createElement('div');
     header.className = 'item-header';
     
+    const titleArea = document.createElement('div');
+    titleArea.style.display = 'flex';
+    titleArea.style.alignItems = 'center';
+    titleArea.style.gap = '8px';
+    titleArea.style.flex = '1';
+    
+    const collapseBtn = document.createElement('button');
+    collapseBtn.className = 'btn-card-collapse';
+    collapseBtn.textContent = '▼';
+    collapseBtn.title = 'Collapse/Expand';
+    
     const title = document.createElement('span');
     title.className = 'item-title';
     title.textContent = `Sensor - ${srObj.name}`;
+    
+    titleArea.appendChild(collapseBtn);
+    titleArea.appendChild(title);
     
     const actions = document.createElement('div');
     actions.className = 'item-actions';
@@ -348,14 +383,24 @@ function renderSensorReporter(srObj) {
     const removeBtn = document.createElement('button');
     removeBtn.className = 'btn-small btn-remove';
     removeBtn.textContent = '✕ Remove';
-    removeBtn.addEventListener('click', () => removeSensorReporter(srObj.id));
+    removeBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        removeSensorReporter(srObj.id);
+    });
     
     actions.appendChild(removeBtn);
-    header.appendChild(title);
+    header.appendChild(titleArea);
     header.appendChild(actions);
     
     const fields = document.createElement('div');
     fields.className = 'item-fields';
+    
+    // Add collapse toggle handler
+    header.addEventListener('click', (e) => {
+        if (e.target.closest('.btn-remove')) return;
+        fields.classList.toggle('collapsed');
+        collapseBtn.classList.toggle('collapsed');
+    });
     
     // Group 1: Name and Measurement Source
     const group1 = document.createElement('fieldset');
@@ -729,6 +774,39 @@ function renderSensorReporter(srObj) {
         byteCountLabel.style.cursor = 'help';
     }
     group5.appendChild(byteCountField);
+    
+    const bitShiftField = createFormField('Bit Shift (right)', 'number', srObj.bitShift, (value) => {
+        srObj.bitShift = value;
+        saveToLocalStorage();
+    }, { min: 0, max: 31, integer: true });
+    const bitShiftLabel = bitShiftField.querySelector('label');
+    if (bitShiftLabel) {
+        bitShiftLabel.title = 'Right shift after extraction (0-31, default 0)';
+        bitShiftLabel.style.cursor = 'help';
+    }
+    group5.appendChild(bitShiftField);
+    
+    const bitMaskField = createFormField('Bit Mask (hex)', 'text', srObj.bitMask, (value) => {
+        srObj.bitMask = value;
+        saveToLocalStorage();
+    }, { placeholder: '0xFFFFFFFF (default)' });
+    const bitMaskLabel = bitMaskField.querySelector('label');
+    if (bitMaskLabel) {
+        bitMaskLabel.title = 'AND mask before shift (hex or decimal, default 0xFFFFFFFF=all bits)';
+        bitMaskLabel.style.cursor = 'help';
+    }
+    group5.appendChild(bitMaskField);
+    
+    const endiannessField = createFormField('Endianness', 'number', srObj.endianness, (value) => {
+        srObj.endianness = value;
+        saveToLocalStorage();
+    }, { min: 0, max: 1, integer: true });
+    const endiannessLabel = endiannessField.querySelector('label');
+    if (endiannessLabel) {
+        endiannessLabel.title = '0=big-endian (MSB first), 1=little-endian (LSB first)';
+        endiannessLabel.style.cursor = 'help';
+    }
+    group5.appendChild(endiannessField);
     
     // Set initial visibility based on measurement source type
     const initialMs = configState.measurementSources.find(ms => ms.name === srObj.measurementName);

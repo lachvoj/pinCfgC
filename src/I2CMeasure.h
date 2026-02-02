@@ -32,6 +32,8 @@ typedef struct I2CMEASURE_S
     uint16_t u16TimeoutMs;         // Timeout duration (default: 100ms) - 2 bytes
     uint16_t u16ConversionDelayMs; // Delay after command before read (0=none, 80=AHT10) - 2 bytes
     uint8_t au8Buffer[6];          // Raw I2C data buffer (increased for AHT10) - 6 bytes
+    uint32_t u32CacheTimestamp;    // Timestamp when cache was last updated (0=invalid) - 4 bytes
+    uint16_t u16CacheValidMs;      // Cache validity duration (0=disabled, default=100ms) - 2 bytes
 } I2CMEASURE_T;
 
 PINCFG_RESULT_T I2CMeasure_eInit(
@@ -41,7 +43,8 @@ PINCFG_RESULT_T I2CMeasure_eInit(
     const uint8_t *pu8CommandBytes,
     uint8_t u8CommandLength,
     uint8_t u8DataSize,
-    uint16_t u16ConversionDelayMs);
+    uint16_t u16ConversionDelayMs,
+    uint16_t u16CacheValidMs);
 
 ISENSORMEASURE_RESULT_T I2CMeasure_eMeasure(
     ISENSORMEASURE_T *pSelf,

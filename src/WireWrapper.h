@@ -11,13 +11,6 @@ extern "C"
 {
 #endif
 
-// Detect STM32 HAL mode (must match WireWrapper.cpp detection)
-#if defined(ARDUINO_ARCH_STM32) || defined(ARDUINO_ARCH_STM32F1) || defined(ARDUINO_ARCH_STM32F4) ||                   \
-    defined(ARDUINO_ARCH_STM32L4) || defined(USE_STM32_HAL_I2C)
-
-    void Wire_vSetI2CHandle(void *psHandle);
-#endif
-
     void Wire_vBegin(void);
 
     void Wire_vBeginTransmission(uint8_t u8Address);

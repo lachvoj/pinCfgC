@@ -535,8 +535,9 @@ function parseCSVConfiguration(csv) {
                     ms.i2cAddr = parts[3];
                     ms.register = parts[4];
                     ms.dataSize = parts[5] || '2';
-                    ms.cmd2 = parts[6] || '';
-                    ms.cmd3 = parts[7] || '';
+                    ms.cache = parts[6] || '';      // Index 6 - cache time in ms (optional, empty = default 100ms)
+                    ms.cmd2 = parts[7] || '';
+                    ms.cmd3 = parts[8] || '';
                 }
             } else if (msType === '4') { // SPI
                 if (parts.length >= 6) {
@@ -546,11 +547,12 @@ function parseCSVConfiguration(csv) {
                     ms.spiDelay = parts[6] || '0';
                 }
             }
+            // AHT10/AHT20 (type 7) - no extra parameters needed
             
             configState.measurementSources.push(ms);
             renderMeasurementSource(ms);
         } else if (type === 'SR' && parts.length >= 9) {
-            // Sensor reporters - minimum 9 fields, optional scale/offset/precision/byteOffset/byteCount/unit
+            // Sensor reporters - minimum 9 fields, optional scale/offset/precision/unit/byteOffset/byteCount/bitShift/bitMask/endianness
             const sr = {
                 id: Date.now() + Math.random(),
                 name: parts[1],
@@ -564,9 +566,12 @@ function parseCSVConfiguration(csv) {
                 scale: parts[9] || '1.0',      // Index 9
                 offset: parts[10] || '0.0',    // Index 10
                 precision: parts[11] || '0',   // Index 11
-                byteOffset: parts[12] || '0',  // Index 12
-                byteCount: parts[13] || '0',   // Index 13
-                unit: parts[14] || ''          // Index 14
+                unit: parts[12] || '',         // Index 12
+                byteOffset: parts[13] || '0',  // Index 13
+                byteCount: parts[14] || '0',   // Index 14
+                bitShift: parts[15] || '0',    // Index 15
+                bitMask: parts[16] || '',      // Index 16
+                endianness: parts[17] || '0'   // Index 17
             };
             
             configState.sensorReporters.push(sr);

@@ -7,7 +7,8 @@
 static void Sensor_vLoop(LOOPABLE_T *psLoopableHandle, uint32_t u32ms);
 static void Sensor_vSendUnitPrefix(SENSOR_T *psHandle);
 static mysensors_payload_t Sensor_eGetPayloadType(mysensors_data_t eVType, uint8_t u8Precision);
-static int32_t Sensor_i32ExtractBytes(const uint8_t *pu8Buffer, uint8_t u8TotalSize, uint8_t u8Offset, uint8_t u8Count);
+static int32_t Sensor_i32ExtractBytes(const uint8_t *pu8Buffer, uint8_t u8TotalSize, uint8_t u8Offset, uint8_t u8Count,
+                                       uint8_t u8Endianness, uint32_t u32Mask, uint8_t u8Shift);
 static const int32_t ai32PrecisionDivisors[7] = {1, 10, 100, 1000, 10000, 100000, 1000000};
 static const char *Sensor_pcGetDefaultUnit(MEASUREMENT_TYPE_T eType);
 
@@ -25,7 +26,12 @@ SENSOR_RESULT_T Sensor_eInit(
     int32_t i32Scale,     // Fixed-point: scale × PINCFG_FIXED_POINT_SCALE
     int32_t i32Offset,    // Fixed-point: offset × PINCFG_FIXED_POINT_SCALE
     uint8_t u8Precision,  // Decimal places (0-6)
-    STRING_POINT_T *psUnit) // Unit string for V_UNIT_PREFIX (NULL if not used)
+    STRING_POINT_T *psUnit, // Unit string for V_UNIT_PREFIX (NULL if not used)
+    uint8_t u8ByteOffset, // Starting byte index (0-5)
+    uint8_t u8ByteCount,  // Number of bytes (1-6, 0=use all)
+    uint8_t u8BitShift,   // Right shift first (0-31, applied before mask)
+    uint32_t u32BitMask,  // AND mask second (0xFFFFFFFF=no mask, applied after shift)
+    uint8_t u8Endianness) // 0=big-endian, 1=little-endian
 {
     if (psHandle == NULL || sName == NULL || psSensorMeasure == NULL)
         return SENSOR_NULLPTR_ERROR_E;
@@ -73,9 +79,12 @@ SENSOR_RESULT_T Sensor_eInit(
     // Determine appropriate payload type based on precision and V_TYPE
     psHandle->sPresentable.ePayloadType = Sensor_eGetPayloadType(eVType, psHandle->u8Precision);
 
-    // Initialize byte extraction (defaults: use all bytes)
-    psHandle->u8DataByteOffset = 0;
-    psHandle->u8DataByteCount = 0; // 0 = use all bytes
+    // Initialize byte extraction and transformation (for multi-value sensors)
+    psHandle->u8DataByteOffset = u8ByteOffset;
+    psHandle->u8DataByteCount = u8ByteCount;
+    psHandle->u8BitShift = u8BitShift;
+    psHandle->u32BitMask = u32BitMask;
+    psHandle->u8Endianness = u8Endianness;
 
     // Force cumulative mode for looptime measurements
     if (psSensorMeasure->eType == MEASUREMENT_TYPE_LOOPTIME_E)
@@ -202,7 +211,8 @@ static void Sensor_vLoop(LOOPABLE_T *psLoopableHandle, uint32_t u32ms)
             {
                 // Extract raw integer value (no conversion)
                 int32_t i32Value =
-                    Sensor_i32ExtractBytes(au8Buffer, u8Size, psHandle->u8DataByteOffset, psHandle->u8DataByteCount);
+                    Sensor_i32ExtractBytes(au8Buffer, u8Size, psHandle->u8DataByteOffset, psHandle->u8DataByteCount,
+                                           psHandle->u8Endianness, psHandle->u32BitMask, psHandle->u8BitShift);
 
                 // Accumulate (no scaling - accumulates final values)
                 psHandle->i64CumulatedValue += i32Value;
@@ -242,8 +252,6 @@ static void Sensor_vLoop(LOOPABLE_T *psLoopableHandle, uint32_t u32ms)
         // Check report interval (pre-calculated to avoid multiply each loop)
         if (PinCfg_u32GetElapsedTime(psHandle->u32LastReportMs, u32ms) >= psHandle->u32ReportIntervalMs)
         {
-            psHandle->u32LastReportMs = u32ms;
-
             // Universal measurement path - all measurements return raw bytes
             uint8_t au8Buffer[6];
             uint8_t u8Size = sizeof(au8Buffer);
@@ -254,11 +262,14 @@ static void Sensor_vLoop(LOOPABLE_T *psLoopableHandle, uint32_t u32ms)
             // Handle non-blocking measurements
             if (eResult == ISENSORMEASURE_PENDING_E)
             {
-                return; // Operation in progress, try again next loop
+                return; // Operation in progress, try again next loop (timer NOT reset)
             }
 
             if (eResult == ISENSORMEASURE_OK_E)
             {
+                // Reset timer only after successful measurement
+                psHandle->u32LastReportMs = u32ms;
+
                 // Send unit prefix on first report (if not already sent)
                 if (!(psHandle->u8Flags & SENSOR_FLAG_UNIT_SENT))
                 {
@@ -268,14 +279,19 @@ static void Sensor_vLoop(LOOPABLE_T *psLoopableHandle, uint32_t u32ms)
 
                 // Extract raw integer value (no conversion)
                 int32_t i32Value =
-                    Sensor_i32ExtractBytes(au8Buffer, u8Size, psHandle->u8DataByteOffset, psHandle->u8DataByteCount);
+                    Sensor_i32ExtractBytes(au8Buffer, u8Size, psHandle->u8DataByteOffset, psHandle->u8DataByteCount,
+                                           psHandle->u8Endianness, psHandle->u32BitMask, psHandle->u8BitShift);
 
                 int32_t i32Scaled = (((int64_t)i32Value * (int64_t)psHandle->i32Scale) + (int64_t)psHandle->i32Offset) /
                                     (PINCFG_FIXED_POINT_SCALE / ai32PrecisionDivisors[psHandle->u8Precision]);
                 // Report value
                 Presentable_vSetState((PRESENTABLE_T *)psHandle, i32Scaled, true);
             }
-            // Note: On error, skip this reading (no state update)
+            else
+            {
+                // On error, reset timer to try again at next interval
+                psHandle->u32LastReportMs = u32ms;
+            }
         }
     }
 }
@@ -317,35 +333,44 @@ static mysensors_payload_t Sensor_eGetPayloadType(mysensors_data_t eVType, uint8
     }
 }
 
-static int32_t Sensor_i32ExtractBytes(const uint8_t *pu8Buffer, uint8_t u8TotalSize, uint8_t u8Offset, uint8_t u8Count)
+static int32_t Sensor_i32ExtractBytes(const uint8_t *pu8Buffer, uint8_t u8TotalSize, uint8_t u8Offset, uint8_t u8Count,
+                                       uint8_t u8Endianness, uint32_t u32Mask, uint8_t u8Shift)
 {
     int32_t i32Value = 0;
     uint8_t u8ExtractSize = u8Count;
 
     // If count is 0, use all bytes from offset
     if (u8ExtractSize == 0 || (u8Offset + u8ExtractSize) > u8TotalSize)
-    {
+    {  
         u8ExtractSize = u8TotalSize - u8Offset;
     }
 
-    // Combine bytes (big-endian: MSB first)
-    for (uint8_t i = 0; i < u8ExtractSize; i++)
+    // Combine bytes with endianness control
+    if (u8Endianness == 0) // Big-endian (MSB first)
     {
-        i32Value = (i32Value << 8) | pu8Buffer[u8Offset + i];
+        for (uint8_t i = 0; i < u8ExtractSize; i++)
+        {
+            i32Value = (i32Value << 8) | pu8Buffer[u8Offset + i];
+        }
+    }
+    else // Little-endian (LSB first)
+    {
+        for (uint8_t i = u8ExtractSize; i > 0; i--)
+        {
+            i32Value = (i32Value << 8) | pu8Buffer[u8Offset + i - 1];
+        }
     }
 
-    // Sign-extend for signed values (if MSB is set)
-    if (u8ExtractSize == 1 && (i32Value & 0x80))
+    // Apply right shift first (before mask)
+    if (u8Shift > 0 && u8Shift < 32)
     {
-        i32Value |= 0xFFFFFF00;
+        i32Value >>= u8Shift;
     }
-    else if (u8ExtractSize == 2 && (i32Value & 0x8000))
+
+    // Apply bit mask second (after shift)
+    if (u32Mask != 0xFFFFFFFF)
     {
-        i32Value |= 0xFFFF0000;
-    }
-    else if (u8ExtractSize == 3 && (i32Value & 0x800000))
-    {
-        i32Value |= 0xFF000000;
+        i32Value &= (int32_t)u32Mask;
     }
 
     return i32Value;

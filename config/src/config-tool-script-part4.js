@@ -82,6 +82,10 @@ function generateOutput() {
             if (ms.i2cAddr) parts.push(ms.i2cAddr);
             if (ms.register) parts.push(ms.register);
             if (ms.dataSize) parts.push(ms.dataSize);
+            // Cache parameter (index 6, optional, empty value uses default)
+            if (ms.cache !== undefined && ms.cache !== '') {
+                parts.push(ms.cache);
+            }
             if (ms.cmd2) parts.push(ms.cmd2);
             if (ms.cmd3) parts.push(ms.cmd3);
         } else if (ms.type === '4') { // SPI
@@ -110,26 +114,34 @@ function generateOutput() {
             sr.reportingInterval
         ];
         
-        // Optional parameters: scale (index 9), offset (index 10), precision (index 11), byteOffset (index 12), byteCount (index 13), unit (index 14)
+        // Optional parameters (indices 9-17): scale, offset, precision, unit, byteOffset, byteCount, bitShift, bitMask, endianness
         const scale = sr.scale || '1.0';
         const offset = sr.offset || '0.0';
         const precision = sr.precision || '0';
+        const unit = sr.unit || '';
         const byteOffset = sr.byteOffset || '0';
         const byteCount = sr.byteCount || '0';
-        const unit = sr.unit || '';
+        const bitShift = sr.bitShift || '0';
+        const bitMask = sr.bitMask || '';
+        const endianness = sr.endianness || '0';
         
         // Include optional parameters only if any are non-default
         const scaleNonDefault = scale !== '1.0' && scale !== '1';
         const offsetNonDefault = offset !== '0.0' && offset !== '0';
         const precisionNonDefault = precision !== '0';
+        const unitNonDefault = unit !== '';
         const byteOffsetNonDefault = byteOffset !== '0';
         const byteCountNonDefault = byteCount !== '0';
-        const unitNonDefault = unit !== '';
+        const bitShiftNonDefault = bitShift !== '0';
+        const bitMaskNonDefault = bitMask !== '';
+        const endiannessNonDefault = endianness !== '0';
         
         // Build optional params array and trim trailing defaults
-        if (scaleNonDefault || offsetNonDefault || precisionNonDefault || byteOffsetNonDefault || byteCountNonDefault || unitNonDefault) {
-            const optionalParams = [scale, offset, precision, byteOffset, byteCount, unit];
-            const isNonDefault = [scaleNonDefault, offsetNonDefault, precisionNonDefault, byteOffsetNonDefault, byteCountNonDefault, unitNonDefault];
+        if (scaleNonDefault || offsetNonDefault || precisionNonDefault || unitNonDefault || 
+            byteOffsetNonDefault || byteCountNonDefault || bitShiftNonDefault || bitMaskNonDefault || endiannessNonDefault) {
+            const optionalParams = [scale, offset, precision, unit, byteOffset, byteCount, bitShift, bitMask, endianness];
+            const isNonDefault = [scaleNonDefault, offsetNonDefault, precisionNonDefault, unitNonDefault, 
+                                  byteOffsetNonDefault, byteCountNonDefault, bitShiftNonDefault, bitMaskNonDefault, endiannessNonDefault];
             
             // Find the last non-default parameter
             let lastNonDefault = -1;

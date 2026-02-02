@@ -136,7 +136,8 @@ void test_vI2CMeasure_Init(void)
         &u8RegAddr, // Register address
         1,          // 1 byte command (register address)
         2,          // Read 2 bytes
-        0           // No conversion delay
+        0,          // No conversion delay
+        0           // No cache
     );
 
     TEST_ASSERT_EQUAL(PINCFG_OK_E, eResult);
@@ -155,7 +156,8 @@ void test_vI2CMeasure_Init(void)
         au8Cmd, // 3-byte command
         3,      // Command length
         6,      // Read 6 bytes
-        80      // 80ms conversion delay
+        80,     // 80ms conversion delay
+        0       // No cache
     );
 
     TEST_ASSERT_EQUAL(PINCFG_OK_E, eResult);
@@ -168,17 +170,17 @@ void test_vI2CMeasure_Init(void)
     TEST_ASSERT_EQUAL(80, sI2C.u16ConversionDelayMs);
 
     // Test NULL pointer error
-    eResult = I2CMeasure_eInit(NULL, &sName, 0x48, &u8RegAddr, 1, 2, 0);
+    eResult = I2CMeasure_eInit(NULL, &sName, 0x48, &u8RegAddr, 1, 2, 0, 0);
     TEST_ASSERT_EQUAL(PINCFG_NULLPTR_ERROR_E, eResult);
 
     // Test invalid data size (0 bytes)
     uint8_t u8Dummy = 0;
     PinCfgStr_vInitStrPoint(&sName, "test", 4);
-    eResult = I2CMeasure_eInit(&sI2C, &sName, 0x48, &u8Dummy, 1, 0, 0);
+    eResult = I2CMeasure_eInit(&sI2C, &sName, 0x48, &u8Dummy, 1, 0, 0, 0);
     TEST_ASSERT_EQUAL(PINCFG_ERROR_E, eResult);
 
     // Test invalid data size (>6 bytes)
-    eResult = I2CMeasure_eInit(&sI2C, &sName, 0x48, &u8Dummy, 1, 7, 0);
+    eResult = I2CMeasure_eInit(&sI2C, &sName, 0x48, &u8Dummy, 1, 7, 0, 0);
     TEST_ASSERT_EQUAL(PINCFG_ERROR_E, eResult);
 }
 
@@ -197,7 +199,7 @@ void test_vI2CMeasure_SimpleRead(void)
 
     // Initialize for simple 2-byte read
     PinCfgStr_vInitStrPoint(&sName, "temp", 4);
-    I2CMeasure_eInit(&sI2C, &sName, 0x48, &u8RegAddr, 1, 2, 0);
+    I2CMeasure_eInit(&sI2C, &sName, 0x48, &u8RegAddr, 1, 2, 0, 0);
 
     // Mock: Set up response data
     WireMock_vReset();
@@ -246,7 +248,7 @@ void test_vI2CMeasure_CommandMode(void)
 
     // Initialize for command mode with conversion delay
     PinCfgStr_vInitStrPoint(&sName, "aht10", 5);
-    I2CMeasure_eInit(&sI2C, &sName, 0x38, au8Cmd, 3, 6, 80);
+    I2CMeasure_eInit(&sI2C, &sName, 0x38, au8Cmd, 3, 6, 80, 0);
 
     WireMock_vReset();
     mock_millis_u32Return = 0;
@@ -300,7 +302,7 @@ void test_vI2CMeasure_Timeout(void)
 
     // Initialize with default timeout
     PinCfgStr_vInitStrPoint(&sName, "temp", 4);
-    I2CMeasure_eInit(&sI2C, &sName, 0x48, &u8RegAddr, 1, 2, 0);
+    I2CMeasure_eInit(&sI2C, &sName, 0x48, &u8RegAddr, 1, 2, 0, 0);
 
     WireMock_vReset();
     WireMock_vSimulateTimeout(true); // Never return data
@@ -355,7 +357,7 @@ void test_vI2CMeasure_DeviceError(void)
     STRING_POINT_T sName;
 
     PinCfgStr_vInitStrPoint(&sName, "temp", 4);
-    I2CMeasure_eInit(&sI2C, &sName, 0x48, &u8RegAddr, 1, 2, 0);
+    I2CMeasure_eInit(&sI2C, &sName, 0x48, &u8RegAddr, 1, 2, 0, 0);
 
     WireMock_vReset();
     WireMock_vSimulateError(true); // Device doesn't ACK
@@ -388,7 +390,7 @@ void test_vI2CMeasure_RawData(void)
 
     // Initialize for 6-byte read
     PinCfgStr_vInitStrPoint(&sName, "aht10", 5);
-    I2CMeasure_eInit(&sI2C, &sName, 0x38, &u8RegAddr, 1, 6, 0);
+    I2CMeasure_eInit(&sI2C, &sName, 0x38, &u8RegAddr, 1, 6, 0, 0);
 
     WireMock_vReset();
     WireMock_vSetResponse(au8ResponseData, 6);

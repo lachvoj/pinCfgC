@@ -606,33 +606,45 @@ Defines an I2C sensor measurement source with non-blocking read support.
 
 #### Line Formats
 
-**Simple Mode (5 parameters)** - For register-based sensors:
+**Simple Mode (6 parameters)** - For register-based sensors:
 ```
-MS,3,<name>,<i2c_addr>,<register>,<data_size>/
+MS,3,<name>,<i2c_addr>,<register>,<data_size>[,<cache_ms>]/
 ```
 
-**Command Mode (6-7 parameters)** - For triggered sensors:
+**Command Mode (7-9 parameters)** - For triggered sensors:
 ```
-MS,3,<name>,<i2c_addr>,<cmd1>,<data_size>,<cmd2>[,<cmd3>]/
+MS,3,<name>,<i2c_addr>,<cmd1>,<data_size>[,<cache_ms>][,<cmd2>][,<cmd3>]/
 ```
 
 #### Parameters
 1. **Type** (`uint8_t`) - Must be **3** (`MEASUREMENT_TYPE_I2C_E`)
 2. **Name** (`char[]`) - Unique name for this measurement source
-3. **I2C Address** (`uint8_t`) - 7-bit I2C device address (hex: 0x48 or decimal: 72)
-4. **Register/Cmd1** (`uint8_t`) - Register address (simple) or first command byte (command mode)
+3. **I2C Address** (`uint8_t`) - 7-bit I2C device address (supports hex: `0x48` or decimal: `72`)
+4. **Register/Cmd1** (`uint8_t`) - Register address (simple) or first command byte (command mode), supports hex
 5. **Data Size** (`uint8_t`) - Number of bytes to read (1-6)
-6. **Cmd2** (optional, `uint8_t`) - Second command byte (triggers command mode)
-7. **Cmd3** (optional, `uint8_t`) - Third command byte
+6. **Cache Duration** (optional, `uint16_t`) - Response caching time in milliseconds (0=disabled, max 5000ms), default 0
+   * Reduces I2C bus traffic when multiple reporters poll the same sensor
+   * Useful when sampling interval < cache duration
+   * Example: 100ms cache allows 3 reporters at 1Hz to share one I2C read per second
+7. **Cmd2** (optional, `uint8_t`) - Second command byte (triggers command mode), supports hex
+8. **Cmd3** (optional, `uint8_t`) - Third command byte, supports hex
 
 #### Mode Detection
-- **5 parameters** → Simple mode: Write register → Read immediately
-- **6-7 parameters** → Command mode: Write command → Wait → Read
+- **6 parameters or less** (no cmd2) → Simple mode: Write register → Read immediately
+- **7+ parameters** (cmd2 present) → Command mode: Write command → Wait → Read
 
 **Auto Conversion Delays:**
 - `0xAC` (AHT10 trigger): 80ms
 - `0xF4` (BME280 forced): 10ms
 - Others: 0ms (immediate)
+
+#### Hexadecimal Support
+All numeric parameters (address, commands) accept both decimal and hexadecimal (0x prefix) notation:
+```csv
+MS,3,tmp102,72,0,2/        # Decimal: address 72, register 0
+MS,3,tmp102,0x48,0x00,2/   # Hex: same as above
+MS,3,aht10,0x38,0xAC,6,0x33,0x00/  # Command mode with hex
+```
 
 #### Data Format
 - **Byte Order:** Big-endian (MSB first) - standard for most I2C sensors
@@ -644,7 +656,8 @@ MS,3,<name>,<i2c_addr>,<cmd1>,<data_size>,<cmd2>[,<cmd3>]/
 **Simple Mode Sensors:**
 ```
 # TMP102 temperature sensor (12-bit, 0.0625°C per LSB)
-MS,3,tmp102_raw,0x48,0x00,2/                        # 5 params = simple mode
+MS,3,tmp102_raw,0x48,0x00,2/                        # Simple mode (no cache)
+MS,3,tmp102_cached,0x48,0x00,2,100/                # Simple mode with 100ms cache
 SR,RoomTemp,tmp102_raw,6,6,0,0,5000,300,0.0625/    # V_TEMP, S_TEMP, scale by 0.0625
 
 # BH1750 light sensor (16-bit, 1 lux per LSB)
@@ -656,19 +669,25 @@ MS,3,tmp102_1,0x48,0x00,2/                          # First TMP102
 MS,3,tmp102_2,0x49,0x00,2/                          # Second TMP102 (different address)
 SR,IndoorTemp,tmp102_1,6,6,0,0,5000,300,0.0625/
 SR,OutdoorTemp,tmp102_2,6,6,0,0,5000,300,0.0625/
+
+# Shared sensor with cache - multiple reporters, one I2C read
+MS,3,shared_tmp,0x48,0x00,2,500/                    # 500ms cache
+SR,FastTemp,shared_tmp,6,6,0,0,1000,60,0.0625/     # Samples every 1s
+SR,SlowTemp,shared_tmp,6,6,0,0,1000,300,0.0625/    # Samples every 1s
+# Both reporters share cached I2C reads within 500ms window
 ```
 
 **Command Mode Sensors:**
 ```
 # AHT10 temperature/humidity sensor
-MS,3,aht10_raw,0x38,0xAC,6,0x33,0x00/              # 7 params = command mode
+MS,3,aht10_raw,0x38,0xAC,6,100,0x33,0x00/          # Command mode with 100ms cache
                                                     # Writes: 0xAC, 0x33, 0x00
                                                     # Waits: 80ms (auto)
                                                     # Reads: 6 bytes
 SR,Temperature,aht10_raw,6,6,0,0,10000,300,0.0/    # V_TEMP, S_TEMP, read every 10s
 
 # BME280 pressure sensor  
-MS,3,bme280_raw,0x76,0xF4,8,0x25/                  # 6 params = command mode
+MS,3,bme280_raw,0x76,0xF4,8,0,0x25/                # Command mode, no cache (empty = default)
                                                     # Writes: 0xF4, 0x25 (forced mode)
                                                     # Waits: 10ms (auto)
 SR,Pressure,bme280_raw,17,4,0,0,5000,300,1.0/       # V_PRESSURE, S_BARO, read every 5s
@@ -1024,9 +1043,12 @@ Lines starting with **'SR'** are parsed as sensor reporter definitions.
 10. 1.0,     (optional scale factor - multiplicative, default 1.0)
 11. 0.0,     (optional offset - additive adjustment, default 0.0)
 12. 0,       (optional precision - decimal places 0-6, default 0)
-13. 0,       (optional byte offset for multi-value sensors)
-14. 0,       (optional byte count for multi-value sensors)
-15. °C/      (optional unit string for V_UNIT_PREFIX, max 8 bytes UTF-8)
+13. °C,      (optional unit string for V_UNIT_PREFIX, max 8 bytes UTF-8)
+14. 0,       (optional byte offset for multi-value sensors, 0-5)
+15. 0,       (optional byte count for multi-value sensors, 1-6, 0=all)
+16. 0,       (optional bit shift right after extraction, 0-31)
+17. 0xFFFFFFFF, (optional bit mask AND before shift, hex or decimal)
+18. 0/       (optional endianness: 0=big-endian MSB first, 1=little-endian LSB first)
 ```
 
 #### Parameters
@@ -1072,37 +1094,55 @@ Lines starting with **'SR'** are parsed as sensor reporter definitions.
     * **1-2 decimals**: Uses `P_INT16` (range -32768 to 32767, e.g., ±327.68 with 2 decimals)
     * **3-6 decimals**: Uses `P_LONG32` (range ±2147483647, e.g., ±2147.483 with 3 decimals or ±2.147483 with 6 decimals)
     * Range: 0-6, values >6 are clamped with warning message
-12. **Byte Offset** (optional, `uint8_t`) - Starting byte index for multi-value sensors (0-5), default 0
-13. **Byte Count** (optional, `uint8_t`) - Number of bytes to extract (1-6, 0=all), default 0
-14. **Unit** (optional, `char[]`) - Unit string sent via MySensors `V_UNIT_PREFIX` message, default empty
+12. **Unit** (optional, `char[]`) - Unit string sent via MySensors `V_UNIT_PREFIX` message, default empty
     * Maximum 8 bytes (UTF-8 encoded, so "°C" = 3 bytes)
     * Sent once on first sensor report to controller
     * Examples: `°C`, `%`, `hPa`, `ppm`, `ms`, `lux`
     * If empty, uses default unit for measurement type (e.g., "ms" for loop time)
+13. **Byte Offset** (optional, `uint8_t`) - Starting byte index for multi-value sensors (0-5), default 0
+    * Used with Byte Count to extract specific byte ranges from sensor data
+14. **Byte Count** (optional, `uint8_t`) - Number of bytes to extract (1-6, 0=all), default 0
+    * 0 = extract all bytes from offset to end
+15. **Bit Shift** (optional, `uint8_t`) - Right shift after byte extraction (0-31 bits), default 0
+    * Applied **before** bit mask for precise bit-field extraction
+    * Example: AHT10 temperature in upper 20 bits → shift right 4 bits
+16. **Bit Mask** (optional, `uint32_t`) - AND mask after shift (hex `0xFFFFFFFF` or decimal), default 0xFFFFFFFF (no masking)
+    * Applied **after** bit shift to isolate specific bits
+    * Supports hex notation: `0xFFFFF` masks to 20 bits
+    * Example: AHT10 20-bit value → mask with `0xFFFFF`
+17. **Endianness** (optional, `uint8_t`) - Byte order for multi-byte extraction, default 0
+    * **0** = Big-endian (MSB first, standard for most I2C/SPI sensors)
+    * **1** = Little-endian (LSB first, some MCU-native protocols)
 
 #### Examples
 ```
 # Basic temperature sensor reporting every 5 minutes (default scale=1.0, offset=0, precision=0)
 SR,CPUTemp,cpu,6,6,0,0,1000,300/
 
-# Temperature sensor with calibration offset, 1 decimal place
-SR,CPUTemp_calibrated,cpu,6,6,0,0,1000,300,1.0,-2.1,1/
+# Temperature sensor with calibration offset, 1 decimal place, with unit
+SR,CPUTemp_calibrated,cpu,6,6,0,0,1000,300,1.0,-2.1,1,°C/
 
 # I2C TMP102 sensor with scale factor (0.0625°C per LSB), 2 decimal places
-MS,3,tmp102_raw,0x48,0x00,2/                         # I2C measurement
-SR,RoomTemp,tmp102_raw,6,6,0,0,5000,300,0.0625,0,2/  # Scale by 0.0625, no offset, 2 decimals
+MS,3,tmp102_raw,0x48,0x00,2/                                    # I2C measurement
+SR,RoomTemp,tmp102_raw,6,6,0,0,5000,300,0.0625,0,2,°C/         # Scale by 0.0625, 2 decimals, unit
 
 # Humidity sensor with both scale and offset, 1 decimal place
-SR,Humidity,humid_raw,1,7,0,0,1000,60,0.01,5.0,1/    # Scale 0.01, add 5.0% offset, 1 decimal
-
-# Enableable sensor with averaging, no decimals (default)
-SR,Humidity_avg,humid_sensor,1,7,1,1,500,60/         # Uses P_BYTE or P_INT16
+SR,Humidity,humid_raw,1,7,0,0,1000,60,0.01,5.0,1,%/            # Scale 0.01, add 5.0% offset, 1 decimal
 
 # Temperature sensor with custom unit string (sent via V_UNIT_PREFIX)
-SR,RoomTemp,tmp102,6,6,0,0,5000,300,0.0625,0,2,0,0,°C/  # Unit: °C
+SR,RoomTemp,tmp102,6,6,0,0,5000,300,0.0625,0,2,°C/             # Unit: °C
 
 # Pressure sensor with hPa unit
-SR,Pressure,bme280,17,4,0,0,5000,300,0.01,0,1,3,3,hPa/  # Unit: hPa
+SR,Pressure,bme280,17,4,0,0,5000,300,0.01,0,1,hPa/             # Unit: hPa
+
+# AHT10 temperature with bit manipulation (20-bit value in bytes 3-5, shifted right 4)
+MS,3,aht10,0x38,0xAC,6,0x33,0x00/
+SR,AHT_Temp,aht10,6,6,0,0,10000,300,0.000191,-50,1,°C,3,3,4,0xFFFFF,0/
+# Extracts bytes 3-5, shifts right 4 bits, masks to 20 bits (0xFFFFF), big-endian
+
+# Multi-value sensor - AHT10 humidity (20-bit value in bytes 1-3, shifted right 4)
+SR,AHT_Hum,aht10,1,7,0,0,10000,300,0.000095,0,1,%,1,3,4,0xFFFFF,0/
+# Extracts bytes 1-3, shifts right 4 bits, masks to 20 bits, big-endian
 
 # Multiple sensors sharing one measurement source with different calibrations
 MS,0,shared/                                          # type 0 = CPU temp

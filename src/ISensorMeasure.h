@@ -8,7 +8,7 @@ typedef enum MEASUREMENT_TYPE_E
     MEASUREMENT_TYPE_CPUTEMP_E = 0,    // CPU temperature sensor
     MEASUREMENT_TYPE_ANALOG_E = 1,     // Analog input (reserved for Phase 3)
     MEASUREMENT_TYPE_DIGITAL_E = 2,    // Digital input (reserved for Phase 3)
-    MEASUREMENT_TYPE_I2C_E = 3,        // I2C sensor
+    MEASUREMENT_TYPE_I2C_E = 3,        // I2C sensor (generic, supports all I2C devices)
     MEASUREMENT_TYPE_CALCULATED_E = 4, // Calculated/formula (reserved for Phase 3)
     MEASUREMENT_TYPE_LOOPTIME_E = 5,   // Loop execution time (debug measurement, bypasses sampling interval)
     MEASUREMENT_TYPE_SPI_E = 6,        // SPI sensor

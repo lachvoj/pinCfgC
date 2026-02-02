@@ -71,16 +71,16 @@ void PinCfgStr_vGetSplitElemByIndex(STRING_POINT_T *psStrPt, const char cDelimit
 
 PINCFG_STR_RESULT_T PinCfgStr_eAtoU8(const STRING_POINT_T *psStrPt, uint8_t *pu8Out)
 {
-    if (psStrPt->szLen > 3)
+    if (psStrPt->szLen > 4) // Allow "0xFF" (4 chars)
         return PINCFG_STR_INSUFFICIENT_BUFFER_E;
 
-    char cTempStr[4];
+    char cTempStr[5];
     char *endptr = NULL;
     memcpy(cTempStr, psStrPt->pcStrStart, psStrPt->szLen);
     cTempStr[psStrPt->szLen] = '\0';
     errno = 0;
-    *pu8Out = (uint8_t)strtoul(cTempStr, &endptr, 10);
-    if (cTempStr == endptr || errno != 0)
+    *pu8Out = (uint8_t)strtoul(cTempStr, &endptr, 0); // Base 0 = auto-detect (0x=hex, else decimal)
+    if (cTempStr == endptr || errno != 0 || *endptr != '\0')
         return PINCFG_STR_UNSUCCESSFULL_CONVERSION_E;
 
     return PINCFG_STR_OK_E;
@@ -88,7 +88,7 @@ PINCFG_STR_RESULT_T PinCfgStr_eAtoU8(const STRING_POINT_T *psStrPt, uint8_t *pu8
 
 PINCFG_STR_RESULT_T PinCfgStr_eAtoU32(const STRING_POINT_T *psStrPt, uint32_t *pu32Out)
 {
-    if (psStrPt->szLen > 10)
+    if (psStrPt->szLen > 10) // "0xFFFFFFFF" = 10 chars (already fits)
         return PINCFG_STR_INSUFFICIENT_BUFFER_E;
 
     char cTempStr[11];
@@ -96,8 +96,8 @@ PINCFG_STR_RESULT_T PinCfgStr_eAtoU32(const STRING_POINT_T *psStrPt, uint32_t *p
     memcpy(cTempStr, psStrPt->pcStrStart, psStrPt->szLen);
     cTempStr[psStrPt->szLen] = '\0';
     errno = 0;
-    *pu32Out = strtoul(cTempStr, &endptr, 10);
-    if (cTempStr == endptr || errno != 0)
+    *pu32Out = strtoul(cTempStr, &endptr, 0); // Base 0 = auto-detect (0x=hex, else decimal)
+    if (cTempStr == endptr || errno != 0 || *endptr != '\0')
         return PINCFG_STR_UNSUCCESSFULL_CONVERSION_E;
 
     return PINCFG_STR_OK_E;
