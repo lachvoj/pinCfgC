@@ -1,7 +1,8 @@
+#include "Cli.h"
+
 #include <stdio.h>
 #include <string.h>
 
-#include "Cli.h"
 #include "CliAuth.h"
 #include "Globals.h"
 #include "Memory.h"

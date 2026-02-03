@@ -36,8 +36,8 @@ typedef struct PRESENTABLE_S
 } PRESENTABLE_T;
 
 // Presentable flag bit masks (upper bits, lower bits reserved for future use)
-#define PRESENTABLE_FLAG_STATE_CHANGED   0x10  // State has changed, needs processing
-#define PRESENTABLE_FLAG_STATE_PRESENTED 0x20  // Controller has acknowledged this presentable
+#define PRESENTABLE_FLAG_STATE_CHANGED 0x10   // State has changed, needs processing
+#define PRESENTABLE_FLAG_STATE_PRESENTED 0x20 // Controller has acknowledged this presentable
 
 typedef enum
 {

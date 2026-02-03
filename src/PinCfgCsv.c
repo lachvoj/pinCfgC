@@ -1,3 +1,5 @@
+#include "PinCfgCsv.h"
+
 #include <stdarg.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -11,7 +13,6 @@
 #include "Memory.h"
 #include "MySensorsWrapper.h"
 #include "PersistentConfiguration.h"
-#include "PinCfgCsv.h"
 #include "PinCfgMessages.h"
 #include "PinCfgParse.h"
 #include "PinCfgStr.h"
@@ -856,8 +857,8 @@ static PINCFG_RESULT_T PinCfgCsv_ParseTriggers(PINCFG_PARSE_SUBFN_PARAMS_T *psPr
 
     // allocate memory for switch actions
     PINCFG_RESULT_T eAllocResult = PINCFG_OK_E;
-    TRIGGER_SWITCHACTION_T *pasSwActs =
-        (TRIGGER_SWITCHACTION_T *)pvAllocOrOOM(psPrms, (size_t)sizeof(TRIGGER_SWITCHACTION_T) * (size_t)u8Count, TRG_E, &eAllocResult);
+    TRIGGER_SWITCHACTION_T *pasSwActs = (TRIGGER_SWITCHACTION_T *)pvAllocOrOOM(
+        psPrms, (size_t)sizeof(TRIGGER_SWITCHACTION_T) * (size_t)u8Count, TRG_E, &eAllocResult);
     if (pasSwActs == NULL)
         return eAllocResult;
 

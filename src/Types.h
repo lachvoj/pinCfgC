@@ -81,8 +81,8 @@
 #endif
 
 // I2C measurement cache duration in milliseconds
-#define PINCFG_I2CMEASURE_CACHE_MIN_MS_D 0     /* 0 = disabled */
-#define PINCFG_I2CMEASURE_CACHE_MAX_MS_D 5000  /* 5 seconds max */
+#define PINCFG_I2CMEASURE_CACHE_MIN_MS_D 0    /* 0 = disabled */
+#define PINCFG_I2CMEASURE_CACHE_MAX_MS_D 5000 /* 5 seconds max */
 #ifndef PINCFG_I2CMEASURE_CACHE_DEFAULT_MS_D
 #define PINCFG_I2CMEASURE_CACHE_DEFAULT_MS_D 0 /* disabled */
 #endif

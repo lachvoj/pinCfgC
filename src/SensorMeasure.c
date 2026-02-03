@@ -1,7 +1,8 @@
+#include "SensorMeasure.h"
+
 #include <string.h>
 
 #include "Memory.h"
-#include "SensorMeasure.h"
 
 SENSORMEASURE_RESULT_T SensorMeasure_eInitReuseName(
     ISENSORMEASURE_T *psHandle,

@@ -109,12 +109,7 @@ typedef enum PINCFG_PARSE_STRINGS_E
 const char *PinCfgMessages_getString(PINCFG_PARSE_STRINGS_T eStr);
 
 // Safe snprintf helper that prevents buffer overflow
-size_t szSafeAppendFormat(
-    char *pcBuffer,
-    size_t szCurrentPos,
-    size_t szMaxLen,
-    const char *pcFormat,
-    ...);
+size_t szSafeAppendFormat(char *pcBuffer, size_t szCurrentPos, size_t szMaxLen, const char *pcFormat, ...);
 
 size_t PinCfgMessages_logParseError(
     PINCFG_PARSE_SUBFN_PARAMS_T *psPrms,

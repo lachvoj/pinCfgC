@@ -1,8 +1,9 @@
+#include "PinCfgMessages.h"
+
 #include <stdarg.h>
 #include <stdio.h>
 
 #include "PinCfgCsv.h"
-#include "PinCfgMessages.h"
 #include "PinCfgParse.h"
 #include "PinCfgStr.h"
 

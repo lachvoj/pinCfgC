@@ -6,14 +6,13 @@
 #include "STM32I2CDriver.h"
 
 // Only compile for STM32 platforms (not unit tests)
-#if !defined(UNIT_TEST) && \
-    (defined(ARDUINO_ARCH_STM32) || defined(ARDUINO_ARCH_STM32F1) || \
-     defined(ARDUINO_ARCH_STM32F4) || defined(ARDUINO_ARCH_STM32L4) || \
-     defined(STM32F1) || defined(STM32F103xB))
+#if !defined(UNIT_TEST) &&                                                                                             \
+    (defined(ARDUINO_ARCH_STM32) || defined(ARDUINO_ARCH_STM32F1) || defined(ARDUINO_ARCH_STM32F4) ||                  \
+     defined(ARDUINO_ARCH_STM32L4) || defined(STM32F1) || defined(STM32F103xB))
 
-#include "stm32f1xx_ll_i2c.h"
 #include "stm32f1xx_ll_bus.h"
 #include "stm32f1xx_ll_gpio.h"
+#include "stm32f1xx_ll_i2c.h"
 #include "stm32f1xx_ll_rcc.h"
 
 // I2C1 pins: PB6 = SCL, PB7 = SDA
@@ -52,7 +51,7 @@ typedef struct STM32_I2C_STATE_S
     volatile bool bSendStop;
     volatile uint8_t au8RxBuffer[STM32_I2C_BUFFER_SIZE];
     volatile uint8_t u8RxLength;
-    
+
     // Non-volatile state
     uint8_t u8Address;
     const uint8_t *pu8TxData;
@@ -265,10 +264,9 @@ void STM32_I2C_vInit(void)
 
 bool STM32_I2C_bIsIdle(void)
 {
-    return (g_sI2C.eState == I2C_STATE_IDLE_E ||
-            g_sI2C.eState == I2C_STATE_TX_COMPLETE_E ||
-            g_sI2C.eState == I2C_STATE_RX_COMPLETE_E ||
-            g_sI2C.eState == I2C_STATE_ERROR_E);
+    return (
+        g_sI2C.eState == I2C_STATE_IDLE_E || g_sI2C.eState == I2C_STATE_TX_COMPLETE_E ||
+        g_sI2C.eState == I2C_STATE_RX_COMPLETE_E || g_sI2C.eState == I2C_STATE_ERROR_E);
 }
 
 STM32_I2C_RESULT_T STM32_I2C_eGetResult(void)
@@ -276,10 +274,7 @@ STM32_I2C_RESULT_T STM32_I2C_eGetResult(void)
     return g_sI2C.eResult;
 }
 
-STM32_I2C_RESULT_T STM32_I2C_eWriteAsync(uint8_t u8Address,
-                                          const uint8_t *pu8Data,
-                                          uint8_t u8Length,
-                                          bool bSendStop)
+STM32_I2C_RESULT_T STM32_I2C_eWriteAsync(uint8_t u8Address, const uint8_t *pu8Data, uint8_t u8Length, bool bSendStop)
 {
     if (pu8Data == NULL || u8Length == 0)
     {

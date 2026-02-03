@@ -64,7 +64,8 @@ int8_t hwCPUTemperature(void);
 // Transport error log mock
 #ifdef MY_TRANSPORT_ERROR_LOG
 
-typedef struct {
+typedef struct
+{
     uint32_t timestamp;
     uint8_t errorCode;
     uint8_t channel;

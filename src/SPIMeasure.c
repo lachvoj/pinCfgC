@@ -1,12 +1,12 @@
 #ifdef PINCFG_FEATURE_SPI_MEASUREMENT
 
+#include "SPIMeasure.h"
+
 #include <string.h>
 
 #include "PinCfgUtils.h"
-#include "SPIMeasure.h"
 #include "SPIWrapper.h"
 #include "SensorMeasure.h"
-
 
 #ifdef UNIT_TEST
 #include "ArduinoMock.h"

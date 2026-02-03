@@ -179,7 +179,8 @@ extern "C"
         mock_transportErrorLog[mock_transportErrorLogHead].reserved = 0;
 
         mock_transportErrorLogHead = (mock_transportErrorLogHead + 1) % 16;
-        if (mock_transportErrorLogCount < 16) {
+        if (mock_transportErrorLogCount < 16)
+        {
             mock_transportErrorLogCount++;
         }
         mock_transportTotalErrorCount++;
@@ -192,13 +193,17 @@ extern "C"
 
     bool transportGetErrorLogEntry(uint8_t index, TransportErrorLogEntry_t *entry)
     {
-        if (index >= mock_transportErrorLogCount || entry == NULL) {
+        if (index >= mock_transportErrorLogCount || entry == NULL)
+        {
             return false;
         }
         uint8_t pos;
-        if (mock_transportErrorLogCount < 16) {
+        if (mock_transportErrorLogCount < 16)
+        {
             pos = index;
-        } else {
+        }
+        else
+        {
             pos = (mock_transportErrorLogHead + index) % 16;
         }
         *entry = mock_transportErrorLog[pos];

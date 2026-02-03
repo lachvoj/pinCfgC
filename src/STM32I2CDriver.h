@@ -14,8 +14,8 @@ extern "C"
 {
 #endif
 
-#include <stdint.h>
 #include <stdbool.h>
+#include <stdint.h>
 
     /**
      * @brief I2C operation result codes
@@ -63,10 +63,11 @@ extern "C"
      * @param bSendStop Whether to send STOP condition after transfer
      * @return STM32_I2C_OK_E if started, STM32_I2C_BUSY_E if busy
      */
-    STM32_I2C_RESULT_T STM32_I2C_eWriteAsync(uint8_t u8Address,
-                                              const uint8_t *pu8Data,
-                                              uint8_t u8Length,
-                                              bool bSendStop);
+    STM32_I2C_RESULT_T STM32_I2C_eWriteAsync(
+        uint8_t u8Address,
+        const uint8_t *pu8Data,
+        uint8_t u8Length,
+        bool bSendStop);
 
     /**
      * @brief Start a read operation (non-blocking)

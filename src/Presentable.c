@@ -1,10 +1,11 @@
+#include "Presentable.h"
+
 #include <stdio.h>
 #include <string.h>
 
 #include "Globals.h"
 #include "Memory.h"
 #include "MySensorsWrapper.h"
-#include "Presentable.h"
 
 // Formatting
 static const char *Presentable_pcFormatDecimal(int32_t i32Value, uint8_t u8Precision, char *pcBuffer, size_t szBufSize);

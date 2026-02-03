@@ -1,8 +1,9 @@
+#include "Memory.h"
+
 #include <errno.h>
 #include <string.h>
 
 #include "Globals.h"
-#include "Memory.h"
 #include "Types.h"
 
 GLOBALS_T *psGlobals = NULL;

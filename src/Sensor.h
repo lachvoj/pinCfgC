@@ -75,14 +75,14 @@ SENSOR_RESULT_T Sensor_eInit(
     ISENSORMEASURE_T *psSensorMeasure,
     uint16_t u16SamplingIntervalMs,
     uint16_t u16ReportIntervalSec,
-    int32_t i32Scale,     // Fixed-point: scale × PINCFG_FIXED_POINT_SCALE
-    int32_t i32Offset,    // Fixed-point: offset × PINCFG_FIXED_POINT_SCALE
-    uint8_t u8Precision,  // Decimal places (0-6)
+    int32_t i32Scale,       // Fixed-point: scale × PINCFG_FIXED_POINT_SCALE
+    int32_t i32Offset,      // Fixed-point: offset × PINCFG_FIXED_POINT_SCALE
+    uint8_t u8Precision,    // Decimal places (0-6)
     STRING_POINT_T *psUnit, // Unit string for V_UNIT_PREFIX (NULL if not used)
-    uint8_t u8ByteOffset, // Starting byte index (0-5)
-    uint8_t u8ByteCount,  // Number of bytes (1-6, 0=use all)
-    uint8_t u8BitShift,   // Right shift after extraction (0-31)
-    uint32_t u32BitMask,  // AND mask before shift (0xFFFFFFFF=no mask)
-    uint8_t u8Endianness); // 0=big-endian, 1=little-endian
+    uint8_t u8ByteOffset,   // Starting byte index (0-5)
+    uint8_t u8ByteCount,    // Number of bytes (1-6, 0=use all)
+    uint8_t u8BitShift,     // Right shift after extraction (0-31)
+    uint32_t u32BitMask,    // AND mask before shift (0xFFFFFFFF=no mask)
+    uint8_t u8Endianness);  // 0=big-endian, 1=little-endian
 
 #endif // SENSOR_H

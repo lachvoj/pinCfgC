@@ -1,6 +1,7 @@
+#include "Trigger.h"
+
 #include "Globals.h"
 #include "Switch.h"
-#include "Trigger.h"
 
 TRIGGER_RESULT_T Trigger_eInit(
     TRIGGER_T *psHandle,

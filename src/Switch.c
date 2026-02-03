@@ -1,7 +1,8 @@
+#include "Switch.h"
+
 #include "Globals.h"
 #include "MySensorsWrapper.h"
 #include "PinCfgUtils.h"
-#include "Switch.h"
 #include "Trigger.h"
 
 // loopable IF
@@ -116,8 +117,8 @@ static void Switch_vCheckFbPin(SWITCH_T *psHandle, uint32_t u32ms)
         psHandle->u32FbReadStarted = u32ms;
         if (psHandle->sPresentable.u8State == 0)
         {
-             Presentable_vSetState((PRESENTABLE_T *)psHandle, 1, true);
-             psHandle->sPresentable.u8Flags &= ~PRESENTABLE_FLAG_STATE_CHANGED;
+            Presentable_vSetState((PRESENTABLE_T *)psHandle, 1, true);
+            psHandle->sPresentable.u8Flags &= ~PRESENTABLE_FLAG_STATE_CHANGED;
         }
 
         return;

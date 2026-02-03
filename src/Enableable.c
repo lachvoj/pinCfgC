@@ -1,4 +1,5 @@
 #include "Enableable.h"
+
 #include "Globals.h"
 #include "Memory.h"
 

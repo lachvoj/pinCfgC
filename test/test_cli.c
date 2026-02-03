@@ -92,8 +92,12 @@ void test_vCLI_EdgeCases(void)
     // Fragment 4: end of password and start of config
     strcpy(pcMsg->data, "4c720a9/CFG:S,o1,13/]#");
     Cli_vRcvMessage((PRESENTABLE_T *)psCli, pcMsg);
-    // State sent after each frame: 3 fragments with RECEIVING_AUTH feedback, then 4th gets auth+type+cfg_data before validation
-    TEST_ASSERT_EQUAL_STRING("RECEIVING_AUTH;RECEIVING_AUTH;RECEIVING_AUTH;RECEIVING_AUTH;RECEIVING_TYPE;RECEIVING_CFG_DATA;VALIDATION_OK;READY;", mock_send_message);
+    // State sent after each frame: 3 fragments with RECEIVING_AUTH feedback, then 4th gets auth+type+cfg_data before
+    // validation
+    TEST_ASSERT_EQUAL_STRING(
+        "RECEIVING_AUTH;RECEIVING_AUTH;RECEIVING_AUTH;RECEIVING_AUTH;RECEIVING_TYPE;RECEIVING_CFG_DATA;VALIDATION_OK;"
+        "READY;",
+        mock_send_message);
 
     // Test fragmented command with GET_CFG
     // First save some config so GET_CFG has something to return
@@ -144,7 +148,10 @@ void test_vCLI_EdgeCases(void)
     strcpy(pcMsg->data, "74c720a9/CMD:UNKNOWNCMD]#");
     Cli_vRcvMessage((PRESENTABLE_T *)psCli, pcMsg);
     // 3 fragments sent before final -> 3x RECEIVING_AUTH feedback, 4th gets auth+type+cmd_data before result
-    TEST_ASSERT_EQUAL_STRING("RECEIVING_AUTH;RECEIVING_AUTH;RECEIVING_AUTH;RECEIVING_AUTH;RECEIVING_TYPE;RECEIVING_CMD_DATA;Unknown command.;", mock_send_message);
+    TEST_ASSERT_EQUAL_STRING(
+        "RECEIVING_AUTH;RECEIVING_AUTH;RECEIVING_AUTH;RECEIVING_AUTH;RECEIVING_TYPE;RECEIVING_CMD_DATA;Unknown "
+        "command.;",
+        mock_send_message);
 
     // Test invalid command format
     memset(mock_send_message, 0, sizeof(mock_send_message));
@@ -220,8 +227,12 @@ void test_vCLI_ChangePassword(void)
     strcpy(pcMsg->data, "59911881f383d4473e94f]#");
     Cli_vRcvMessage((PRESENTABLE_T *)psCli, pcMsg);
 
-    // Should report success - state sent after each frame: 3x RECEIVING_AUTH + 4th gets auth+type+cmd_data + 3x RECEIVING_CMD_DATA + result
-    TEST_ASSERT_EQUAL_STRING("RECEIVING_AUTH;RECEIVING_AUTH;RECEIVING_AUTH;RECEIVING_AUTH;RECEIVING_TYPE;RECEIVING_CMD_DATA;RECEIVING_CMD_DATA;RECEIVING_CMD_DATA;RECEIVING_CMD_DATA;Pwd changed OK.;", mock_send_message);
+    // Should report success - state sent after each frame: 3x RECEIVING_AUTH + 4th gets auth+type+cmd_data + 3x
+    // RECEIVING_CMD_DATA + result
+    TEST_ASSERT_EQUAL_STRING(
+        "RECEIVING_AUTH;RECEIVING_AUTH;RECEIVING_AUTH;RECEIVING_AUTH;RECEIVING_TYPE;RECEIVING_CMD_DATA;RECEIVING_CMD_"
+        "DATA;RECEIVING_CMD_DATA;RECEIVING_CMD_DATA;Pwd changed OK.;",
+        mock_send_message);
     TEST_ASSERT_EQUAL(CLI_READY_E, psCli->eState);
 
     // Test 2: Verify new password works - try to authenticate with it
@@ -244,8 +255,12 @@ void test_vCLI_ChangePassword(void)
     strcpy(pcMsg->data, "473e94f/CMD:GET_CFG]#");
     Cli_vRcvMessage((PRESENTABLE_T *)psCli, pcMsg);
 
-    // Should succeed with new password - 3 fragments -> 3x RECEIVING_AUTH feedback, 4th gets auth+type+cmd_data before result
-    TEST_ASSERT_EQUAL_STRING("RECEIVING_AUTH;RECEIVING_AUTH;RECEIVING_AUTH;RECEIVING_AUTH;RECEIVING_TYPE;RECEIVING_CMD_DATA;No config data.;", mock_send_message);
+    // Should succeed with new password - 3 fragments -> 3x RECEIVING_AUTH feedback, 4th gets auth+type+cmd_data before
+    // result
+    TEST_ASSERT_EQUAL_STRING(
+        "RECEIVING_AUTH;RECEIVING_AUTH;RECEIVING_AUTH;RECEIVING_AUTH;RECEIVING_TYPE;RECEIVING_CMD_DATA;No config "
+        "data.;",
+        mock_send_message);
 
     // Test 3: Verify old password no longer works
     memset(mock_send_message, 0, sizeof(mock_send_message));
@@ -268,7 +283,8 @@ void test_vCLI_ChangePassword(void)
     Cli_vRcvMessage((PRESENTABLE_T *)psCli, pcMsg);
 
     // Should fail authentication with old password - 3 fragments + 4th also sends auth before failure
-    TEST_ASSERT_EQUAL_STRING("RECEIVING_AUTH;RECEIVING_AUTH;RECEIVING_AUTH;RECEIVING_AUTH;Authentication failed.;", mock_send_message);
+    TEST_ASSERT_EQUAL_STRING(
+        "RECEIVING_AUTH;RECEIVING_AUTH;RECEIVING_AUTH;RECEIVING_AUTH;Authentication failed.;", mock_send_message);
 
     // Test 4: Invalid new password (too short)
     // Reset password back to default for this test
@@ -293,7 +309,10 @@ void test_vCLI_ChangePassword(void)
     Cli_vRcvMessage((PRESENTABLE_T *)psCli, pcMsg);
 
     // Should report invalid password length - 3 fragments + 4th with auth+type+cmd_data before result
-    TEST_ASSERT_EQUAL_STRING("RECEIVING_AUTH;RECEIVING_AUTH;RECEIVING_AUTH;RECEIVING_AUTH;RECEIVING_TYPE;RECEIVING_CMD_DATA;Invalid new pwd length.;", mock_send_message);
+    TEST_ASSERT_EQUAL_STRING(
+        "RECEIVING_AUTH;RECEIVING_AUTH;RECEIVING_AUTH;RECEIVING_AUTH;RECEIVING_TYPE;RECEIVING_CMD_DATA;Invalid new pwd "
+        "length.;",
+        mock_send_message);
 }
 
 #ifdef MY_TRANSPORT_ERROR_LOG
@@ -347,9 +366,9 @@ void test_vCLI_GetTransportErrors_SingleEntry(void)
     init_TransportErrorLogMock();
 
     // Log some errors
-    transportLogError(0x82, 8, 5);   // CAN TX failed, channel 8, extra 5
-    transportLogError(0x83, 8, 0);   // CAN TX timeout
-    transportLogError(0x8B, 8, 10);  // CAN bus off
+    transportLogError(0x82, 8, 5);  // CAN TX failed, channel 8, extra 5
+    transportLogError(0x83, 8, 0);  // CAN TX timeout
+    transportLogError(0x8B, 8, 10); // CAN bus off
 
     CLI_T *psCli = (CLI_T *)Memory_vpAlloc(sizeof(CLI_T));
     Cli_eInit(psCli, 0);
@@ -378,9 +397,10 @@ void test_vCLI_GetTransportErrors_SingleEntry(void)
     strcpy(pcMsg->data, "RORS]#");
     Cli_vRcvMessage((PRESENTABLE_T *)psCli, pcMsg);
 
-    // Final fragment sends state feedback, then message is split every 25 chars by Cli_vSendBigMessage, mock adds ; after each
-    // Full message: "T:3,C:3|1000,82,8,5|1100,83,8,0|1200,8B,8,10" (47 chars)
-    TEST_ASSERT_EQUAL_STRING("RECEIVING_CMD_DATA;T:3,C:3|1000,82,8,5|1100,;83,8,0|1200,8B,8,10;READY;", mock_send_message);
+    // Final fragment sends state feedback, then message is split every 25 chars by Cli_vSendBigMessage, mock adds ;
+    // after each Full message: "T:3,C:3|1000,82,8,5|1100,83,8,0|1200,8B,8,10" (47 chars)
+    TEST_ASSERT_EQUAL_STRING(
+        "RECEIVING_CMD_DATA;T:3,C:3|1000,82,8,5|1100,;83,8,0|1200,8B,8,10;READY;", mock_send_message);
 }
 
 void test_vCLI_GetTransportErrors_MultipleEntries(void)
@@ -462,10 +482,10 @@ void register_cli_tests(void)
     RUN_TEST(test_vCLI);
     RUN_TEST(test_vCLI_EdgeCases);
     RUN_TEST(test_vCLI_ChangePassword);
-    #ifdef MY_TRANSPORT_ERROR_LOG
+#ifdef MY_TRANSPORT_ERROR_LOG
     RUN_TEST(test_vCLI_GetTransportErrors_EmptyLog);
     RUN_TEST(test_vCLI_GetTransportErrors_SingleEntry);
     RUN_TEST(test_vCLI_GetTransportErrors_MultipleEntries);
     RUN_TEST(test_vCLI_GetTransportErrors_FullLog);
-    #endif
+#endif
 }

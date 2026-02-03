@@ -145,10 +145,10 @@ extern "C"
         mock_analogRead_u8LastPin = u8Pin;
         return mock_analogRead_u16Return;
 #elif defined(ARDUINO_ARCH_STM32)
-        return hwAnalogRead(u8Pin);
+    return hwAnalogRead(u8Pin);
 #else
-        // Fallback to Arduino analogRead for other platforms
-        return (uint16_t)analogRead(u8Pin);
+    // Fallback to Arduino analogRead for other platforms
+    return (uint16_t)analogRead(u8Pin);
 #endif
     }
 

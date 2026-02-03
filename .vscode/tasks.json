@@ -4,6 +4,16 @@
     "version": "2.0.0",
     "tasks": [
         {
+            "label": "Format: clang-format all files",
+            "type": "shell",
+            "command": "find src include test -type f -not -path '*/Unity/*' \\( -name '*.c' -o -name '*.cpp' -o -name '*.h' \\) -exec clang-format -i {} +",
+            "problemMatcher": [],
+            "presentation": {
+                "reveal": "always",
+                "panel": "shared"
+            }
+        },
+        {
 			"label": "test_qemu_pre-debug",
 			"type": "shell",
 			"command": "echo 'QEMU debug started'; /home/test/workspace/qemu/build/qemu-system-arm -M stm32f103c8-bluepill -semihosting -kernel ${workspaceFolder}/test/qemu/build/test_qemu.elf -monitor none -nographic -serial stdio -s -S",

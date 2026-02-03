@@ -886,7 +886,6 @@ void test_vMemoryOverflow_CSVParsing(void)
     }
 }
 
-
 // ============================================================================
 // Test Registration Function
 // ============================================================================
@@ -898,18 +897,18 @@ void register_stress_tests(void)
     RUN_TEST(test_vMillisWraparound_InPinDebounce);
     RUN_TEST(test_vMillisWraparound_SwitchImpulse);
     RUN_TEST(test_vMillisWraparound_SensorReporting);
-    
+
     // Concurrency tests
     RUN_TEST(test_vConcurrentTriggers_MultipleOnSameInput);
     RUN_TEST(test_vConcurrentTriggers_MultipleActions);
     RUN_TEST(test_vConcurrentTriggers_RapidEvents);
-    
+
     // Array size tests
     RUN_TEST(test_vMaxArraySize_TriggerMaxSwitches);
     RUN_TEST(test_vMaxArraySize_PresentablesCount);
     RUN_TEST(test_vMaxArraySize_LoopablesCount);
     RUN_TEST(test_vMaxArraySize_InPinSubscribers);
-    
+
     // Malformed CSV tests
     RUN_TEST(test_vMalformedCSV_MissingTerminator);
     RUN_TEST(test_vMalformedCSV_EmptyFields);
@@ -918,7 +917,7 @@ void register_stress_tests(void)
     RUN_TEST(test_vMalformedCSV_LongFields);
     RUN_TEST(test_vMalformedCSV_UnknownLineType);
     RUN_TEST(test_vMalformedCSV_ControlChars);
-    
+
 #ifndef USE_MALLOC
     // Memory overflow tests (static memory only)
     RUN_TEST(test_vMemoryOverflow_AllocationSize);

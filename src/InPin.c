@@ -1,7 +1,8 @@
+#include "InPin.h"
+
 #include <errno.h>
 
 #include "Globals.h"
-#include "InPin.h"
 #include "MySensorsWrapper.h"
 #include "PinCfgUtils.h"
 #include "PinSubscriberIf.h"

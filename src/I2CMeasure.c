@@ -1,22 +1,21 @@
 #ifdef PINCFG_FEATURE_I2C_MEASUREMENT
 
+#include "I2CMeasure.h"
+
 #include <string.h>
 
-#include "I2CMeasure.h"
 #include "PinCfgUtils.h"
 #include "SensorMeasure.h"
 
 // Platform detection: use STM32I2CDriver on STM32, WireWrapper elsewhere
-#if !defined(UNIT_TEST) && \
-    (defined(ARDUINO_ARCH_STM32) || defined(ARDUINO_ARCH_STM32F1) || \
-     defined(ARDUINO_ARCH_STM32F4) || defined(ARDUINO_ARCH_STM32L4) || \
-     defined(STM32F1) || defined(STM32F103xB))
+#if !defined(UNIT_TEST) &&                                                                                             \
+    (defined(ARDUINO_ARCH_STM32) || defined(ARDUINO_ARCH_STM32F1) || defined(ARDUINO_ARCH_STM32F4) ||                  \
+     defined(ARDUINO_ARCH_STM32L4) || defined(STM32F1) || defined(STM32F103xB))
 #define USE_STM32_I2C_DRIVER
 #include "STM32I2CDriver.h"
 #else
 #include "WireWrapper.h"
 #endif
-
 
 #ifdef UNIT_TEST
 #include "ArduinoMock.h"
@@ -90,7 +89,7 @@ PINCFG_RESULT_T I2CMeasure_eInit(
     psHandle->u32RequestTime = 0;
 
     // Initialize cache
-    psHandle->u32CacheTimestamp = 0;       // 0 = cache invalid
+    psHandle->u32CacheTimestamp = 0;             // 0 = cache invalid
     psHandle->u16CacheValidMs = u16CacheValidMs; // 0 = disabled
 
     // Initialize I2C (safe to call multiple times)
@@ -119,8 +118,7 @@ ISENSORMEASURE_RESULT_T I2CMeasure_eMeasure(
     I2CMEASURE_T *psHandle = (I2CMEASURE_T *)pSelf;
 
     // Check cache validity (if caching enabled)
-    if (psHandle->u16CacheValidMs > 0 &&
-        psHandle->u32CacheTimestamp != 0 &&
+    if (psHandle->u16CacheValidMs > 0 && psHandle->u32CacheTimestamp != 0 &&
         PinCfg_u32GetElapsedTime(psHandle->u32CacheTimestamp, u32ms) < psHandle->u16CacheValidMs)
     {
         // Return cached data
@@ -154,17 +152,15 @@ ISENSORMEASURE_RESULT_T I2CMeasure_eMeasure(
             if (psHandle->u8CommandLength == 1)
             {
                 // Simple mode: write register address, no stop (repeated start follows)
-                eResult = STM32_I2C_eWriteAsync(psHandle->u8DeviceAddress, 
-                                                 psHandle->au8CommandBytes, 1, false);
+                eResult = STM32_I2C_eWriteAsync(psHandle->u8DeviceAddress, psHandle->au8CommandBytes, 1, false);
             }
             else
             {
                 // Command mode: write full command sequence with stop
-                eResult = STM32_I2C_eWriteAsync(psHandle->u8DeviceAddress,
-                                                 psHandle->au8CommandBytes,
-                                                 psHandle->u8CommandLength, true);
+                eResult = STM32_I2C_eWriteAsync(
+                    psHandle->u8DeviceAddress, psHandle->au8CommandBytes, psHandle->u8CommandLength, true);
             }
-            
+
             if (eResult == STM32_I2C_BUSY_E)
             {
                 // Driver became busy between check and call, retry next loop
@@ -277,24 +273,24 @@ ISENSORMEASURE_RESULT_T I2CMeasure_eMeasure(
         return ISENSORMEASURE_ERROR_E;
 
     case I2CMEASURE_STATE_DATA_READY_E:
+    {
+        uint8_t u8CopySize = psHandle->u8DataSize;
+        if (u8CopySize > *pu8Size)
         {
-            uint8_t u8CopySize = psHandle->u8DataSize;
-            if (u8CopySize > *pu8Size)
-            {
-                u8CopySize = *pu8Size;
-            }
-            for (uint8_t i = 0; i < u8CopySize; i++)
-            {
-                pu8Buffer[i] = psHandle->au8Buffer[i];
-            }
-            *pu8Size = u8CopySize;
-
-            // Update cache timestamp if caching enabled
-            if (psHandle->u16CacheValidMs > 0)
-            {
-                psHandle->u32CacheTimestamp = u32ms;
-            }
+            u8CopySize = *pu8Size;
         }
+        for (uint8_t i = 0; i < u8CopySize; i++)
+        {
+            pu8Buffer[i] = psHandle->au8Buffer[i];
+        }
+        *pu8Size = u8CopySize;
+
+        // Update cache timestamp if caching enabled
+        if (psHandle->u16CacheValidMs > 0)
+        {
+            psHandle->u32CacheTimestamp = u32ms;
+        }
+    }
         psHandle->eState = I2CMEASURE_STATE_IDLE_E;
         return ISENSORMEASURE_OK_E;
 
@@ -317,7 +313,7 @@ ISENSORMEASURE_RESULT_T I2CMeasure_eMeasure(
             Wire_vBeginTransmission(psHandle->u8DeviceAddress);
             Wire_u8Write(psHandle->au8CommandBytes[0]);
             Wire_u8EndTransmission(false); // No stop, repeated start follows
-            
+
             // Request data (blocking)
             Wire_u8RequestFrom(psHandle->u8DeviceAddress, psHandle->u8DataSize);
             psHandle->u32RequestTime = u32ms;
@@ -356,7 +352,7 @@ ISENSORMEASURE_RESULT_T I2CMeasure_eMeasure(
             psHandle->eState = I2CMEASURE_STATE_ERROR_E;
             return ISENSORMEASURE_ERROR_E;
         }
-        
+
         // Check if data is available
         if (Wire_u8Available() >= psHandle->u8DataSize)
         {
@@ -370,31 +366,29 @@ ISENSORMEASURE_RESULT_T I2CMeasure_eMeasure(
         return ISENSORMEASURE_PENDING_E;
 
     case I2CMEASURE_STATE_DATA_READY_E:
+    {
+        uint8_t u8CopySize = psHandle->u8DataSize;
+        if (u8CopySize > *pu8Size)
         {
-            uint8_t u8CopySize = psHandle->u8DataSize;
-            if (u8CopySize > *pu8Size)
-            {
-                u8CopySize = *pu8Size;
-            }
-            for (uint8_t i = 0; i < u8CopySize; i++)
-            {
-                pu8Buffer[i] = psHandle->au8Buffer[i];
-            }
-            *pu8Size = u8CopySize;
-
-            // Update cache timestamp if caching enabled
-            if (psHandle->u16CacheValidMs > 0)
-            {
-                psHandle->u32CacheTimestamp = u32ms;
-            }
+            u8CopySize = *pu8Size;
         }
+        for (uint8_t i = 0; i < u8CopySize; i++)
+        {
+            pu8Buffer[i] = psHandle->au8Buffer[i];
+        }
+        *pu8Size = u8CopySize;
+
+        // Update cache timestamp if caching enabled
+        if (psHandle->u16CacheValidMs > 0)
+        {
+            psHandle->u32CacheTimestamp = u32ms;
+        }
+    }
         psHandle->eState = I2CMEASURE_STATE_IDLE_E;
         return ISENSORMEASURE_OK_E;
 
     case I2CMEASURE_STATE_ERROR_E:
-    default:
-        psHandle->eState = I2CMEASURE_STATE_IDLE_E;
-        return ISENSORMEASURE_ERROR_E;
+    default: psHandle->eState = I2CMEASURE_STATE_IDLE_E; return ISENSORMEASURE_ERROR_E;
     }
 #endif
 }

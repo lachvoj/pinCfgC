@@ -1678,15 +1678,15 @@ void test_vLoopTimeMeasure_MultipleSensors(void)
 void register_measurements_tests(void)
 {
     RUN_TEST(test_vCPUTemp);
-    #ifdef PINCFG_FEATURE_I2C_MEASUREMENT
+#ifdef PINCFG_FEATURE_I2C_MEASUREMENT
     RUN_TEST(test_vI2CMeasure_Init);
     RUN_TEST(test_vI2CMeasure_SimpleRead);
     RUN_TEST(test_vI2CMeasure_CommandMode);
     RUN_TEST(test_vI2CMeasure_Timeout);
     RUN_TEST(test_vI2CMeasure_DeviceError);
     RUN_TEST(test_vI2CMeasure_RawData);
-    #endif
-    #ifdef PINCFG_FEATURE_SPI_MEASUREMENT
+#endif
+#ifdef PINCFG_FEATURE_SPI_MEASUREMENT
     RUN_TEST(test_vSPIMeasure_Init);
     RUN_TEST(test_vSPIMeasure_SimpleRead);
     RUN_TEST(test_vSPIMeasure_CommandModeNoDelay);
@@ -1698,16 +1698,16 @@ void register_measurements_tests(void)
     RUN_TEST(test_vSPIMeasure_CSVParsing_Simple);
     RUN_TEST(test_vSPIMeasure_CSVParsing_Command);
     RUN_TEST(test_vSPIMeasure_CSVParsing_Sensor);
-    #endif
-    #ifdef PINCFG_FEATURE_ANALOG_MEASUREMENT
+#endif
+#ifdef PINCFG_FEATURE_ANALOG_MEASUREMENT
     RUN_TEST(test_vAnalogMeasure_Init);
     RUN_TEST(test_vAnalogMeasure_SimpleRead);
     RUN_TEST(test_vAnalogMeasure_ErrorHandling);
     RUN_TEST(test_vAnalogMeasure_MultiplePins);
     RUN_TEST(test_vAnalogMeasure_CSVParsing);
     RUN_TEST(test_vAnalogMeasure_SensorIntegration);
-    #endif
-    #ifdef PINCFG_FEATURE_LOOPTIME_MEASUREMENT
+#endif
+#ifdef PINCFG_FEATURE_LOOPTIME_MEASUREMENT
     RUN_TEST(test_vLoopTimeMeasure_Init);
     RUN_TEST(test_vLoopTimeMeasure_TimeDelta);
     RUN_TEST(test_vLoopTimeMeasure_Offset);
@@ -1716,13 +1716,13 @@ void register_measurements_tests(void)
     RUN_TEST(test_vLoopTimeMeasure_CSVParsing);
     RUN_TEST(test_vLoopTimeMeasure_SensorIntegration);
     RUN_TEST(test_vLoopTimeMeasure_MultipleSensors);
-    // TODO: Implement these tests
-    //RUN_TEST(test_vLoopTimeMeasure_BasicRecording);
-    //RUN_TEST(test_vLoopTimeMeasure_CSVParsing_Basic);
-    //RUN_TEST(test_vLoopTimeMeasure_CSVParsing_WithThresholds);
-    //RUN_TEST(test_vLoopTimeMeasure_MinMaxTracking);
-    //RUN_TEST(test_vLoopTimeMeasure_ArrayRotation);
-    //RUN_TEST(test_vLoopTimeMeasure_ThresholdViolations);
-    //RUN_TEST(test_vLoopTimeMeasure_EdgeCases);
-    #endif
+// TODO: Implement these tests
+// RUN_TEST(test_vLoopTimeMeasure_BasicRecording);
+// RUN_TEST(test_vLoopTimeMeasure_CSVParsing_Basic);
+// RUN_TEST(test_vLoopTimeMeasure_CSVParsing_WithThresholds);
+// RUN_TEST(test_vLoopTimeMeasure_MinMaxTracking);
+// RUN_TEST(test_vLoopTimeMeasure_ArrayRotation);
+// RUN_TEST(test_vLoopTimeMeasure_ThresholdViolations);
+// RUN_TEST(test_vLoopTimeMeasure_EdgeCases);
+#endif
 }

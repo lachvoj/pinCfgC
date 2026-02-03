@@ -1,8 +1,9 @@
+#include "PinCfgStr.h"
+
 #include <errno.h>
 #include <stdlib.h>
 
 #include "Memory.h"
-#include "PinCfgStr.h"
 
 void PinCfgStr_vInitStrPoint(STRING_POINT_T *psStrPoint, const char *pcStrStart, size_t szLen)
 {

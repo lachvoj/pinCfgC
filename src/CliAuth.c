@@ -1,6 +1,7 @@
+#include "CliAuth.h"
+
 #include <string.h>
 
-#include "CliAuth.h"
 #include "PersistentConfiguration.h"
 
 // No global variables - read password from EEPROM when needed
