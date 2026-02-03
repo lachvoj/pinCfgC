@@ -1,10 +1,10 @@
+#include <stdarg.h>
 #include <stdio.h>
 
 #include "PinCfgCsv.h"
 #include "PinCfgMessages.h"
 #include "PinCfgParse.h"
 #include "PinCfgStr.h"
-
 
 // Error message strings - conditional compilation for size optimization
 #ifdef PINCFG_USE_ERROR_MESSAGES
@@ -66,7 +66,7 @@ static const char *_parseStrings[] = {
     "W:L:",               // WL_E
     "I:",                 // I_E
 #ifdef PINCFG_USE_ERROR_MESSAGES
-    "CLI:",                               // ECR_E
+    "CLI:",                               // CLI_E
     "Switch:",                            // SW_E
     "InPin:",                             // IP_E
     "Trigger:",                           // TRG_E
@@ -74,7 +74,7 @@ static const char *_parseStrings[] = {
     "InPinDebounceMs:",                   // IPDMS_E
     "InPinMulticlickMaxDelayMs:",         // IPMCDMS_E
     "SwitchImpulseDurationMs:",           // SWIDMS_E
-    "SwitchFbDelayMs:",                 // SWFNDMS_E
+    "SwitchFbDelayMs:",                   // SWFNDMS_E
     "SwitchFbOffDelayMs:",                // SWFFDMS_E
     "OOM",                                // OOM_E
     "init failed",                        // INITF_E
@@ -121,6 +121,26 @@ const char *PinCfgMessages_getString(PINCFG_PARSE_STRINGS_T eStr)
 #endif
 }
 
+// Safe snprintf helper that appends formatted string and returns actual bytes written
+// Prevents buffer overflow by clamping return value to actual written bytes
+size_t szSafeAppendFormat(char *pcBuffer, size_t szCurrentPos, size_t szMaxLen, const char *pcFormat, ...)
+{
+    size_t szAvailable = szGetSize(szMaxLen, szCurrentPos);
+    if (szAvailable == 0)
+        return 0;
+
+    va_list args;
+    va_start(args, pcFormat);
+    int iResult = vsnprintf(pcBuffer + szCurrentPos, szAvailable, pcFormat, args);
+    va_end(args);
+
+    if (iResult < 0)
+        return 0;
+
+    // Clamp to actual written (truncation-aware)
+    return ((size_t)iResult < szAvailable) ? (size_t)iResult : (szAvailable > 0 ? szAvailable - 1 : 0);
+}
+
 // Unified error logging - automatically handles PINCFG_USE_ERROR_MESSAGES mode
 // Also increments warning counter automatically
 size_t PinCfgMessages_logParseError(
@@ -135,11 +155,11 @@ size_t PinCfgMessages_logParseError(
         psPrms->szNumberOfWarnings++;
     }
 
-    size_t result;
 #ifdef PINCFG_USE_ERROR_MESSAGES
-    result = snprintf(
-        (char *)(psPrms->psParsePrms->pcOutString + psPrms->pcOutStringLast),
-        szGetSize(psPrms->psParsePrms->u16OutStrMaxLen, psPrms->pcOutStringLast),
+    return szSafeAppendFormat(
+        psPrms->psParsePrms->pcOutString,
+        psPrms->pcOutStringLast,
+        psPrms->psParsePrms->u16OutStrMaxLen,
         PinCfgMessages_getString(FSDSS_E),
         isFatal ? PinCfgMessages_getString(EL_E) : PinCfgMessages_getString(WL_E),
         psPrms->u16LinesProcessed,
@@ -147,14 +167,14 @@ size_t PinCfgMessages_logParseError(
         _errorMessages[errorCode]);
 #else
     (void)prefix; // Unused in compact mode
-    result = snprintf(
-        (char *)(psPrms->psParsePrms->pcOutString + psPrms->pcOutStringLast),
-        szGetSize(psPrms->psParsePrms->u16OutStrMaxLen, psPrms->pcOutStringLast),
+    return szSafeAppendFormat(
+        psPrms->psParsePrms->pcOutString,
+        psPrms->pcOutStringLast,
+        psPrms->psParsePrms->u16OutStrMaxLen,
         isFatal ? "L%d:E%d;" : "L%d:W%d;",
         psPrms->u16LinesProcessed,
         errorCode);
 #endif
-    return result;
 }
 
 // Helper for simple error without line number (E: or W:)
@@ -166,17 +186,14 @@ size_t PinCfgMessages_logSimpleError(
     bool isFatal)
 {
 #ifdef PINCFG_USE_ERROR_MESSAGES
-    return snprintf(
-        (char *)(pcOutString + pcOutStringLast),
-        szGetSize(u16OutStrMaxLen, pcOutStringLast),
+    return szSafeAppendFormat(
+        pcOutString,
+        pcOutStringLast,
+        u16OutStrMaxLen,
         "%s%s\n",
         isFatal ? PinCfgMessages_getString(E_E) : PinCfgMessages_getString(W_E),
         _errorMessages[errorCode]);
 #else
-    return snprintf(
-        (char *)(pcOutString + pcOutStringLast),
-        szGetSize(u16OutStrMaxLen, pcOutStringLast),
-        isFatal ? "E%d\n" : "W%d\n",
-        errorCode);
+    return szSafeAppendFormat(pcOutString, pcOutStringLast, u16OutStrMaxLen, isFatal ? "E%d\n" : "W%d\n", errorCode);
 #endif
 }

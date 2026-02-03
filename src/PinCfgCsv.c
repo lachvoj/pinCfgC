@@ -123,6 +123,7 @@ static bool bGetOptionalField(PINCFG_PARSE_SUBFN_PARAMS_T *psPrms, uint8_t u8Ind
 }
 
 // Allocate memory with OOM error handling
+// NOTE: Does NOT call Memory_eReset() - caller must decide whether to reset
 static void *pvAllocOrOOM(
     PINCFG_PARSE_SUBFN_PARAMS_T *psPrms,
     size_t szSize,
@@ -132,7 +133,6 @@ static void *pvAllocOrOOM(
     void *pvAlloc = Memory_vpAlloc(szSize);
     if (pvAlloc == NULL)
     {
-        Memory_eReset();
         psPrms->pcOutStringLast += LOG_ERROR(psPrms, PinCfgMessages_getString(eComponentType), ERR_OOM);
         *peResult = PINCFG_OUTOFMEMORY_ERROR_E;
     }
@@ -181,9 +181,10 @@ __attribute__((unused)) static size_t szLogWarningExt(
     const char *pcSuffix)
 {
     psPrms->szNumberOfWarnings++;
-    return snprintf(
-        (char *)(psPrms->psParsePrms->pcOutString + psPrms->pcOutStringLast),
-        szGetSize(psPrms->psParsePrms->u16OutStrMaxLen, psPrms->pcOutStringLast),
+    return szSafeAppendFormat(
+        psPrms->psParsePrms->pcOutString,
+        psPrms->pcOutStringLast,
+        psPrms->psParsePrms->u16OutStrMaxLen,
         PinCfgMessages_getString(FSDSS_E),
         PinCfgMessages_getString(EL_E),
         psPrms->u16LinesProcessed,
@@ -366,8 +367,6 @@ PINCFG_RESULT_T PinCfgCsv_eInit(uint8_t *pu8Memory, size_t szMemorySize, const c
 
         sParseParams.pcConfig = pcDefaultCfg;
         ePincfgResult = PinCfgCsv_eParse(&sParseParams);
-        // char sOutStr[1000];
-        // ePincfgResult = PinCfgCsv_eParse(NULL, sOutStr, sizeof(sOutStr), false);
     }
 
     // Only convert linked lists to arrays if they were actually created
@@ -389,6 +388,12 @@ PINCFG_RESULT_T PinCfgCsv_eInit(uint8_t *pu8Memory, size_t szMemorySize, const c
         // Note: Measurements are NOT converted to array
         // They remain in linked list during parsing only
         // Sensors store direct pointers, so no array needed at runtime
+    }
+
+    if (ePincfgResult == PINCFG_OUTOFMEMORY_ERROR_E && psGlobals->u8PresentablesCount > 0)
+    {
+        CLI_T *psCli = (CLI_T *)psGlobals->ppsPresentables[0];
+        Cli_vSetState(psCli, CLI_OUT_OF_MEM_ERR_E, NULL, true);
     }
 
     Memory_vTempFree();
@@ -519,14 +524,16 @@ PINCFG_RESULT_T PinCfgCsv_eParse(PINCFG_PARSE_PARAMS_T *psParams)
 
     // Print final summary
 #ifdef PINCFG_USE_ERROR_MESSAGES
-    sPrms.pcOutStringLast += snprintf(
-        (char *)(sPrms.psParsePrms->pcOutString + sPrms.pcOutStringLast),
-        szGetSize(sPrms.psParsePrms->u16OutStrMaxLen, sPrms.pcOutStringLast),
+    sPrms.pcOutStringLast += szSafeAppendFormat(
+        sPrms.psParsePrms->pcOutString,
+        sPrms.pcOutStringLast,
+        sPrms.psParsePrms->u16OutStrMaxLen,
         "I: Configuration parsed.\n");
 #else
-    sPrms.pcOutStringLast += snprintf(
-        (char *)(sPrms.psParsePrms->pcOutString + sPrms.pcOutStringLast),
-        szGetSize(sPrms.psParsePrms->u16OutStrMaxLen, sPrms.pcOutStringLast),
+    sPrms.pcOutStringLast += szSafeAppendFormat(
+        sPrms.psParsePrms->pcOutString,
+        sPrms.pcOutStringLast,
+        sPrms.psParsePrms->u16OutStrMaxLen,
         "W%zu\n",
         sPrms.szNumberOfWarnings);
 #endif
@@ -557,17 +564,11 @@ static PINCFG_RESULT_T PinCfgCsv_CreateCli(PINCFG_PARSE_SUBFN_PARAMS_T *psPrms)
 
     if (!psPrms->psParsePrms->bValidate)
     {
-        CLI_T *psCfgRcvrHnd = (CLI_T *)Memory_vpAlloc(sizeof(CLI_T));
-        if (psCfgRcvrHnd == NULL)
+        PINCFG_RESULT_T eAllocResult = PINCFG_OK_E;
+        CLI_T *psCfgRcvrHnd = (CLI_T *)pvAllocOrOOM(psPrms, sizeof(CLI_T), CLI_E, &eAllocResult);
+        if (eAllocResult != PINCFG_OK_E)
         {
-            Memory_eReset();
-            psPrms->pcOutStringLast += LOG_SIMPLE_ERROR(
-                psPrms->psParsePrms->pcOutString,
-                psPrms->pcOutStringLast,
-                psPrms->psParsePrms->u16OutStrMaxLen,
-                ERR_OOM);
-
-            return PINCFG_OUTOFMEMORY_ERROR_E;
+            return eAllocResult;
         }
 
         if (Cli_eInit(psCfgRcvrHnd, psPrms->u8PresentablesCount) == CLI_OK_E)
@@ -834,7 +835,7 @@ static PINCFG_RESULT_T PinCfgCsv_ParseTriggers(PINCFG_PARSE_SUBFN_PARAMS_T *psPr
     if (psPrms->psParsePrms->pszMemoryRequired != NULL)
     {
         *(psPrms->psParsePrms->pszMemoryRequired) +=
-            Memory_szGetAllocatedSize(sizeof(TRIGGER_SWITCHACTION_T) * u8Count) +
+            Memory_szGetAllocatedSize((size_t)sizeof(TRIGGER_SWITCHACTION_T) * (size_t)u8Count) +
             Memory_szGetAllocatedSize(sizeof(TRIGGER_T));
     }
 
@@ -856,7 +857,7 @@ static PINCFG_RESULT_T PinCfgCsv_ParseTriggers(PINCFG_PARSE_SUBFN_PARAMS_T *psPr
     // allocate memory for switch actions
     PINCFG_RESULT_T eAllocResult = PINCFG_OK_E;
     TRIGGER_SWITCHACTION_T *pasSwActs =
-        (TRIGGER_SWITCHACTION_T *)pvAllocOrOOM(psPrms, sizeof(TRIGGER_SWITCHACTION_T) * u8Count, TRG_E, &eAllocResult);
+        (TRIGGER_SWITCHACTION_T *)pvAllocOrOOM(psPrms, (size_t)sizeof(TRIGGER_SWITCHACTION_T) * (size_t)u8Count, TRG_E, &eAllocResult);
     if (pasSwActs == NULL)
         return eAllocResult;
 
@@ -1011,7 +1012,7 @@ static PINCFG_RESULT_T PinCfgCsv_ParseMeasurementSource(PINCFG_PARSE_SUBFN_PARAM
         u32Temp = 0;
         if (eParseFieldU32(psPrms, 4, &u32Temp) != PINCFG_STR_OK_E)
         {
-            psPrms->pcOutStringLast += szLogWarningExt(psPrms, MS_E, ERR_INVALID_I2C_CMD, " command byte\n");
+            psPrms->pcOutStringLast += LOG_WARNING(psPrms, PinCfgMessages_getString(MS_E), ERR_INVALID_I2C_CMD);
             return PINCFG_OK_E;
         }
         au8CommandBytes[0] = (uint8_t)u32Temp;
@@ -1035,15 +1036,12 @@ static PINCFG_RESULT_T PinCfgCsv_ParseMeasurementSource(PINCFG_PARSE_SUBFN_PARAM
         // Parameter 6 (optional): Cache duration in ms (empty value uses default)
         if (bGetOptionalField(psPrms, 6))
         {
-            // Parse the value
             u32Temp = 0;
             if (eParseFieldU32(psPrms, 6, &u32Temp) == PINCFG_STR_OK_E)
             {
                 u16CacheValidMs = (uint16_t)u32Temp;
                 if (u16CacheValidMs > PINCFG_I2CMEASURE_CACHE_MAX_MS_D)
-                {
                     u16CacheValidMs = PINCFG_I2CMEASURE_CACHE_MAX_MS_D;
-                }
             }
         }
 
@@ -1142,7 +1140,7 @@ static PINCFG_RESULT_T PinCfgCsv_ParseMeasurementSource(PINCFG_PARSE_SUBFN_PARAM
         uint8_t u8CSPin = 0;
         if (eParseFieldU8(psPrms, 3, &u8CSPin) != PINCFG_STR_OK_E)
         {
-            psPrms->pcOutStringLast += szLogWarningExt(psPrms, MS_E, ERR_INVALID_PIN, " CS pin\n");
+            psPrms->pcOutStringLast += LOG_WARNING(psPrms, PinCfgMessages_getString(MS_E), ERR_INVALID_PIN);
             return PINCFG_OK_E;
         }
 
@@ -1205,7 +1203,7 @@ static PINCFG_RESULT_T PinCfgCsv_ParseMeasurementSource(PINCFG_PARSE_SUBFN_PARAM
                 uint32_t u32Cmd = 0;
                 if (eParseFieldU32(psPrms, 4 + i, &u32Cmd) != PINCFG_STR_OK_E)
                 {
-                    psPrms->pcOutStringLast += szLogWarningExt(psPrms, MS_E, ERR_INVALID_ARGS, " command byte\n");
+                    psPrms->pcOutStringLast += LOG_WARNING(psPrms, PinCfgMessages_getString(MS_E), ERR_INVALID_ARGS);
                     return PINCFG_OK_E;
                 }
                 au8CommandBytes[i] = (uint8_t)u32Cmd;
@@ -1346,8 +1344,8 @@ static PINCFG_RESULT_T PinCfgCsv_ParseMeasurementSource(PINCFG_PARSE_SUBFN_PARAM
 static PINCFG_RESULT_T PinCfgCsv_ParseSensorReporter(PINCFG_PARSE_SUBFN_PARAMS_T *psPrms)
 {
     // SR,<name>,<measurement>,<vType>,<sType>,<enableable>,<cumulative>,<sampMs>,<reportSec>,<scale>,<offset>,<precision>,<unit>,<byteOffset>,<byteCount>,<bitShift>,<bitMask>,<endianness>
-    // Min: SR,name,meas,6,6,0,0,1000,300 = 9 items (scale, offset, precision, unit, byte extraction, transform optional)
-    // Max: SR,name,meas,6,6,0,0,1000,300,0.0625,-2.1,2,°C,0,2,4,0x0FFFFF,0 = 18 items
+    // Min: SR,name,meas,6,6,0,0,1000,300 = 9 items (scale, offset, precision, unit, byte extraction, transform
+    // optional) Max: SR,name,meas,6,6,0,0,1000,300,0.0625,-2.1,2,°C,0,2,4,0x0FFFFF,0 = 18 items
     if (psPrms->u8LineItemsLen < 9 || psPrms->u8LineItemsLen > 18)
     {
         psPrms->pcOutStringLast += LOG_WARNING(psPrms, PinCfgMessages_getString(SR_E), ERR_INVALID_ARGS);
@@ -1452,9 +1450,10 @@ static PINCFG_RESULT_T PinCfgCsv_ParseSensorReporter(PINCFG_PARSE_SUBFN_PARAMS_T
         if (PinCfgStr_eAtoFixedPoint(&(psPrms->sTempStrPt), &i32Scale) != PINCFG_STR_OK_E || i32Scale < i32MinScale ||
             i32Scale > i32MaxScale)
         {
-            psPrms->pcOutStringLast += snprintf(
-                (char *)(psPrms->psParsePrms->pcOutString + psPrms->pcOutStringLast),
-                szGetSize(psPrms->psParsePrms->u16OutStrMaxLen, psPrms->pcOutStringLast),
+            psPrms->pcOutStringLast += szSafeAppendFormat(
+                psPrms->psParsePrms->pcOutString,
+                psPrms->pcOutStringLast,
+                psPrms->psParsePrms->u16OutStrMaxLen,
                 PinCfgMessages_getString(FSDSSS_E),
                 PinCfgMessages_getString(EL_E),
                 psPrms->u16LinesProcessed,
@@ -1474,9 +1473,10 @@ static PINCFG_RESULT_T PinCfgCsv_ParseSensorReporter(PINCFG_PARSE_SUBFN_PARAMS_T
         if (PinCfgStr_eAtoFixedPoint(&(psPrms->sTempStrPt), &i32Offset) != PINCFG_STR_OK_E ||
             i32Offset < i32MinOffset || i32Offset > i32MaxOffset)
         {
-            psPrms->pcOutStringLast += snprintf(
-                (char *)(psPrms->psParsePrms->pcOutString + psPrms->pcOutStringLast),
-                szGetSize(psPrms->psParsePrms->u16OutStrMaxLen, psPrms->pcOutStringLast),
+            psPrms->pcOutStringLast += szSafeAppendFormat(
+                psPrms->psParsePrms->pcOutString,
+                psPrms->pcOutStringLast,
+                psPrms->psParsePrms->u16OutStrMaxLen,
                 PinCfgMessages_getString(FSDSS_E),
                 PinCfgMessages_getString(EL_E),
                 psPrms->u16LinesProcessed,
@@ -1494,9 +1494,10 @@ static PINCFG_RESULT_T PinCfgCsv_ParseSensorReporter(PINCFG_PARSE_SUBFN_PARAMS_T
         if (PinCfgStr_eAtoU8(&(psPrms->sTempStrPt), &u8Precision) != PINCFG_STR_OK_E ||
             u8Precision > PINCFG_SENSOR_PRECISION_MAX_D)
         {
-            psPrms->pcOutStringLast += snprintf(
-                (char *)(psPrms->psParsePrms->pcOutString + psPrms->pcOutStringLast),
-                szGetSize(psPrms->psParsePrms->u16OutStrMaxLen, psPrms->pcOutStringLast),
+            psPrms->pcOutStringLast += szSafeAppendFormat(
+                psPrms->psParsePrms->pcOutString,
+                psPrms->pcOutStringLast,
+                psPrms->psParsePrms->u16OutStrMaxLen,
                 PinCfgMessages_getString(FSDSSS_E),
                 PinCfgMessages_getString(EL_E),
                 psPrms->u16LinesProcessed,
@@ -1598,12 +1599,11 @@ static PINCFG_RESULT_T PinCfgCsv_ParseSensorReporter(PINCFG_PARSE_SUBFN_PARAMS_T
         return PINCFG_OK_E;
 
     // Create sensor reporter
-    SENSOR_T *psSensorHandle = (SENSOR_T *)Memory_vpAlloc(sizeof(SENSOR_T));
-    if (psSensorHandle == NULL)
+    PINCFG_RESULT_T eAllocResult = PINCFG_OK_E;
+    SENSOR_T *psSensorHandle = (SENSOR_T *)pvAllocOrOOM(psPrms, sizeof(SENSOR_T), SR_E, &eAllocResult);
+    if (eAllocResult != PINCFG_OK_E)
     {
-        Memory_eReset();
-        psPrms->pcOutStringLast += LOG_ERROR(psPrms, PinCfgMessages_getString(SR_E), ERR_OOM);
-        return PINCFG_OUTOFMEMORY_ERROR_E;
+        return eAllocResult;
     }
 
     // Link sensor to measurement source
@@ -1619,15 +1619,15 @@ static PINCFG_RESULT_T PinCfgCsv_ParseSensorReporter(PINCFG_PARSE_SUBFN_PARAMS_T
              psMeasurement, // Link to measurement
              u16SamplingIntervalMs,
              u16ReportIntervalSec,
-             i32Scale,    // Multiplicative scale factor (fixed-point)
-             i32Offset,   // Additive offset adjustment (fixed-point)
-             u8Precision, // Decimal places (0-6)
+             i32Scale,                          // Multiplicative scale factor (fixed-point)
+             i32Offset,                         // Additive offset adjustment (fixed-point)
+             u8Precision,                       // Decimal places (0-6)
              (sUnit.szLen > 0) ? &sUnit : NULL, // Unit string
-             u8ByteOffset,   // Byte extraction start
-             u8ByteCount,    // Byte extraction count
-             u8BitShift,     // Bit shift
-             u32BitMask,     // Bit mask
-             u8Endianness) == SENSOR_OK_E); // Endianness
+             u8ByteOffset,                      // Byte extraction start
+             u8ByteCount,                       // Byte extraction count
+             u8BitShift,                        // Bit shift
+             u32BitMask,                        // Bit mask
+             u8Endianness) == SENSOR_OK_E);     // Endianness
 
     // Add main sensor to presentables
     if (bInitOk && psPrms->psParsePrms->eAddToPresentables != NULL)
@@ -1650,9 +1650,10 @@ static PINCFG_RESULT_T PinCfgCsv_ParseSensorReporter(PINCFG_PARSE_SUBFN_PARAMS_T
 
     if (!bInitOk)
     {
-        psPrms->pcOutStringLast += snprintf(
-            (char *)(psPrms->psParsePrms->pcOutString + psPrms->pcOutStringLast),
-            szGetSize(psPrms->psParsePrms->u16OutStrMaxLen, psPrms->pcOutStringLast),
+        psPrms->pcOutStringLast += szSafeAppendFormat(
+            psPrms->psParsePrms->pcOutString,
+            psPrms->pcOutStringLast,
+            psPrms->psParsePrms->u16OutStrMaxLen,
             PinCfgMessages_getString(FSDSS_E),
             PinCfgMessages_getString(EL_E),
             psPrms->u16LinesProcessed,

@@ -145,7 +145,7 @@
 #endif
 
 #ifndef PINCFG_CLI_RECEIVE_TIMEOUT_MS_D
-#define PINCFG_CLI_RECEIVE_TIMEOUT_MS_D 30000 /* 30 seconds */
+#define PINCFG_CLI_RECEIVE_TIMEOUT_MS_D 60000 /* 60 seconds */
 #endif
 
 #endif // TYPES_H

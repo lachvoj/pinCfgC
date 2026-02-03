@@ -70,7 +70,7 @@ typedef enum PINCFG_PARSE_STRINGS_E
     WL_E,         // "W:L:"
     I_E,          // "I:"
                   // Extended strings - returned as empty string in compact mode
-    ECR_E,        // "CLI:"
+    CLI_E,        // "CLI:"
     SW_E,         // "Switch:"
     IP_E,         // "InPin:"
     TRG_E,        // "Trigger:"
@@ -107,6 +107,14 @@ typedef enum PINCFG_PARSE_STRINGS_E
 } PINCFG_PARSE_STRINGS_T;
 
 const char *PinCfgMessages_getString(PINCFG_PARSE_STRINGS_T eStr);
+
+// Safe snprintf helper that prevents buffer overflow
+size_t szSafeAppendFormat(
+    char *pcBuffer,
+    size_t szCurrentPos,
+    size_t szMaxLen,
+    const char *pcFormat,
+    ...);
 
 size_t PinCfgMessages_logParseError(
     PINCFG_PARSE_SUBFN_PARAMS_T *psPrms,

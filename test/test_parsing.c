@@ -28,7 +28,7 @@ void test_vPinCfgCsv(void)
     TEST_ASSERT_EQUAL(PINCFG_OUTOFMEMORY_ERROR_E, eParseResult);
     // Accept either full error message or error code
 #ifdef PINCFG_USE_ERROR_MESSAGES
-    TEST_ASSERT_EQUAL_STRING("E:OOM\n", acOutStr); // Shortened OOM message
+    TEST_ASSERT_EQUAL_STRING("E:L:0:CLI:OOM\n", acOutStr); // Shortened OOM message
 #else
     TEST_ASSERT_EQUAL_STRING("E10\n", acOutStr); // ERR_OOM = 10
 #endif

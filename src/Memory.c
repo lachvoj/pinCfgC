@@ -21,6 +21,20 @@ typedef struct MEMORY_TEMP_ITEM_S
     };
 } MEMORY_TEMP_ITEM_T;
 
+static void Memory_vResetState(void)
+{
+    psGlobals->pvMemNext = (char *)psGlobals + sizeof(GLOBALS_T);
+    psGlobals->pvMemTempEnd = psGlobals->pvMemNext;
+    psGlobals->u8LoopablesCount = 0;
+    psGlobals->u8PresentablesCount = 0;
+    psGlobals->ppsLoopables = NULL;
+    psGlobals->ppsPresentables = NULL;
+
+    memset(psGlobals->pvMemNext, 0x00U, (size_t)(psGlobals->pvMemEnd - psGlobals->pvMemNext));
+
+    Memory_vTempFree();
+}
+
 MEMORY_RESULT_T Memory_eInit(uint8_t *pu8Memory, size_t szSize)
 {
     if (pu8Memory == NULL)
@@ -31,26 +45,21 @@ MEMORY_RESULT_T Memory_eInit(uint8_t *pu8Memory, size_t szSize)
 
     psGlobals = (GLOBALS_T *)pu8Memory;
     psGlobals->pvMemEnd = (char *)(pu8Memory + ((szSize - 1) / sizeof(void *)) * sizeof(void *));
-    psGlobals->pvMemNext = (char *)(pu8Memory + sizeof(GLOBALS_T));
-    psGlobals->pvMemTempEnd = psGlobals->pvMemNext;
-    psGlobals->u8LoopablesCount = 0;
-    psGlobals->u8PresentablesCount = 0;
-    psGlobals->ppsLoopables = NULL;
-    psGlobals->ppsPresentables = NULL;
     psGlobals->bMemIsInitialized = true;
 
-    Memory_vTempFree();
+    Memory_vResetState();
 
     return MEMORY_OK_E;
 }
 
 MEMORY_RESULT_T Memory_eReset(void)
 {
-    psGlobals->pvMemNext = ((char *)psGlobals) + sizeof(GLOBALS_T);
-    psGlobals->pvMemTempEnd = psGlobals->pvMemNext;
-    psGlobals->ppsLoopables = NULL;
-    psGlobals->ppsPresentables = NULL;
-    Memory_vTempFree();
+    if (!psGlobals || !psGlobals->bMemIsInitialized)
+        return MEMORY_ERROR_E;
+
+    // Reset pointers without recalculating pvMemEnd (which would cause shrinking)
+    // bMemIsInitialized stays true, pvMemEnd stays unchanged (already aligned from init)
+    Memory_vResetState();
 
     return MEMORY_OK_E;
 }

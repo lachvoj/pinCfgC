@@ -45,6 +45,8 @@ static void Cli_vConfigurationReceived(CLI_T *psHandle);
 static void Cli_vExecuteCommand(CLI_T *psHandle, char *pcCmd);
 static void Cli_vSendBigMessage(CLI_T *psHandle, char *pcBigMsg);
 static void Cli_vResetState(CLI_T *psHandle);
+static bool Cli_bAppendToBuffer(CLI_T *psHandle, const char *pcData);
+static bool Cli_bHandleFragment(CLI_T *psHandle, const char *pcMessage, bool *pbAlreadyAppended);
 
 #if defined(ARDUINO) && !defined(TEST)
 #if defined(ARDUINO_ARCH_STM32) || defined(ARDUINO_ARCH_STM32F1)
@@ -164,6 +166,22 @@ static void Cli_vShiftBuffer(CLI_T *psHandle, size_t szStartPos)
     psHandle->u16CfgNext = szNewLen;
 }
 
+// Helper: Handle message fragment with timeout reset
+// Returns false if processing should stop (early return), true to continue
+static bool Cli_bHandleFragment(CLI_T *psHandle, const char *pcMessage, bool *pbAlreadyAppended)
+{
+    if (*pbAlreadyAppended)
+        return true; // Already appended, continue processing
+
+    if (!Cli_bAppendToBuffer(psHandle, pcMessage))
+        return false; // Buffer full, stop processing
+
+    *pbAlreadyAppended = true;
+    psHandle->u32ReceivingStartedMs = u32Millis(); // Reset timeout on each fragment
+    Presentable_vSendState((PRESENTABLE_T *)psHandle);
+    return true; // Continue processing
+}
+
 // Helper: Append data to buffer, returns false if too large
 static bool Cli_bAppendToBuffer(CLI_T *psHandle, const char *pcData)
 {
@@ -274,16 +292,8 @@ void Cli_vRcvMessage(PRESENTABLE_T *psBaseHandle, const MyMessage *pcMsg)
     // STATE: RECEIVING_AUTH - Continue receiving fragmented pwd
     if (psHandle->eState == CLI_RECEIVING_AUTH_E)
     {
-        if (!bAlreadyAppended)
-        {
-            if (!Cli_bAppendToBuffer(psHandle, pcMessage))
-                return;
-            else
-            {
-                bAlreadyAppended = true;
-                Presentable_vSendState((PRESENTABLE_T *)psHandle);
-            }
-        }
+        if (!Cli_bHandleFragment(psHandle, pcMessage, &bAlreadyAppended))
+            return;
 
         char *pcPwdEnd = strchr(psHandle->pcCfgBuf, '/');
         size_t szFragmentLen = pcPwdEnd ? (size_t)(pcPwdEnd - psHandle->pcCfgBuf) : strlen(psHandle->pcCfgBuf);
@@ -321,16 +331,8 @@ void Cli_vRcvMessage(PRESENTABLE_T *psBaseHandle, const MyMessage *pcMsg)
     // STATE: RECEIVING_TYPE - Continue receiving fragmented CFG:/CMD: prefix
     if (psHandle->eState == CLI_RECEIVING_TYPE_E)
     {
-        if (!bAlreadyAppended)
-        {
-            if (!Cli_bAppendToBuffer(psHandle, pcMessage))
-                return;
-            else
-            {
-                bAlreadyAppended = true;
-                Presentable_vSendState((PRESENTABLE_T *)psHandle);
-            }
-        }
+        if (!Cli_bHandleFragment(psHandle, pcMessage, &bAlreadyAppended))
+            return;
 
         if (psHandle->u16CfgNext < 4)
             return;
@@ -358,16 +360,8 @@ void Cli_vRcvMessage(PRESENTABLE_T *psBaseHandle, const MyMessage *pcMsg)
     // STATE: RECEIVING_CFG_DATA or RECEIVING_CMD_DATA - Continue receiving data
     if (psHandle->eState == CLI_RECEIVING_CFG_DATA_E || psHandle->eState == CLI_RECEIVING_CMD_DATA_E)
     {
-        if (!bAlreadyAppended)
-        {
-            if (!Cli_bAppendToBuffer(psHandle, pcMessage))
-                return;
-            else
-            {
-                bAlreadyAppended = true;
-                Presentable_vSendState((PRESENTABLE_T *)psHandle);
-            }
-        }
+        if (!Cli_bHandleFragment(psHandle, pcMessage, &bAlreadyAppended))
+            return;
 
         char *pcEndString = strstr(psHandle->pcCfgBuf, _pcMsgEND);
 
