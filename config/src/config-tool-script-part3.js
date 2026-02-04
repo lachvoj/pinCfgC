@@ -502,11 +502,14 @@ function parseCSVConfiguration(csv) {
             const tr = {
                 id: Date.now() + Math.random(),
                 name: parts[1],
-                inputName: parts[2],
+                eventSource: parts[2],  // Can be input or sensor name
                 eventType: parts[3],
-                eventCount: parts[4],
+                eventData: parts[4],     // Decimal for value-based, integer for multiclick
                 actions: []
             };
+            
+            // Backward compatibility: also set inputName
+            tr.inputName = parts[2];
             
             for (let i = 5; i < parts.length; i += 2) {
                 if (i + 1 < parts.length) {

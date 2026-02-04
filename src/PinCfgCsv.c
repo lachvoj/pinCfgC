@@ -7,6 +7,7 @@
 
 #include "CPUTempMeasure.h"
 #include "Cli.h"
+#include "Event.h"
 #include "Globals.h"
 #include "InPin.h"
 #include "LoopTimeMeasure.h"
@@ -89,27 +90,25 @@ static const uint8_t _au8MeasurementSizes[MEASUREMENT_TYPE_COUNT_E] = {
 // Helper functions for code size optimization
 // ============================================================================
 
-// Parse a field at given index as uint8_t
-static PINCFG_STR_RESULT_T eParseFieldU8(PINCFG_PARSE_SUBFN_PARAMS_T *psPrms, uint8_t u8Index, uint8_t *pu8Out)
+// Get field at given index (sets psPrms->sTempStrPt)
+static void vGetField(PINCFG_PARSE_SUBFN_PARAMS_T *psPrms, uint8_t u8Index)
 {
     psPrms->sTempStrPt = psPrms->sLine;
     PinCfgStr_vGetSplitElemByIndex(&(psPrms->sTempStrPt), PINCFG_VALUE_SEPARATOR_D, u8Index);
+}
+
+// Parse a field at given index as uint8_t
+static PINCFG_STR_RESULT_T eParseFieldU8(PINCFG_PARSE_SUBFN_PARAMS_T *psPrms, uint8_t u8Index, uint8_t *pu8Out)
+{
+    vGetField(psPrms, u8Index);
     return PinCfgStr_eAtoU8(&(psPrms->sTempStrPt), pu8Out);
 }
 
 // Parse a field at given index as uint32_t
 static PINCFG_STR_RESULT_T eParseFieldU32(PINCFG_PARSE_SUBFN_PARAMS_T *psPrms, uint8_t u8Index, uint32_t *pu32Out)
 {
-    psPrms->sTempStrPt = psPrms->sLine;
-    PinCfgStr_vGetSplitElemByIndex(&(psPrms->sTempStrPt), PINCFG_VALUE_SEPARATOR_D, u8Index);
+    vGetField(psPrms, u8Index);
     return PinCfgStr_eAtoU32(&(psPrms->sTempStrPt), pu32Out);
-}
-
-// Get field at given index (sets psPrms->sTempStrPt)
-static void vGetField(PINCFG_PARSE_SUBFN_PARAMS_T *psPrms, uint8_t u8Index)
-{
-    psPrms->sTempStrPt = psPrms->sLine;
-    PinCfgStr_vGetSplitElemByIndex(&(psPrms->sTempStrPt), PINCFG_VALUE_SEPARATOR_D, u8Index);
 }
 
 // Get optional field at given index (returns true if field exists and is non-empty)
@@ -779,8 +778,9 @@ static PINCFG_RESULT_T PinCfgCsv_ParseInpins(PINCFG_PARSE_SUBFN_PARAMS_T *psPrms
 
 static PINCFG_RESULT_T PinCfgCsv_ParseTriggers(PINCFG_PARSE_SUBFN_PARAMS_T *psPrms)
 {
-    uint8_t u8Count, u8EventType, u8EventCount, u8DrivesCountReal, u8Offset, u8DrivenAction;
-    INPIN_T *psInPinEmiterHnd;
+    uint8_t u8Count, u8EventType, u8DrivesCountReal, u8Offset, u8DrivenAction;
+    int32_t i32EventData;
+    IEVENTPUBLISHER_T *psEventPublisherHnd;
     SWITCH_T *psSwitchHnd;
 
     if (psPrms == NULL)
@@ -806,10 +806,11 @@ static PINCFG_RESULT_T PinCfgCsv_ParseTriggers(PINCFG_PARSE_SUBFN_PARAMS_T *psPr
     }
     else
     {
-        psInPinEmiterHnd = (INPIN_T *)PinCfgCsv_psFindInTempPresentablesByName(&(psPrms->sTempStrPt));
-        if (psInPinEmiterHnd == NULL)
+        psEventPublisherHnd = (IEVENTPUBLISHER_T *)PinCfgCsv_psFindInTempPresentablesByName(&(psPrms->sTempStrPt));
+        if (psEventPublisherHnd == NULL)
         {
-            psPrms->pcOutStringLast += LOG_WARNING(psPrms, PinCfgMessages_getString(TRG_E), ERR_INPIN_NOT_FOUND);
+            psPrms->pcOutStringLast +=
+                LOG_WARNING(psPrms, PinCfgMessages_getString(TRG_E), ERR_EVENT_PUBLISHER_NOT_FOUND);
 
             return PINCFG_OK_E;
         }
@@ -822,12 +823,15 @@ static PINCFG_RESULT_T PinCfgCsv_ParseTriggers(PINCFG_PARSE_SUBFN_PARAMS_T *psPr
         return PINCFG_OK_E;
     }
 
-    if (eParseFieldU8(psPrms, 4, &u8EventCount) != PINCFG_STR_OK_E)
+    vGetField(psPrms, 4);
+    if (PinCfgStr_eAtoFixedPoint(&(psPrms->sTempStrPt), &i32EventData) != PINCFG_STR_OK_E)
     {
-        psPrms->pcOutStringLast += LOG_WARNING(psPrms, PinCfgMessages_getString(TRG_E), ERR_INVALID_EVENT_COUNT);
+        psPrms->pcOutStringLast += LOG_WARNING(psPrms, PinCfgMessages_getString(TRG_E), ERR_INVALID_EVENT_DATA);
 
         return PINCFG_OK_E;
     }
+    if (u8EventType == (uint8_t)TRIGGER_MULTI_E)
+        i32EventData /= PINCFG_FIXED_POINT_SCALE;
 
     psPrms->sTempStrPt = psPrms->sLine;
     u8Count = (uint8_t)((psPrms->u8LineItemsLen - 5) / 2);
@@ -897,15 +901,13 @@ static PINCFG_RESULT_T PinCfgCsv_ParseTriggers(PINCFG_PARSE_SUBFN_PARAMS_T *psPr
     if (psTriggerHnd == NULL)
         return eAllocResult;
 
-    if (Trigger_eInit(psTriggerHnd, pasSwActs, u8DrivesCountReal, (TRIGGER_EVENTTYPE_T)u8EventType, u8EventCount) ==
-        TRIGGER_OK_E)
+    if ((Trigger_eInit(psTriggerHnd, pasSwActs, u8DrivesCountReal, (TRIGGER_EVENTTYPE_T)u8EventType, i32EventData) !=
+         TRIGGER_OK_E) ||
+        (EventPublisher_eAddSubscriber(psEventPublisherHnd, (IEVENTSUBSCRIBER_T *)psTriggerHnd) !=
+         EVENTSUBSCRIBER_OK_E))
     {
-        InPin_eAddSubscriber(psInPinEmiterHnd, (PINSUBSCRIBER_IF_T *)psTriggerHnd);
-    }
-    else
-    {
-        Memory_eReset();
         psPrms->pcOutStringLast += LOG_WARNING(psPrms, PinCfgMessages_getString(TRG_E), ERR_INIT_FAILED);
+        return PINCFG_ERROR_E;
     }
 
     return PINCFG_OK_E;

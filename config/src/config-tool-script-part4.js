@@ -60,9 +60,9 @@ function generateOutput() {
     
     // Generate trigger lines
     configState.triggers.forEach(tr => {
-        if (!tr.inputName || tr.actions.length === 0) return;
+        if (!tr.eventSource || tr.actions.length === 0) return;
         
-        const parts = ['T', tr.name, tr.inputName, tr.eventType, tr.eventCount];
+        const parts = ['T', tr.name, tr.eventSource, tr.eventType, tr.eventData || '1.0'];
         tr.actions.forEach(action => {
             if (action.switchName) {
                 parts.push(action.switchName);
@@ -325,8 +325,8 @@ function validateConfiguration() {
                 if (parts.length < 5) {
                     errors.push(`${lineRef}: Trigger requires at least 5 fields`);
                 } else {
-                    const inputName = parts[2];
-                    validatedConfig.triggers.push({ lineRef, inputName, parts });
+                    const eventSource = parts[2];  // Can be input or sensor name
+                    validatedConfig.triggers.push({ lineRef, eventSource, parts });
                 }
             } else if (type === 'MS') {
                 if (parts.length < 3) {
@@ -462,8 +462,11 @@ function validateConfiguration() {
     
     // Cross-reference validation
     validatedConfig.triggers.forEach(trigger => {
-        if (!validatedConfig.inputs.has(trigger.inputName)) {
-            errors.push(`${trigger.lineRef}: Trigger references non-existent input "${trigger.inputName}"`);
+        // Check if event source exists (can be input or sensor)
+        const eventSourceExists = validatedConfig.inputs.has(trigger.eventSource) || 
+                                  validatedConfig.sensorReporters.some(sr => sr.parts[0] === trigger.eventSource);
+        if (!eventSourceExists) {
+            errors.push(`${trigger.lineRef}: Trigger references non-existent event source "${trigger.eventSource}"`);
         }
         // Check action switch references
         for (let i = 5; i < trigger.parts.length; i += 2) {

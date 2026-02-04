@@ -4,9 +4,9 @@ function addTrigger() {
     const triggerObj = {
         id: Date.now(),
         name: `t${String(configState.triggers.length + 1).padStart(2, '0')}`,
-        inputName: '',
+        eventSource: '',
         eventType: '1',
-        eventCount: '1',
+        eventData: '1.0',
         actions: []
     };
     
@@ -51,27 +51,32 @@ function renderTrigger(triggerObj) {
         saveToLocalStorage();
     }));
     
-    // Input name select
-    const inputSelect = createSelectField('Input', triggerObj.inputName, 
-        configState.inputs.map(i => ({ value: i.name, label: i.name })),
+    // Event source select (inputs + sensors)
+    const eventSources = [
+        ...configState.inputs.map(i => ({ value: i.name, label: `${i.name} (Input)` })),
+        ...configState.sensorReporters.map(s => ({ value: s.name, label: `${s.name} (Sensor)` }))
+    ];
+    const sourceSelect = createSelectField('Event Source', triggerObj.eventSource, eventSources,
         (value) => {
-            triggerObj.inputName = value;
+            triggerObj.eventSource = value;
             saveToLocalStorage();
         });
-    fields.appendChild(inputSelect);
+    fields.appendChild(sourceSelect);
     
     // Event type select
-    const eventOptions = Object.entries(INPUT_EVENT_TYPES).map(([k, v]) => ({ value: k, label: `${k} - ${v}` }));
+    const eventOptions = Object.entries(EVENT_TYPES).map(([k, v]) => ({ value: k, label: `${k} - ${v}` }));
     const eventSelect = createSelectField('Event Type', triggerObj.eventType, eventOptions, (value) => {
         triggerObj.eventType = value;
         saveToLocalStorage();
     });
     fields.appendChild(eventSelect);
     
-    fields.appendChild(createFormField('Event Count', 'number', triggerObj.eventCount, (value) => {
-        triggerObj.eventCount = value;
+    // Event data field - supports decimal values for value-based events, integer for multiclick
+    const dataLabel = triggerObj.eventType === '3' ? 'Click Count' : 'Event Data (threshold)';
+    fields.appendChild(createFormField(dataLabel, 'text', triggerObj.eventData, (value) => {
+        triggerObj.eventData = value;
         saveToLocalStorage();
-    }, { min: 0, max: 10 }));
+    }));
     
     card.appendChild(header);
     card.appendChild(fields);

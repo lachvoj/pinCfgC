@@ -33,14 +33,21 @@ function getUtf8ByteLength(str) {
     return new TextEncoder().encode(str).length;
 }
 
-// Input event types
-const INPUT_EVENT_TYPES = {
+// Event types (for triggers - work with any event source)
+const EVENT_TYPES = {
     '0': 'Down',
     '1': 'Up',
     '2': 'Longpress',
     '3': 'Multiclick',
-    '4': 'All'
+    '4': 'Value',
+    '5': 'Higher',
+    '6': 'Lower',
+    '7': 'Exact',
+    '8': 'All'
 };
+
+// Keep old name for backward compatibility
+const INPUT_EVENT_TYPES = EVENT_TYPES;
 
 // Switch action types
 const SWITCH_ACTIONS = {

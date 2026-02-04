@@ -30,7 +30,7 @@ void test_vPinCfgCsv(void)
 #ifdef PINCFG_USE_ERROR_MESSAGES
     TEST_ASSERT_EQUAL_STRING("E:L:0:CLI:OOM\n", acOutStr); // Shortened OOM message
 #else
-    TEST_ASSERT_EQUAL_STRING("E10\n", acOutStr); // ERR_OOM = 10
+    TEST_ASSERT_EQUAL_STRING("L0:E10;", acOutStr); // ERR_OOM = 10
 #endif
     Memory_eReset();
 #endif // USE_MALLOC

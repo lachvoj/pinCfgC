@@ -23,10 +23,10 @@ static const char *_errorMessages[] = {
     "OOM",                           // 10 - ERR_OOM
     "Init failed",                   // 11 - ERR_INIT_FAILED
     "Switch not found",              // 12 - ERR_SWITCH_NOT_FOUND
-    "InPin not found",               // 13 - ERR_INPIN_NOT_FOUND
+    "Event publisher not found",     // 13 - ERR_EVENT_PUBLISHER_NOT_FOUND
     "Source not found",              // 14 - ERR_SOURCE_NOT_FOUND
     "Invalid event type",            // 15 - ERR_INVALID_EVENT_TYPE
-    "Invalid event count",           // 16 - ERR_INVALID_EVENT_COUNT
+    "Invalid event data",            // 16 - ERR_INVALID_EVENT_DATA
     "Invalid switch action",         // 17 - ERR_INVALID_SWITCH_ACTION
     "Nothing to drive",              // 18 - ERR_NOTHING_TO_DRIVE
     "Invalid type enum",             // 19 - ERR_INVALID_TYPE_ENUM

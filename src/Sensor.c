@@ -1,9 +1,11 @@
 #include "Sensor.h"
 
+#include "Event.h"
 #include "Globals.h"
 #include "InPin.h"
 #include "Memory.h"
 #include "PinCfgUtils.h"
+#include "Trigger.h"
 
 static void Sensor_vLoop(LOOPABLE_T *psLoopableHandle, uint32_t u32ms);
 static void Sensor_vSendUnitPrefix(SENSOR_T *psHandle);
@@ -58,6 +60,9 @@ SENSOR_RESULT_T Sensor_eInit(
 
     // Setup loop function (single function for all modes)
     psHandle->sLoopable.vLoop = Sensor_vLoop;
+
+    // Initalize event subscriber list
+    psHandle->psFirstSubscriber = NULL;
 
     // Initialize timing
     psHandle->u16SamplingIntervalMs = u16SamplingIntervalMs;
@@ -251,6 +256,7 @@ static void Sensor_vLoop(LOOPABLE_T *psLoopableHandle, uint32_t u32ms)
                                      psHandle->i32Offset) /
                                     (PINCFG_FIXED_POINT_SCALE / ai32PrecisionDivisors[psHandle->u8Precision]);
                 Presentable_vSetState((PRESENTABLE_T *)psHandle, i32Scaled, true);
+                EventPublisher_vSendEvent((IEVENTPUBLISHER_T *)psHandle, TRIGGER_VALUE_E, (uint32_t)i32Scaled, u32ms);
 
                 // Reset accumulator
                 psHandle->i64CumulatedValue = 0;
@@ -303,6 +309,7 @@ static void Sensor_vLoop(LOOPABLE_T *psLoopableHandle, uint32_t u32ms)
                                     (PINCFG_FIXED_POINT_SCALE / ai32PrecisionDivisors[psHandle->u8Precision]);
                 // Report value
                 Presentable_vSetState((PRESENTABLE_T *)psHandle, i32Scaled, true);
+                EventPublisher_vSendEvent((IEVENTPUBLISHER_T *)psHandle, TRIGGER_VALUE_E, i32Scaled, u32ms);
             }
             else
             {

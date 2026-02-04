@@ -255,7 +255,7 @@ void test_vConcurrentTriggers_MultipleOnSameInput(void)
 
     // Count subscribers in chain - due to two-pass parsing, expect >= 2
     int nSubscriberCount = 0;
-    PINSUBSCRIBER_IF_T *psCurrent = psInPin->psFirstSubscriber;
+    IEVENTSUBSCRIBER_T *psCurrent = psInPin->psFirstSubscriber;
     while (psCurrent != NULL)
     {
         nSubscriberCount++;
@@ -472,10 +472,10 @@ void test_vMaxArraySize_LoopablesCount(void)
 /**
  * Test: InPin subscriber chain length
  */
-void test_vMaxArraySize_InPinSubscribers(void)
+void test_vMaxArraySize_InEventSubscribers(void)
 {
     INPIN_T sInPin;
-    PINSUBSCRIBER_IF_T asSubscribers[10];
+    IEVENTSUBSCRIBER_T asSubscribers[10];
     INPIN_RESULT_T eResult;
     STRING_POINT_T sName;
 
@@ -485,17 +485,18 @@ void test_vMaxArraySize_InPinSubscribers(void)
     eResult = InPin_eInit(&sInPin, &sName, 1, 16);
     TEST_ASSERT_EQUAL(INPIN_OK_E, eResult);
 
+    EVENTSUBSCRIBER_RESULT_T eSubscriberResult;
     // Add many subscribers (chain test)
     for (int i = 0; i < 10; i++)
     {
         asSubscribers[i].psNext = NULL;
         asSubscribers[i].vEventHandle = NULL;
-        eResult = InPin_eAddSubscriber(&sInPin, &asSubscribers[i]);
-        TEST_ASSERT_EQUAL(INPIN_OK_E, eResult);
+        eSubscriberResult = EventPublisher_eAddSubscriber((IEVENTPUBLISHER_T *)&sInPin, &asSubscribers[i]);
+        TEST_ASSERT_EQUAL(INPIN_OK_E, eSubscriberResult);
     }
 
     // Verify chain is intact
-    PINSUBSCRIBER_IF_T *psCurrent = sInPin.psFirstSubscriber;
+    IEVENTSUBSCRIBER_T *psCurrent = sInPin.psFirstSubscriber;
     int count = 0;
     while (psCurrent != NULL)
     {
@@ -907,7 +908,7 @@ void register_stress_tests(void)
     RUN_TEST(test_vMaxArraySize_TriggerMaxSwitches);
     RUN_TEST(test_vMaxArraySize_PresentablesCount);
     RUN_TEST(test_vMaxArraySize_LoopablesCount);
-    RUN_TEST(test_vMaxArraySize_InPinSubscribers);
+    RUN_TEST(test_vMaxArraySize_InEventSubscribers);
 
     // Malformed CSV tests
     RUN_TEST(test_vMalformedCSV_MissingTerminator);

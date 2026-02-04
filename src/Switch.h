@@ -53,6 +53,6 @@ SWITCH_RESULT_T Switch_eInit(
     uint32_t u32TimedAdidtionalDelayMs);
 
 // forwarded event handler
-void Switch_vEventHandle(SWITCH_T *psHandle, uint8_t u8EventType, uint32_t u32Data, uint32_t u32ms);
+void Switch_vEventHandle(SWITCH_T *psHandle, uint8_t u8EventType, int32_t i32Data, uint32_t u32ms);
 
 #endif // SWITCH_H

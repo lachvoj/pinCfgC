@@ -2,6 +2,7 @@
 #define SENSOR_H
 
 #include "Enableable.h"
+#include "Event.h"
 #include "ILoopable.h"
 #include "ISensorMeasure.h"
 #include "MySensorsWrapper.h"
@@ -23,6 +24,7 @@ typedef struct SENSOR_S
 {
     PRESENTABLE_T sPresentable;
     LOOPABLE_T sLoopable;
+    IEVENTSUBSCRIBER_T *psFirstSubscriber; // Linked list of event subscribers
     PRESENTABLE_VTAB_T sVtab;
     ISENSORMEASURE_T *psSensorMeasure;
     // Enableable presentable (only used if bEnableable=true)

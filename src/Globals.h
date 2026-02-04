@@ -15,9 +15,9 @@
 
 // ============================================================================
 
+#include "Event.h"
 #include "ILoopable.h"
 #include "ISensorMeasure.h"
-#include "PinSubscriberIf.h"
 #include "Presentable.h"
 
 typedef struct

@@ -10,7 +10,7 @@ void test_vFlow_timedSwitch(void)
     // Configuration string: input pin -> trigger -> timed switch
     const char *pcCfg = "I,i1,16/"            // Input pin on pin 16
                         "ST,sw1,13,5000/"     // Timed switch on pin 13 with 5s timeout
-                        "T,t1,i1,4,1,sw1,3/"; // Trigger that connects i1 to sw1
+                        "T,t1,i1,8,1,sw1,3/"; // Trigger that connects i1 to sw1
 
     // To use this configuration, make EEPROM config size return invalid (too large)
     // This ensures PinCfgCsv_eInit uses the provided pcCfg instead of loading from EEPROM
@@ -219,7 +219,7 @@ void test_vFlow_timedSwitch(void)
     TEST_ASSERT_EQUAL(1, mock_digitalWrite_u32Called);
     TEST_ASSERT_EQUAL(HIGH, mock_digitalWrite_u8Value);
 
-    u32Time += psInPin->u32timerMultiStarted + psGlobals->u32InPinMulticlickMaxDelayMs;
+    u32Time += psInPin->u32TimerMultiStarted + psGlobals->u32InPinMulticlickMaxDelayMs;
     PinCfgCsv_vLoop(u32Time);
 
     // Verify switch is off
@@ -256,9 +256,9 @@ void test_vFlow_timedSwitch(void)
     TEST_ASSERT_EQUAL(2, mock_send_u32Called);
     TEST_ASSERT_EQUAL(u32Time, psSwitchHnd->u32ImpulseStarted);
     TEST_ASSERT_EQUAL(5000, psSwitchHnd->u32ImpulseDuration);
-    TEST_ASSERT_EQUAL(u32Time, psInPin->u32timerMultiStarted);
+    TEST_ASSERT_EQUAL(u32Time, psInPin->u32TimerMultiStarted);
 
-    u32Time += psInPin->u32timerMultiStarted + psGlobals->u32InPinMulticlickMaxDelayMs;
+    u32Time += psInPin->u32TimerMultiStarted + psGlobals->u32InPinMulticlickMaxDelayMs;
     PinCfgCsv_vLoop(u32Time);
 
     // Verify switch is off

@@ -1,14 +1,17 @@
 # pinCfgC
 
+Version: <VERSION_PLACEHOLDER>
+
 The goal of this library is to provide a CSV-based configuration that specifies how IO pins on the MySensors platform will behave.
 
 ## Table of Contents
-1. [Format Overview](#format-overview)
-2. [Memory Management](#memory-management)
-3. [Comments](#comments)
-4. [Special Characters](#special-characters)
-5. [Global Configuration Items](#global-configuration-items)
-6. [CLI](#cli)
+1. [Event System Architecture](#event-system-architecture)
+2. [Format Overview](#format-overview)
+3. [Memory Management](#memory-management)
+4. [Comments](#comments)
+5. [Special Characters](#special-characters)
+6. [Global Configuration Items](#global-configuration-items)
+7. [CLI](#cli)
    1. [Configuration Upload](#configuration-upload)
    2. [Supported Commands](#supported-commands)
    3. [Quick Start Example](#quick-start-example)
@@ -18,23 +21,97 @@ The goal of this library is to provide a CSV-based configuration that specifies 
    7. [Compile-Time Configuration](#compile-time-configuration)
    8. [Troubleshooting](#troubleshooting)
    9. [Configuration Generator](#configuration-generator)
-7. [Switches](#switches)
+8. [Switches](#switches)
    1. [Basic switch](#basic-switch)
    2. [Basic switch with Feedback](#basic-switch-with-feedback)
    3. [Impulse Output Switch](#impulse-output-switch)
    4. [Impulse Output Switch with Feedback](#impulse-output-switch-with-feedback)
    5. [Timed Output Switch](#timed-output-switch)
-8. [Inputs](#inputs)
-9. [Triggers](#triggers)
-10. [Measurement Sources](#measurement-sources)
+9. [Inputs](#inputs)
+10. [Triggers](#triggers)
+11. [Measurement Sources](#measurement-sources)
     1. [CPU Temperature Measurement](#cpu-temperature-measurement)
     2. [I2C Measurement](#i2c-measurement-compile-time-optional)
     3. [SPI Measurement](#spi-measurement-compile-time-optional)
     4. [Loop Time Measurement](#loop-time-measurement-debug)
     5. [Analog Measurement](#analog-measurement-compile-time-optional)
-11. [Sensor Reporters](#sensor-reporters)
+12. [Sensor Reporters](#sensor-reporters)
+13. [Automation Patterns](#automation-patterns)
+    1. [Button Automation](#button-automation)
+    2. [Value-Based Automation](#value-based-automation)
+    3. [Advanced Patterns](#advanced-patterns)
+13. [Automation Patterns](#automation-patterns)
+    1. [Button Automation](#button-automation)
+    2. [Value-Based Automation](#value-based-automation)
+    3. [Advanced Patterns](#advanced-patterns)
+
+## Event System Architecture
+
+The pinCfgC library uses a **publisher-subscriber pattern** for component communication, enabling flexible event-driven automation.
+
+### Event Publishers
+
+Components that generate events implement the event publisher interface:
+
+- **Input Pins** ([Inputs](#inputs)): Publish button/switch state changes
+  - Event types: DOWN, UP, LONGPRESS, MULTICLICK
+  - Event data: Button state or click count
+  
+- **Sensor Reporters** ([Sensor Reporters](#sensor-reporters)): Publish measurement values
+  - Event type: VALUE (measurement available)
+  - Event data: Scaled and calibrated sensor reading
+
+### Event Subscribers
+
+- **Triggers** ([Triggers](#triggers)): Subscribe to events from inputs or sensors
+  - Listen for specific event types
+  - Execute actions on switches when conditions match
+  - Support value comparisons (HIGHER, LOWER, EXACT)
+
+### Event Flow
+
+1. **Event Generation**: Publisher component detects change (button press or sensor reading)
+2. **Event Dispatch**: Publisher sends event with type and data to all subscribers
+3. **Event Filtering**: Each trigger checks if event matches its configuration
+4. **Action Execution**: Matching triggers perform switch actions (toggle, on, off)
+
+### Event Types and Data
+
+**Button Events** (from Input Pins):
+- Event types: DOWN (0), UP (1), LONGPRESS (2), MULTICLICK (3), ALL (8)
+- Event data: Click count for multiclick, state for others
+
+**Value Events** (from Sensor Reporters):
+- Event types: VALUE (4), HIGHER (5), LOWER (6), EXACT (7), ALL (8)
+- Event data: Signed measurement value (after scale/offset/precision)
+
+**Event Timing**:
+- Input events: Generated immediately when pin state changes (with debouncing)
+- Sensor events: Generated at reporting interval (not sampling interval)
+
+### Configuration Pattern
+
+```csv
+# 1. Define event publishers
+I,button1,2/                              # Input pin as publisher
+MS,3,temp_sensor,0x48,0x00,2/            # Measurement source
+SR,RoomTemp,temp_sensor,6,6,0,0,5000,60/ # Sensor reporter as publisher
+
+# 2. Define actuators
+S,light,13/                               # Switch controlled by triggers
+S,heater,5/                               # Another switch
+
+# 3. Define event subscribers (triggers)
+T,light_toggle,button1,1,1,light,0/      # Subscribe to button UP event
+T,heat_on,RoomTemp,6,18.0,heater,1/      # Subscribe to temp < 18°C (LOWER)
+T,heat_off,RoomTemp,5,22.0,heater,2/     # Subscribe to temp > 22°C (HIGHER)
+```
+
+See [Automation Patterns](#automation-patterns) for complete examples.
 
 ## Format Overview
+
+### Basic Configuration Example
 ```
 #comment
 CD,330/
@@ -58,10 +135,41 @@ T,t06,i06,1,1,o06,0/
 T,t07,i07,1,1,o07,0/
 T,t08,i08,1,1,o08,0/
 T,t09,i09,1,1,o09,0/
-T,t10,i10,1,1,o10,0/
-MS,0,cpu_temp/
-SR,CPUTemp,cpu_temp,6,6,0,0,1000,300,-2.1/
+T,t10,i10,8,1,o10,0/
 ```
+
+### Advanced Configuration Example
+
+Configuration with sensor-driven automation:
+
+```
+#comment
+CD,330/
+CM,620/
+CR,150/
+CN,1000/
+# Define switches
+S,light,13,heater,5,fan,12/
+# Define input buttons
+I,btn1,2,btn2,3/
+# Define measurement sources
+MS,3,temp_raw,0x48,0x00,2/
+MS,3,humid_raw,0x38,0xAC,6,0x33,0x00/
+# Define sensor reporters (event publishers)
+SR,RoomTemp,temp_raw,6,6,0,0,5000,60,0.0625,0,1,°C/
+SR,Humidity,humid_raw,1,7,0,0,10000,300,0.000095,0,1,%,1,3/
+# Define triggers (event subscribers)
+T,light_toggle,btn1,1,1,light,0/
+T,heat_on,RoomTemp,6,18.0,heater,1/
+T,heat_off,RoomTemp,5,22.0,heater,2/
+T,fan_on,Humidity,5,70.0,fan,1/
+T,fan_off,Humidity,6,60.0,fan,2/
+```
+
+This example demonstrates:
+- Button-triggered light control (input event)
+- Temperature-controlled heating (18-22°C hysteresis)
+- Humidity-controlled ventilation (60-70% thresholds)
 
 ## Memory Management
 
@@ -212,6 +320,8 @@ Commands use the format: `#[<sha256_hex_hash>/CMD:COMMAND]#`
 
 #### Available Commands
 
+**Core Commands** (always available):
+
 * **GET_CFG**: Returns the current configuration as a CSV string (without the password).
   ```
   #[240be518fabd2724ddb6f04eeb1da5967448d7e831c08c8fa822809f74c720a9/CMD:GET_CFG]#
@@ -227,6 +337,29 @@ Commands use the format: `#[<sha256_hex_hash>/CMD:COMMAND]#`
   #[240be518fabd2724ddb6f04eeb1da5967448d7e831c08c8fa822809f74c720a9/CMD:CHANGE_PWD:5e884898da28047151d0e56f8dc6292773603d0d6aabbdd62a11ef721d1542d8]#
   ```
   (This changes from `admin123` to `password`)
+
+**Conditional Commands** (require compile-time flags):
+
+* **GET_TSP_ERRORS**: Returns MySensors transport error log. _(Requires `MY_TRANSPORT_ERROR_LOG` defined)_
+  ```
+  #[240be518fabd2724ddb6f04eeb1da5967448d7e831c08c8fa822809f74c720a9/CMD:GET_TSP_ERRORS]#
+  ```
+
+* **CLR_TSP_ERRORS**: Clears MySensors transport error log. _(Requires `MY_TRANSPORT_ERROR_LOG` defined)_
+  ```
+  #[240be518fabd2724ddb6f04eeb1da5967448d7e831c08c8fa822809f74c720a9/CMD:CLR_TSP_ERRORS]#
+  ```
+
+* **FW_CHCK**: Verifies firmware CRC integrity. _(Requires `FWCHECK_ENABLED` defined)_
+  ```
+  #[240be518fabd2724ddb6f04eeb1da5967448d7e831c08c8fa822809f74c720a9/CMD:FW_CHCK]#
+  ```
+  Returns `CRC OK` or `CRC ERROR` based on firmware validity.
+
+* **GET_FW_VERSION**: Returns firmware version string. _(Requires `FWCHECK_ENABLED` and `FWCHECK_INCLUDE_FW_VERSION` defined)_
+  ```
+  #[240be518fabd2724ddb6f04eeb1da5967448d7e831c08c8fa822809f74c720a9/CMD:GET_FW_VERSION]#
+  ```
 
 **Password Hash Requirements**:
 - Exactly 64 hexadecimal characters (SHA-256 hash)
@@ -278,12 +411,15 @@ The CLI reports its state using the following status messages:
 **Standard States:**
 - **READY**: Ready to receive configuration or commands.
 - **OUT_OF_MEMORY_ERROR**: Not enough memory to process the request.
-- **RECEIVING_AUTH**: Receiving fragmented password.
-- **RECEIVING_DATA**: Receiving configuration or command data (echoes back received messages).
-- **RECEIVED**: Configuration data received.
-- **VALIDATING**: Validating configuration.
+- **RECEIVING_AUTH**: Receiving fragmented password hash.
+- **RECEIVING_TYPE**: Determining message type (CFG or CMD).
+- **RECEIVING_CFG_DATA**: Receiving configuration data (echoes back received messages).
+- **RECEIVING_CMD_DATA**: Receiving command data (echoes back received messages).
 - **VALIDATION_OK**: Configuration is valid and saved.
 - **VALIDATION_ERROR**: Configuration is invalid.
+
+**Conditional States:**
+- **FW_CRC_ERROR**: Firmware CRC check failed. _(Requires `FWCHECK_ENABLED` defined)_
 
 **Authentication-Related Messages:**
 - **Authentication required.**: Sent when attempting operations without password.
@@ -394,6 +530,23 @@ build_flags =
 - Verify EEPROM is working correctly on your hardware
 - Check that `PersistentCfg` is properly initialized
 - Ensure write operations complete before power loss
+
+**Problem: "Event publisher not found"**
+- Trigger references a non-existent input pin or sensor reporter name in field 3
+- Check that the referenced name exists in an `I,` (input) or `SR,` (sensor reporter) line
+- Names are case-sensitive - verify exact spelling and capitalization
+- Ensure `I,` and `SR,` lines appear **before** the `T,` (trigger) lines that reference them
+- Example: `T,my_trigger,TempSensor,5,20.0,heater,1/` requires `SR,TempSensor,...` defined earlier
+
+**Problem: "Invalid event data"**
+- Event data field (parameter 5 in trigger line) has incorrect format
+- For **multiclick events** (type 3): Use integer values 1-255
+  - Example: `T,dbl_click,btn1,3,2,light,0/` (2 clicks)
+- For **value-based triggers** (types 5-7): Use decimal values
+  - Example: `T,cold,temp,6,18.5,heater,1/` (below 18.5)
+  - Example: `T,hot,temp,5,-5.0,cooler,1/` (above -5.0)
+- Parser automatically converts decimal values to internal fixed-point format
+- Do not manually calculate scaling factors
 
 ### Configuration Generator
 
@@ -537,26 +690,50 @@ y. xx/  (pin of input x)
 ```I,i01,193,i02,192,i03,19,i04,18,i05,194,i06,195,i07,196,i08,197,i09,200,i10,201,i11,30,i12,31/```
 
 ## Triggers
-Triggers specify how input events are transformed into output actions.
+Triggers specify how events from inputs or sensors are transformed into output actions.
 Lines starting with **'T'** are parsed as trigger definitions.
 
 ### Line Format
 ```
-1. T,   (starts with one character T for triggers)
-2. t01, (name of trigger 1)
-3. i01, (name of input to listen to)
-4. 1,   (input event type to listen to: 0-down, 1-up, 2-longpress, 3-multi, 4-all)
-5. 1,   (event count - number of actions to trigger switch/switches)
+1. T,   (starts with T for triggers)
+2. t01, (unique trigger name)
+3. i01, (event publisher name: input pin OR sensor reporter)
+4. 1,   (event type: 0-8, see Event Types below)
+5. 1,   (event data: multiclick count OR value threshold)
 6. o01, (name of driven switch 1)
 7. 0,   (switch action 1: 0-toggle, 1-turn on, 2-turn off, 3-forward)
    ...,
 x. oXX, (name of driven switch x)
 y. 0/   (switch action x)
 ```
-### Input Event Listening
-Line element 3 is the **name** of the **input** whose events the trigger will listen to.  
-Line element 4 is the input event [type](#input-event-types) to listen for, or **4 - All** to listen to all events produced by the input.  
-Line element 5 is the number of occurrences of the event to listen for. Use 0 for DOWN or longpress events; otherwise, specify the count for UP or Multiclick.
+
+### Event Source Listening
+
+**Line element 3** - Event publisher name:
+- **Input pin name** from `I,` line (e.g., `i01`, `button1`) - for button/switch events
+- **Sensor reporter name** from `SR,` line (e.g., `RoomTemp`, `Humidity`) - for measurement-based automation
+- See [Inputs](#inputs) for input configuration
+- See [Sensor Reporters](#sensor-reporters) for sensor configuration
+
+**Line element 4** - Event type to listen for:
+* **0 - DOWN**: Input changed to LOW state (after debounce)
+* **1 - UP**: Input changed to HIGH state (after debounce)
+* **2 - LONGPRESS**: Input held HIGH longer than multiclick delay
+* **3 - MULTICLICK**: Rapid click sequence detected (event data = click count)
+* **4 - VALUE**: Any value event from sensor (passes through all values)
+* **5 - HIGHER**: Trigger when sensor value > threshold
+* **6 - LOWER**: Trigger when sensor value < threshold
+* **7 - EXACT**: Trigger when sensor value == threshold (exact match)
+* **8 - ALL**: Listen to all event types from the publisher
+
+**Line element 5** - Event data:
+- **For MULTICLICK (type 3)**: Integer click count (1-255)
+  - Example: `3,2` means "on double-click"
+- **For value-based triggers (types 5-7)**: Decimal threshold value
+  - Example: `5,22.5` means "when value exceeds 22.5"
+  - Example: `6,-5.0` means "when value drops below -5.0"
+  - Parser automatically converts to internal format (no manual scaling needed)
+- **For other types (0-2, 4, 8)**: Use `0` or `1`
 
 ### Switch Action(s) Definition
 Trigger line elements from 6 onward are pairs: 1. switch name and 2. switch action.
@@ -565,6 +742,34 @@ Switch actions can be:
 * **1 - on**: Set the switch state to ON.
 * **2 - off**: Set the switch state to OFF.
 * **3 - forward**: Forward the input event to the switch.
+
+### Examples
+
+**Button Triggers:**
+```csv
+I,btn1,2,btn2,3/
+S,light,13,fan,5/
+T,toggle_light,btn1,1,1,light,0/        # Toggle light on button press
+T,double_click,btn1,3,2,light,1/        # Turn ON on double-click
+T,long_press,btn1,2,0,light,2/          # Turn OFF on long press
+T,all_events,btn2,8,0,fan,0/            # Toggle fan on any button event
+```
+
+**Value-Based Triggers (Sensor Automation):**
+```csv
+MS,3,temp,0x48,0x00,2/
+SR,RoomTemp,temp,6,6,0,0,5000,60,0.0625,0,1/
+S,heater,13/
+T,heat_on,RoomTemp,6,18.0,heater,1/     # Turn heater ON when temp < 18°C
+T,heat_off,RoomTemp,5,22.0,heater,2/    # Turn heater OFF when temp > 22°C
+```
+
+**Multiple Actions:**
+```csv
+T,multi_action,btn1,1,1,light,0,fan,1,heater,2/  # Toggle, ON, OFF on single trigger
+```
+
+See [Automation Patterns](#automation-patterns) for more complete examples.
 
 ## Measurement Sources
 Measurement sources define hardware reading logic without timing or reporting behavior. This allows multiple sensors to share the same measurement source.
@@ -1172,3 +1377,313 @@ Each sensor can apply its own scale, offset, and precision to the raw measuremen
 - Different calibrations for different zones or accuracy requirements
 
 **Important:** MS lines must appear **before** SR lines that reference them.
+
+### Sensor Event Publishing
+
+Sensor reporters automatically **publish events** when reporting measurements, enabling value-based automation through triggers. This allows sensors to control switches based on threshold conditions without additional code.
+
+#### Event Details
+
+- **Event Type**: `TRIGGER_VALUE_E` (type 4 in trigger configuration)
+- **Event Data**: Scaled and calibrated measurement value (after scale, offset, and precision applied)
+- **Timing**: Events are published at the **reporting interval**, not the sampling interval
+  - Standard mode: Event contains instantaneous measurement
+  - Cumulative mode: Event contains averaged value over the reporting period
+
+#### Trigger Compatibility
+
+Sensors work with the following trigger event types (see [Triggers](#triggers)):
+- **Type 4 (VALUE)**: Responds to any sensor value (passes through all measurements)
+- **Type 5 (HIGHER)**: Triggers when sensor value **exceeds** threshold (`value > threshold`)
+- **Type 6 (LOWER)**: Triggers when sensor value **falls below** threshold (`value < threshold`)
+- **Type 7 (EXACT)**: Triggers when sensor value **matches** threshold exactly (`value == threshold`)
+- **Type 8 (ALL)**: Responds to all sensor events
+
+#### Configuration Examples
+
+**Temperature-Controlled Heating with Hysteresis:**
+```csv
+# Temperature sensor
+MS,3,temp_raw,0x48,0x00,2/
+SR,RoomTemp,temp_raw,6,6,0,0,5000,60,0.0625,0,1,°C/  # Report every 60 seconds
+
+# Heater switch
+S,heater,13/
+
+# Triggers with hysteresis (4°C band to prevent relay chatter)
+T,heat_on,RoomTemp,6,18.0,heater,1/   # Turn ON when temp < 18°C (LOWER)
+T,heat_off,RoomTemp,5,22.0,heater,2/  # Turn OFF when temp > 22°C (HIGHER)
+```
+
+**Humidity-Controlled Ventilation:**
+```csv
+# Humidity sensor
+MS,3,humid_raw,0x38,0xAC,6,0x33,0x00/
+SR,Humidity,humid_raw,1,7,0,0,10000,300,0.000095,0,1,%,1,3/
+
+# Fan switch
+S,fan,5/
+
+# Triggers with 10% hysteresis
+T,fan_on,Humidity,5,70.0,fan,1/   # Turn fan ON when humidity > 70%
+T,fan_off,Humidity,6,60.0,fan,2/  # Turn fan OFF when humidity < 60%
+```
+
+#### Important Considerations
+
+⚠️ **Common Pitfalls:**
+
+1. **Missing Hysteresis**: Without a deadband between ON and OFF thresholds, relays/switches will chatter rapidly when the sensor value oscillates near a single threshold.
+   - ❌ Bad: `T,heat_on,temp,6,20.0,heater,1/` and `T,heat_off,temp,5,20.0,heater,2/` (same threshold!)
+   - ✅ Good: Use separate thresholds with a gap (e.g., 18°C and 22°C)
+
+2. **Inverted HIGHER/LOWER Logic**: 
+   - Type 5 (HIGHER) triggers when `value > threshold` - use for turn-OFF conditions when value rises
+   - Type 6 (LOWER) triggers when `value < threshold` - use for turn-ON conditions when value drops
+   - Example: Heating turns ON when temperature is LOWER than setpoint
+
+3. **Reporting Interval Impact**: Events only fire at the reporting interval, not every measurement. For rapid response, reduce the reporting interval, but balance against network traffic and power consumption.
+
+4. **Precision and Thresholds**: Ensure threshold values account for sensor precision. With `precision=0`, a threshold of `20.5` becomes `20` internally.
+
+See [Automation Patterns](#automation-patterns) for more complete examples.
+
+## Automation Patterns
+
+This section provides practical configuration examples demonstrating common automation patterns using the event system.
+
+### Button Automation
+
+Button-based automation using input pins as event publishers.
+
+#### Simple Toggle on Press
+
+```csv
+# Hardware setup
+I,btn1,2/              # Button on pin 2
+S,light,13/            # Light on pin 13
+
+# Toggle light on button press (UP event)
+T,toggle,btn1,1,1,light,0/
+```
+
+#### Double-Click Action
+
+```csv
+# Hardware setup
+I,btn1,2/
+S,light,13,night_mode,12/
+
+# Single press toggles light
+T,single_press,btn1,1,1,light,0/
+
+# Double-click activates night mode
+T,double_click,btn1,3,2,night_mode,1/
+```
+
+#### Long Press Override
+
+```csv
+# Hardware setup
+I,emergency_btn,3/
+S,alarm,5,all_lights,13/
+
+# Regular press toggles alarm
+T,alarm_toggle,emergency_btn,1,1,alarm,0/
+
+# Long press turns ON all lights (emergency mode)
+T,emergency_all_on,emergency_btn,2,0,all_lights,1/
+```
+
+#### Multi-Switch Coordination
+
+```csv
+# Hardware setup
+I,master_btn,2/
+S,light1,13,light2,12,light3,11,light4,10/
+
+# One button controls multiple switches simultaneously
+T,all_lights,master_btn,1,1,light1,0,light2,0,light3,0,light4,0/
+```
+
+⚠️ **Button Automation Warnings:**
+- **Debounce Configuration**: Adjust `CD` global parameter if buttons trigger multiple times per press
+- **Multiclick Timing**: Increase `CM` parameter if double-clicks are hard to register
+- **Pullup Resistors**: Ensure input pins have proper pull-up/pull-down resistors configured
+- **Event Type Confusion**: Type 1 (UP) triggers on button release, type 0 (DOWN) on button press
+
+### Value-Based Automation
+
+Sensor-driven automation using measurement thresholds.
+
+#### Temperature-Controlled Heating (with Hysteresis)
+
+```csv
+# Hardware setup
+MS,3,temp_sensor,0x48,0x00,2/                    # TMP102 I2C sensor
+SR,RoomTemp,temp_sensor,6,6,0,0,5000,60,0.0625,0,1,°C/
+S,heater,13/
+
+# Hysteresis: ON at 18°C, OFF at 22°C (4°C deadband prevents chatter)
+T,heat_on,RoomTemp,6,18.0,heater,1/   # Turn ON when temp < 18°C
+T,heat_off,RoomTemp,5,22.0,heater,2/  # Turn OFF when temp > 22°C
+```
+
+**How it works:**
+- When temperature drops to 17.9°C → heater turns ON
+- Temperature rises (heater working)
+- When temperature reaches 22.1°C → heater turns OFF
+- The 4°C gap prevents rapid on/off cycling
+
+#### Humidity-Controlled Ventilation
+
+```csv
+# Hardware setup
+MS,3,humid_sensor,0x38,0xAC,6,0x33,0x00/         # AHT10 sensor
+SR,Humidity,humid_sensor,1,7,0,0,10000,300,0.000095,0,1,%,1,3/
+S,exhaust_fan,5/
+
+# Fan control with 10% hysteresis
+T,fan_on,Humidity,5,70.0,exhaust_fan,1/   # Turn ON when > 70%
+T,fan_off,Humidity,6,60.0,exhaust_fan,2/  # Turn OFF when < 60%
+```
+
+#### Light-Level Activated Relay
+
+```csv
+# Hardware setup
+MS,3,light_sensor,0x23,0x10,2/                   # BH1750 light sensor
+SR,Brightness,light_sensor,37,16,0,0,2000,60,1.0/
+S,outdoor_lights,7/
+
+# Turn lights ON when dark, OFF when bright
+T,lights_on,Brightness,6,50,outdoor_lights,1/    # ON when < 50 lux
+T,lights_off,Brightness,5,100,outdoor_lights,2/  # OFF when > 100 lux
+```
+
+#### Battery Voltage Warnings
+
+```csv
+# Hardware setup
+MS,1,battery,0/                                  # Analog pin A0
+SR,BattVolt,battery,38,37,0,0,5000,60,0.00323,0,2/
+S,warning_led,4,critical_led,3/
+
+# Multi-level battery monitoring
+T,low_batt,BattVolt,6,3.3,warning_led,1/        # Warning at < 3.3V
+T,batt_ok,BattVolt,5,3.5,warning_led,2/         # Clear warning at > 3.5V
+T,critical,BattVolt,6,3.0,critical_led,1/       # Critical at < 3.0V
+```
+
+#### Exact Value Matching
+
+```csv
+# Hardware setup
+MS,1,selector,1/                                 # Analog selector knob
+SR,Mode,selector,2,35,0,0,1000,60,1.0/
+S,mode1,10,mode2,11,mode3,12/
+
+# Trigger at specific values (rotary switch positions)
+T,select_mode1,Mode,7,0,mode1,1,mode2,2,mode3,2/    # Value = 0
+T,select_mode2,Mode,7,512,mode1,2,mode2,1,mode3,2/  # Value = 512
+T,select_mode3,Mode,7,1023,mode1,2,mode2,2,mode3,1/ # Value = 1023
+```
+
+⚠️ **Value-Based Automation Warnings:**
+- **Hysteresis is Critical**: Always use different thresholds for ON and OFF to prevent rapid switching
+- **HIGHER/LOWER Confusion**: HIGHER (type 5) means `value > threshold`, LOWER (type 6) means `value < threshold`
+- **Threshold Precision**: Match threshold decimal places to sensor precision setting
+- **Reporting Interval**: Triggers only fire at reporting interval - reduce for faster response
+- **Sensor Calibration**: Use scale/offset parameters to ensure accurate threshold matching
+
+### Advanced Patterns
+
+Complex automation combining multiple sensors and logic.
+
+#### Combined Temperature and Light Control
+
+```csv
+# Hardware setup
+MS,3,temp,0x48,0x00,2/
+MS,3,light,0x23,0x10,2/
+SR,RoomTemp,temp,6,6,0,0,5000,60,0.0625,0,1/
+SR,Brightness,light,37,16,0,0,2000,60,1.0/
+S,heater,13,night_light,12/
+
+# Heater based on temperature
+T,heat_on,RoomTemp,6,18.0,heater,1/
+T,heat_off,RoomTemp,5,22.0,heater,2/
+
+# Night light only when dark
+T,light_on,Brightness,6,20,night_light,1/
+T,light_off,Brightness,5,50,night_light,2/
+```
+
+#### Single Sensor Driving Multiple Outputs
+
+```csv
+# Hardware setup
+MS,3,temp,0x48,0x00,2/
+SR,RoomTemp,temp,6,6,0,0,5000,60,0.0625,0,1/
+S,heater,13,fan,5,warning,4/
+
+# Multi-zone temperature control
+T,too_cold,RoomTemp,6,15.0,heater,1,fan,2/       # < 15°C: heater ON, fan OFF
+T,cold,RoomTemp,5,18.0,heater,2/                 # > 18°C: heater OFF
+T,hot,RoomTemp,5,28.0,fan,1/                     # > 28°C: fan ON
+T,too_hot,RoomTemp,5,32.0,warning,1/             # > 32°C: warning ON
+T,ok_temp,RoomTemp,6,30.0,warning,2/             # < 30°C: warning OFF
+```
+
+#### Multi-Sensor Decision Logic
+
+```csv
+# Hardware setup
+MS,3,indoor_temp,0x48,0x00,2/
+MS,3,outdoor_temp,0x49,0x00,2/
+SR,IndoorTemp,indoor_temp,6,6,0,0,5000,60,0.0625,0,1/
+SR,OutdoorTemp,outdoor_temp,6,6,0,0,5000,60,0.0625,0,1/
+S,heater,13,ac,5,vent,12/
+
+# Heating when indoor cold
+T,heat_on,IndoorTemp,6,18.0,heater,1/
+T,heat_off,IndoorTemp,5,21.0,heater,2/
+
+# AC when indoor hot AND outdoor hot
+T,ac_on,IndoorTemp,5,26.0,ac,1/
+T,ac_off,IndoorTemp,6,24.0,ac,2/
+
+# Ventilation when indoor hot BUT outdoor cool (free cooling)
+T,vent_on,IndoorTemp,5,24.0,vent,1/
+T,vent_off_indoor,IndoorTemp,6,22.0,vent,2/
+T,vent_off_outdoor,OutdoorTemp,5,20.0,vent,2/
+```
+
+#### Forwarding Events to Timed Switches
+
+```csv
+# Hardware setup
+I,motion_sensor,2/
+MS,3,light_level,0x23,0x10,2/
+SR,Ambient,light_level,37,16,0,0,2000,60,1.0/
+ST,light,13,300000/                              # Timed switch: 5 min ON period
+
+# Motion extends light timer when dark
+T,motion_dark,motion_sensor,1,1,light,3/         # Forward UP event
+T,disable_in_day,Ambient,5,100,light,2/          # Disable in bright conditions
+```
+
+**How timed switch forwarding works:**
+- Type 3 (forward) action passes the event to timed switches
+- UP events extend the timer duration
+- LONGPRESS events immediately turn OFF timed switches
+- See [Timed Output Switch](#timed-output-switch) for details
+
+⚠️ **Advanced Pattern Warnings:**
+- **Event Timing Conflicts**: Multiple sensors at different reporting intervals may cause unexpected behavior
+- **Cumulative Mode Impact**: Average values behave differently than instantaneous readings in threshold triggers
+- **Switch State Conflicts**: Multiple triggers controlling the same switch can cause race conditions
+- **Debugging Complexity**: Use [Sensor Reporters](#sensor-reporters) with frequent reporting during development
+- **Memory Usage**: Complex configurations with many triggers increase memory requirements - monitor with `PINCFG_MEMORY_SZ`
+
+## Automation Patterns

@@ -1,3 +1,4 @@
+#include "Event.h"
 #include "test_helpers.h"
 
 // Component Tests - MySensorsPresent, InPin, Switch, Trigger
@@ -83,23 +84,24 @@ void test_vInPin(void)
     TEST_ASSERT_EQUAL(1, mock_digitalWrite_u32Called);
 
     // add subscirber
-    PINSUBSCRIBER_IF_T *psPinSubscriber1 = (PINSUBSCRIBER_IF_T *)Memory_vpAlloc(sizeof(PINSUBSCRIBER_IF_T));
-    PINSUBSCRIBER_IF_T *psPinSubscriber2 = (PINSUBSCRIBER_IF_T *)Memory_vpAlloc(sizeof(PINSUBSCRIBER_IF_T));
-    psPinSubscriber1->psNext = NULL;
-    psPinSubscriber2->psNext = NULL;
-    eResult = InPin_eAddSubscriber(NULL, psPinSubscriber1);
-    TEST_ASSERT_EQUAL(INPIN_NULLPTR_ERROR_E, eResult);
-    eResult = InPin_eAddSubscriber(psInPinHandle, NULL);
-    TEST_ASSERT_EQUAL(INPIN_NULLPTR_ERROR_E, eResult);
-    eResult = InPin_eAddSubscriber(NULL, NULL);
-    TEST_ASSERT_EQUAL(INPIN_NULLPTR_ERROR_E, eResult);
-    eResult = InPin_eAddSubscriber(psInPinHandle, psPinSubscriber1);
-    TEST_ASSERT_EQUAL(INPIN_OK_E, eResult);
-    TEST_ASSERT_EQUAL(psInPinHandle->psFirstSubscriber, psPinSubscriber1);
-    eResult = InPin_eAddSubscriber(psInPinHandle, psPinSubscriber2);
-    TEST_ASSERT_EQUAL(INPIN_OK_E, eResult);
-    TEST_ASSERT_EQUAL(psInPinHandle->psFirstSubscriber, psPinSubscriber1);
-    TEST_ASSERT_EQUAL(psPinSubscriber1->psNext, psPinSubscriber2);
+    IEVENTSUBSCRIBER_T *psEventSubscriber1 = (IEVENTSUBSCRIBER_T *)Memory_vpAlloc(sizeof(IEVENTSUBSCRIBER_T));
+    IEVENTSUBSCRIBER_T *psEventSubscriber2 = (IEVENTSUBSCRIBER_T *)Memory_vpAlloc(sizeof(IEVENTSUBSCRIBER_T));
+    psEventSubscriber1->psNext = NULL;
+    psEventSubscriber2->psNext = NULL;
+    EVENTSUBSCRIBER_RESULT_T eSubscriberResult;
+    eSubscriberResult = EventPublisher_eAddSubscriber(NULL, psEventSubscriber1);
+    TEST_ASSERT_EQUAL(INPIN_NULLPTR_ERROR_E, eSubscriberResult);
+    eSubscriberResult = EventPublisher_eAddSubscriber(psInPinHandle, NULL);
+    TEST_ASSERT_EQUAL(INPIN_NULLPTR_ERROR_E, eSubscriberResult);
+    eSubscriberResult = EventPublisher_eAddSubscriber(NULL, NULL);
+    TEST_ASSERT_EQUAL(INPIN_NULLPTR_ERROR_E, eSubscriberResult);
+    eSubscriberResult = EventPublisher_eAddSubscriber(psInPinHandle, psEventSubscriber1);
+    TEST_ASSERT_EQUAL(INPIN_OK_E, eSubscriberResult);
+    TEST_ASSERT_EQUAL(psInPinHandle->psFirstSubscriber, psEventSubscriber1);
+    eSubscriberResult = EventPublisher_eAddSubscriber(psInPinHandle, psEventSubscriber2);
+    TEST_ASSERT_EQUAL(INPIN_OK_E, eSubscriberResult);
+    TEST_ASSERT_EQUAL(psInPinHandle->psFirstSubscriber, psEventSubscriber1);
+    TEST_ASSERT_EQUAL(psEventSubscriber1->psNext, psEventSubscriber2);
 }
 
 void test_vSwitch(void)
@@ -224,7 +226,7 @@ void test_vTrigger(void)
     TEST_ASSERT_NOT_NULL(psTrigger);
     TEST_ASSERT_EQUAL(1, psTrigger->u8SwActCount);
     TEST_ASSERT_EQUAL(TRIGGER_A_TOGGLE_E, psTrigger->eEventType);
-    TEST_ASSERT_EQUAL(1, psTrigger->u8EventCount);
+    TEST_ASSERT_EQUAL(1 * PINCFG_FIXED_POINT_SCALE, psTrigger->i32EventData);
 
     // Check trigger actions
     TRIGGER_SWITCHACTION_T *psAction1 = &psTrigger->pasSwAct[0];

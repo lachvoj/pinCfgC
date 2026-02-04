@@ -256,10 +256,8 @@ void Switch_vLoopTimedFeedback(LOOPABLE_T *psLoopableHandle, uint32_t u32ms)
     }
 }
 
-void Switch_vEventHandle(SWITCH_T *psHandle, uint8_t u8EventType, uint32_t u32Data, uint32_t u32ms)
+void Switch_vEventHandle(SWITCH_T *psHandle, uint8_t u8EventType, int32_t i32Data, uint32_t u32ms)
 {
-    (void)u32Data; // unused parameter
-
     if (psHandle == NULL)
         return;
 

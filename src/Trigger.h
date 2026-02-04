@@ -1,7 +1,7 @@
 #ifndef TRIGGER_H
 #define TRIGGER_H
 
-#include "PinSubscriberIf.h"
+#include "Event.h"
 #include "Switch.h"
 #include "Types.h"
 
@@ -19,6 +19,10 @@ typedef enum TRIGGER_EVENTTYPE_E
     TRIGGER_UP_E,
     TRIGGER_LONG_E,
     TRIGGER_MULTI_E,
+    TRIGGER_VALUE_E,
+    TRIGGER_HIGHER_E,
+    TRIGGER_LOWER_E,
+    TRIGGER_EXACT_E,
     TRIGGER_ALL_E
 } TRIGGER_EVENTTYPE_T;
 
@@ -38,11 +42,11 @@ typedef struct TRIGGER_SWITCHACTION_S
 
 typedef struct TRIGGER_S
 {
-    PINSUBSCRIBER_IF_T sPinSubscriber;
+    IEVENTSUBSCRIBER_T sEventSubscriber;
     TRIGGER_SWITCHACTION_T *pasSwAct;
     uint8_t u8SwActCount;
     TRIGGER_EVENTTYPE_T eEventType;
-    uint8_t u8EventCount;
+    int32_t i32EventData;
 } TRIGGER_T;
 
 TRIGGER_RESULT_T Trigger_eInit(
@@ -50,8 +54,6 @@ TRIGGER_RESULT_T Trigger_eInit(
     TRIGGER_SWITCHACTION_T *pasSwAct,
     uint8_t u8SwActCount,
     TRIGGER_EVENTTYPE_T eEventType,
-    uint8_t u8EventCount);
-
-void Trigger_vEventHandle(PINSUBSCRIBER_IF_T *psBaseHandle, uint8_t u8EventType, uint32_t u32Data, uint32_t u32ms);
+    int32_t i32EventData);
 
 #endif // TRIGGER_H
