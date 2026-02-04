@@ -1325,6 +1325,7 @@ void test_vLoopTimeMeasure_TimeDelta(void)
     LoopTimeMeasure_eInit(&sMeasure, &sName);
 
     // First call should return error (no previous timestamp)
+    mock_micros_u32Return = 1000;
     eResult = sMeasure.sSensorMeasure.eMeasure(&sMeasure.sSensorMeasure, au8Buffer, &u8Size, 1000);
     TEST_ASSERT_EQUAL(ISENSORMEASURE_ERROR_E, eResult);
     TEST_ASSERT_FALSE(sMeasure.bFirstCall);
@@ -1332,6 +1333,7 @@ void test_vLoopTimeMeasure_TimeDelta(void)
 
     // Second call should return delta as 4 bytes
     u8Size = 4;
+    mock_micros_u32Return = 1010;
     eResult = sMeasure.sSensorMeasure.eMeasure(&sMeasure.sSensorMeasure, au8Buffer, &u8Size, 1010);
     TEST_ASSERT_EQUAL(ISENSORMEASURE_OK_E, eResult);
     TEST_ASSERT_EQUAL(4, u8Size);
@@ -1343,6 +1345,7 @@ void test_vLoopTimeMeasure_TimeDelta(void)
 
     // Third call with different delta
     u8Size = 4;
+    mock_micros_u32Return = 1025;
     eResult = sMeasure.sSensorMeasure.eMeasure(&sMeasure.sSensorMeasure, au8Buffer, &u8Size, 1025);
     TEST_ASSERT_EQUAL(ISENSORMEASURE_OK_E, eResult);
     u32Delta =
@@ -1352,6 +1355,7 @@ void test_vLoopTimeMeasure_TimeDelta(void)
 
     // Test with zero delta (same timestamp)
     u8Size = 4;
+    mock_micros_u32Return = 1025;
     eResult = sMeasure.sSensorMeasure.eMeasure(&sMeasure.sSensorMeasure, au8Buffer, &u8Size, 1025);
     TEST_ASSERT_EQUAL(ISENSORMEASURE_OK_E, eResult);
     u32Delta =
@@ -1376,10 +1380,12 @@ void test_vLoopTimeMeasure_Offset(void)
     LoopTimeMeasure_eInit(&sMeasure, &sName);
 
     // First call (skip)
+    mock_micros_u32Return = 1000;
     sMeasure.sSensorMeasure.eMeasure(&sMeasure.sSensorMeasure, au8Buffer, &u8Size, 1000);
 
     // Second call - verify raw delta is returned (offset not applied here)
     u8Size = 4;
+    mock_micros_u32Return = 1010;
     eResult = sMeasure.sSensorMeasure.eMeasure(&sMeasure.sSensorMeasure, au8Buffer, &u8Size, 1010);
     TEST_ASSERT_EQUAL(ISENSORMEASURE_OK_E, eResult);
     uint32_t u32Delta =
@@ -1388,6 +1394,7 @@ void test_vLoopTimeMeasure_Offset(void)
 
     // Third call - another raw delta
     u8Size = 4;
+    mock_micros_u32Return = 1020;
     eResult = sMeasure.sSensorMeasure.eMeasure(&sMeasure.sSensorMeasure, au8Buffer, &u8Size, 1020);
     TEST_ASSERT_EQUAL(ISENSORMEASURE_OK_E, eResult);
     u32Delta =
@@ -1412,11 +1419,13 @@ void test_vLoopTimeMeasure_Overflow(void)
 
     // First call near overflow
     uint32_t u32NearMax = UINT32_MAX - 5;
+    mock_micros_u32Return = u32NearMax;
     sMeasure.sSensorMeasure.eMeasure(&sMeasure.sSensorMeasure, au8Buffer, &u8Size, u32NearMax);
 
     // Second call after overflow
     uint32_t u32AfterOverflow = 10; // Wrapped around
     u8Size = 4;
+    mock_micros_u32Return = u32AfterOverflow;
     eResult = sMeasure.sSensorMeasure.eMeasure(&sMeasure.sSensorMeasure, au8Buffer, &u8Size, u32AfterOverflow);
     TEST_ASSERT_EQUAL(ISENSORMEASURE_OK_E, eResult);
     // Delta should be 16 (5 to max + 1 + 10 after overflow)
@@ -1555,30 +1564,30 @@ void test_vLoopTimeMeasure_SensorIntegration(void)
 
     // Simulate loop iterations
     // Note: Sampling interval is 100ms, so sensor measures at intervals of >= 100ms
-    mock_millis_u32Return = 0;
+    mock_micros_u32Return = 0;
 
     // Loop 1 (time 0) - First call initializes timestamp, no measurement yet
-    PinCfgCsv_vLoop(mock_millis_u32Return);
+    PinCfgCsv_vLoop(mock_micros_u32Return);
     TEST_ASSERT_EQUAL(0, psSensor->u32SamplesCount);
 
     // Loop 2 (time 100ms) - Should measure (delta = 100ms), first real sample
-    mock_millis_u32Return = 100;
-    PinCfgCsv_vLoop(mock_millis_u32Return);
+    mock_micros_u32Return = 100;
+    PinCfgCsv_vLoop(mock_micros_u32Return);
     TEST_ASSERT_EQUAL(1, psSensor->u32SamplesCount); // First successful measurement
 
     // Loop 3 (time 200ms) - Should measure again (delta = 100ms)
-    mock_millis_u32Return = 200;
-    PinCfgCsv_vLoop(mock_millis_u32Return);
+    mock_micros_u32Return = 200;
+    PinCfgCsv_vLoop(mock_micros_u32Return);
     TEST_ASSERT_EQUAL(2, psSensor->u32SamplesCount);
 
     // Loop 4 (time 300ms) - Should measure (delta = 100ms)
-    mock_millis_u32Return = 300;
-    PinCfgCsv_vLoop(mock_millis_u32Return);
+    mock_micros_u32Return = 300;
+    PinCfgCsv_vLoop(mock_micros_u32Return);
     TEST_ASSERT_EQUAL(3, psSensor->u32SamplesCount);
 
     // Loop 5 (time 600ms) - Should measure (delta = 300ms)
-    mock_millis_u32Return = 600;
-    PinCfgCsv_vLoop(mock_millis_u32Return);
+    mock_micros_u32Return = 600;
+    PinCfgCsv_vLoop(mock_micros_u32Return);
 
     // Debug: print actual values
     if (psSensor->u32SamplesCount != 4 || psSensor->i64CumulatedValue < 599 || psSensor->i64CumulatedValue > 601)
@@ -1602,8 +1611,8 @@ void test_vLoopTimeMeasure_SensorIntegration(void)
     // Continue loops until report interval (5 seconds = 5000ms)
     for (uint32_t i = 6; i <= 5000; i++)
     {
-        mock_millis_u32Return = i;
-        PinCfgCsv_vLoop(mock_millis_u32Return);
+        mock_micros_u32Return = i;
+        PinCfgCsv_vLoop(mock_micros_u32Return);
     }
 
     // After reporting, samples should be reset

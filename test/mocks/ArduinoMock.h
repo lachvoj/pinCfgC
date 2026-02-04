@@ -52,6 +52,10 @@ extern "C"
     extern uint32_t mock_millis_u32Return;
     uint32_t millis();
 
+    extern uint32_t mock_micros_u32Called;
+    extern uint32_t mock_micros_u32Return;
+    uint32_t micros();
+
     // Analog functions
     extern uint16_t mock_analogRead_u16Return;
     extern uint32_t mock_analogRead_u32Called;

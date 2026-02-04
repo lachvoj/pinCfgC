@@ -55,6 +55,7 @@ extern "C"
 
     // HAL
     uint32_t u32Millis();
+    uint32_t u32Micros();
     void vHwWriteConfigBlock(void *buf, void *addr, size_t length);
     void vHwReadConfigBlock(void *buf, void *addr, size_t length);
     uint8_t u8EEPROMRead(int idx);

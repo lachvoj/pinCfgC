@@ -4,6 +4,7 @@
 #ifdef PINCFG_FEATURE_LOOPTIME_MEASUREMENT
 
 #include "LoopTimeMeasure.h"
+#include "MySensorsWrapper.h"
 #include "PinCfgUtils.h"
 #include "SensorMeasure.h"
 
@@ -47,19 +48,22 @@ static ISENSORMEASURE_RESULT_T LoopTimeMeasure_eMeasure(
 
     LOOPTIMEMEASURE_T *psHandle = (LOOPTIMEMEASURE_T *)pSelf;
 
+    // Get current timestamp in microseconds (ignore u32ms parameter for high-resolution measurement)
+    uint32_t u32CurrentMicros = u32Micros();
+
     // First call - just store timestamp, no measurement yet
     if (psHandle->bFirstCall)
     {
-        psHandle->u32LastCallTime = u32ms;
+        psHandle->u32LastCallTime = u32CurrentMicros;
         psHandle->bFirstCall = false;
         return ISENSORMEASURE_ERROR_E; // Skip this sample (no delta yet)
     }
 
-    // Calculate time since last call = loop execution time
-    uint32_t u32LoopDuration = PinCfg_u32GetElapsedTime(psHandle->u32LastCallTime, u32ms);
+    // Calculate time since last call = loop execution time (in microseconds)
+    uint32_t u32LoopDuration = PinCfg_u32GetElapsedTime(psHandle->u32LastCallTime, u32CurrentMicros);
 
-    // Store timestamp for next iteration
-    psHandle->u32LastCallTime = u32ms;
+    // Return loop duration in microseconds in big-endian format (4 bytes)
+    psHandle->u32LastCallTime = u32CurrentMicros;
 
     // Return loop duration in big-endian format (4 bytes)
     pu8Buffer[0] = (uint8_t)(u32LoopDuration >> 24);

@@ -106,6 +106,11 @@ extern "C"
         return millis();
     }
 
+    uint32_t u32Micros()
+    {
+        return micros();
+    }
+
     void vWait(const uint32_t waitingMS)
     {
         wait(waitingMS);

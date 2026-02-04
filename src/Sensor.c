@@ -404,7 +404,7 @@ static const char *Sensor_pcGetDefaultUnit(MEASUREMENT_TYPE_T eType)
     switch (eType)
     {
 #ifdef PINCFG_FEATURE_LOOPTIME_MEASUREMENT
-    case MEASUREMENT_TYPE_LOOPTIME_E: return "ms";
+    case MEASUREMENT_TYPE_LOOPTIME_E: return "µs";
 #endif
     default: return NULL; // No default unit
     }

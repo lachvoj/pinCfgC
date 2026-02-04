@@ -24,6 +24,14 @@ uint32_t millis()
     return mock_millis_u32Return;
 }
 
+uint32_t mock_micros_u32Called;
+uint32_t mock_micros_u32Return;
+uint32_t micros()
+{
+    mock_micros_u32Called++;
+    return mock_micros_u32Return;
+}
+
 // Analog mock functions
 uint16_t mock_analogRead_u16Return = 512; // Default mid-range (10-bit)
 uint32_t mock_analogRead_u32Called = 0;
